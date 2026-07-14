@@ -21,6 +21,13 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case mediaState = "io.element.device_mute"
         case setAlwaysOnScreen = "set_always_on_screen"
     }
+
+    #if DEBUG
+    private enum MatrixRTCWidgetAction {
+        static let membershipEventType = "org.matrix.msc3401.call.member"
+        static let sendEvent = "send_event"
+    }
+    #endif
     
     private enum PreferredAudioRoute {
         case systemDefault
@@ -51,6 +58,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private var hasRequestedEmbeddedWebContentReset = false
     #if DEBUG
     private var pendingReceiverWidgetJoinRequestID: String?
+    private var pendingReceiverMembershipStateSendRequestIDs = Set<String>()
     #endif
     
     private let actionsSubject: PassthroughSubject<CallScreenViewModelAction, Never> = .init()
@@ -227,6 +235,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         audioRouteEnforcementTask = nil
         #if DEBUG
         pendingReceiverWidgetJoinRequestID = nil
+        pendingReceiverMembershipStateSendRequestIDs.removeAll()
         #endif
         resetEmbeddedWebContentIfNeeded()
         let pendingSetupCallTask = setupCallTask
@@ -246,6 +255,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     // MARK: - Private
 
     private func handleWidgetAction(message: String) async {
+        #if DEBUG
+        recordReceiverMembershipStateSendAttemptIfNeeded(message)
+        #endif
+
         if timeoutTask != nil,
            let decodedMessage = try? DecodedWidgetMessage.decode(message: message),
            decodedMessage.hasLoaded {
@@ -771,16 +784,49 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private func recordReceiverWidgetJoinDriverResponseIfNeeded(_ message: String) {
         guard let data = message.data(using: .utf8),
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              payload["api"] as? String == ElementCallWidgetMessage.Direction.toWidget.rawValue,
-              payload["action"] as? String == NativeWidgetAction.join.rawValue,
-              payload["response"] != nil,
-              let requestID = payload["requestId"] as? String,
-              requestID == pendingReceiverWidgetJoinRequestID else {
+              payload["api"] as? String == ElementCallWidgetMessage.Direction.fromWidget.rawValue,
+              let action = payload["action"] as? String,
+              let response = payload["response"] as? [String: Any],
+              let requestID = payload["requestId"] as? String else {
             return
         }
 
-        pendingReceiverWidgetJoinRequestID = nil
-        SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDriverResponseReceived()
+        if action == NativeWidgetAction.join.rawValue,
+           requestID == pendingReceiverWidgetJoinRequestID {
+            pendingReceiverWidgetJoinRequestID = nil
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDriverResponseReceived()
+        }
+
+        guard action == MatrixRTCWidgetAction.sendEvent,
+              pendingReceiverMembershipStateSendRequestIDs.remove(requestID) != nil else {
+            return
+        }
+
+        if let error = response["error"] as? [String: Any] {
+            let matrixAPIError = error["matrix_api_error"] as? [String: Any]
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendError(httpStatus: matrixAPIError?["http_status"] as? Int)
+        } else {
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendCompleted()
+        }
+    }
+
+    private func recordReceiverMembershipStateSendAttemptIfNeeded(_ message: String) {
+        guard let data = message.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              payload["api"] as? String == ElementCallWidgetMessage.Direction.fromWidget.rawValue,
+              payload["action"] as? String == MatrixRTCWidgetAction.sendEvent,
+              let eventData = payload["data"] as? [String: Any],
+              eventData["type"] as? String == MatrixRTCWidgetAction.membershipEventType,
+              eventData["state_key"] is String,
+              eventData["delay"] == nil,
+              let content = eventData["content"] as? [String: Any],
+              !content.isEmpty,
+              let requestID = payload["requestId"] as? String,
+              pendingReceiverMembershipStateSendRequestIDs.insert(requestID).inserted else {
+            return
+        }
+
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendAttempted()
     }
     #endif
     

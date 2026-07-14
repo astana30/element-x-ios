@@ -856,6 +856,37 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
+    static func recordReceiverMembershipStateSendAttempted() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverMembershipStateSendAttempted = true
+        writeProof()
+    }
+
+    static func recordReceiverMembershipStateSendCompleted() {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverMembershipStateSendCompleted = true
+        proof.receiverMembershipStateSendHTTPBucket = "2xx"
+        proof.receiverMembershipPresentOnSynapse = true
+        proof.receiverMatrixRTCMembershipPublished = true
+        updateTwoParticipantProof()
+        writeProof()
+    }
+
+    static func recordReceiverMembershipStateSendError(httpStatus: Int?) {
+        guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
+            return
+        }
+
+        proof.receiverMembershipStateSendHTTPBucket = membershipStateSendHTTPBucket(status: httpStatus)
+        writeProof()
+    }
+
     static func recordMatrixRTCObservation(participantCount: Int,
                                            hasActiveCall: Bool,
                                            localParticipantPresent: Bool = false,
@@ -874,11 +905,42 @@ enum SalemXStage2FSimulatorSignalingDebug {
             proof.matrixRTCTwoParticipantsSeen = true
         }
 
+        updateTwoParticipantProof()
+
         if proof.matrixRTCTwoParticipantsSeen, !hasActiveCall || participantCount == 0 {
             proof.matrixRTCRoomEmptyOrClosed = true
         }
 
         writeProof()
+    }
+
+    private static func updateTwoParticipantProof() {
+        if proof.receiverMatrixRTCMembershipPublished, proof.receiverRemoteParticipantSeen {
+            proof.matrixRTCTwoParticipantsSeen = true
+        }
+    }
+
+    private static func membershipStateSendHTTPBucket(status: Int?) -> String {
+        guard let status else {
+            return "sdk_error"
+        }
+
+        switch status {
+        case 401:
+            return "unauthorized"
+        case 403:
+            return "forbidden"
+        case 409:
+            return "conflict"
+        case 429:
+            return "rate_limited"
+        case 500...599:
+            return "server_error"
+        case 400...499:
+            return "client_error"
+        default:
+            return "unexpected_status"
+        }
     }
 
     static func recordSenderUpstreamHangupInvoked(roomID: String) {
@@ -1851,6 +1913,10 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var receiverWidgetJoinDispatchCompleted = false
         var receiverWidgetJoinDispatchErrorBucket = "not_requested"
         var receiverMatrixRTCJoinStarted = false
+        var receiverMembershipStateSendAttempted = false
+        var receiverMembershipStateSendCompleted = false
+        var receiverMembershipStateSendHTTPBucket = "not_requested"
+        var receiverMembershipPresentOnSynapse = false
         var receiverMatrixRTCMembershipPublished = false
         var receiverRemoteParticipantSeen = false
         var matrixRTCTwoParticipantsSeen = false
@@ -1963,6 +2029,10 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "receiver_membership_send_attempted=\(receiverWidgetJoinDispatchAttempted)",
                 "receiver_membership_send_completed=\(receiverWidgetJoinDispatchCompleted)",
                 "receiver_membership_send_error_bucket=\(receiverWidgetJoinDispatchErrorBucket)",
+                "receiver_membership_state_send_attempted=\(receiverMembershipStateSendAttempted)",
+                "receiver_membership_state_send_completed=\(receiverMembershipStateSendCompleted)",
+                "receiver_membership_state_send_http_bucket=\(receiverMembershipStateSendHTTPBucket)",
+                "receiver_membership_present_on_synapse=\(receiverMembershipPresentOnSynapse)",
                 "receiver_matrixrtc_membership_published=\(receiverMatrixRTCMembershipPublished)",
                 "receiver_remote_participant_seen=\(receiverRemoteParticipantSeen)",
                 "matrixrtc_two_participants_seen=\(matrixRTCTwoParticipantsSeen)",

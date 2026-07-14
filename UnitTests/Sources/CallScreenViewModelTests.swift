@@ -191,9 +191,13 @@ final class CallScreenViewModelTests {
         #expect(proof.contains("receiver_membership_send_attempted=true"))
         #expect(proof.contains("receiver_membership_send_completed=true"))
         #expect(proof.contains("receiver_membership_send_error_bucket=none"))
+        #expect(proof.contains("receiver_membership_state_send_attempted=false"))
+        #expect(proof.contains("receiver_membership_state_send_completed=false"))
+        #expect(proof.contains("receiver_membership_state_send_http_bucket=not_requested"))
+        #expect(proof.contains("receiver_membership_present_on_synapse=false"))
 
         let mismatchedDriverResponse = """
-        {"api":"toWidget","action":"io.element.join","widgetId":"call-widget","requestId":"stale-request","response":{}}
+        {"api":"fromWidget","action":"io.element.join","widgetId":"call-widget","requestId":"stale-request","response":{"error":{"message":"unsupported"}}}
         """
         harness.widgetDriver.messagePublisher.send(mismatchedDriverResponse)
         await waitFor { evaluatedScripts.count == 2 }
@@ -202,13 +206,99 @@ final class CallScreenViewModelTests {
         #expect(proof.contains("receiver_widget_join_driver_response_received=false"))
 
         let matchingDriverResponse = """
-        {"api":"toWidget","action":"io.element.join","widgetId":"call-widget","requestId":"join-request","response":{}}
+        {"api":"fromWidget","action":"io.element.join","widgetId":"call-widget","requestId":"join-request","response":{"error":{"message":"unsupported"}}}
         """
         harness.widgetDriver.messagePublisher.send(matchingDriverResponse)
         await waitFor { evaluatedScripts.count == 3 }
 
         proof = try stage2FSimulatorProofText()
         #expect(proof.contains("receiver_widget_join_driver_response_received=true"))
+
+        let delayedMembershipMessage = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"delayed-membership","data":{"type":"org.matrix.msc3401.call.member","state_key":"redacted-state","content":{},"delay":8000}}
+        """
+        harness.viewModel.context.send(viewAction: .widgetAction(message: delayedMembershipMessage))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 2 }
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_membership_state_send_attempted=false"))
+
+        let membershipMessage = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"current-membership","data":{"type":"org.matrix.msc3401.call.member","state_key":"redacted-state","content":{"m.calls":[{}]}}}
+        """
+        harness.viewModel.context.send(viewAction: .widgetAction(message: membershipMessage))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 3 }
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_membership_state_send_attempted=true"))
+        #expect(proof.contains("receiver_membership_state_send_completed=false"))
+
+        let staleMembershipResponse = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"stale-membership","response":{"event_id":"redacted-event"}}
+        """
+        harness.widgetDriver.messagePublisher.send(staleMembershipResponse)
+        await waitFor { evaluatedScripts.count == 4 }
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_membership_state_send_completed=false"))
+
+        let membershipResponse = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"current-membership","response":{"event_id":"redacted-event"}}
+        """
+        harness.widgetDriver.messagePublisher.send(membershipResponse)
+        await waitFor { evaluatedScripts.count == 5 }
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_membership_state_send_completed=true"))
+        #expect(proof.contains("receiver_membership_state_send_http_bucket=2xx"))
+        #expect(proof.contains("receiver_membership_present_on_synapse=true"))
+        #expect(proof.contains("receiver_matrixrtc_membership_published=true"))
+        #expect(proof.contains("matrixrtc_two_participants_seen=false"))
+
+        SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCObservation(participantCount: 1,
+                                                                        hasActiveCall: true,
+                                                                        remoteParticipantPresent: true)
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_remote_participant_seen=true"))
+        #expect(proof.contains("matrixrtc_two_participants_seen=true"))
+
+        harness.viewModel.stop()
+    }
+
+    @Test
+    func roomCallMembershipStateSendRecordsDriverFailureWithoutPublishing() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+
+        setenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE", "1", 1)
+        defer { unsetenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE") }
+
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        let membershipMessage = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"failed-membership","data":{"type":"org.matrix.msc3401.call.member","state_key":"redacted-state","content":{"m.calls":[{}]}}}
+        """
+        harness.viewModel.context.send(viewAction: .widgetAction(message: membershipMessage))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 1 }
+
+        let failureResponse = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"failed-membership","response":{"error":{"message":"redacted","matrix_api_error":{"http_status":403}}}}
+        """
+        harness.widgetDriver.messagePublisher.send(failureResponse)
+
+        await waitFor {
+            (try? self.stage2FSimulatorProofText().contains("receiver_membership_state_send_http_bucket=forbidden")) == true
+        }
+
+        let proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("receiver_membership_state_send_attempted=true"))
+        #expect(proof.contains("receiver_membership_state_send_completed=false"))
+        #expect(proof.contains("receiver_membership_state_send_http_bucket=forbidden"))
+        #expect(proof.contains("receiver_membership_present_on_synapse=false"))
+        #expect(proof.contains("receiver_matrixrtc_membership_published=false"))
 
         harness.viewModel.stop()
     }

@@ -766,6 +766,10 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(source.contains("receiver_widget_join_dispatch_error_bucket=\\(receiverWidgetJoinDispatchErrorBucket)"))
         #expect(source.contains("receiver_matrixrtc_join_started=\\(receiverMatrixRTCJoinStarted)"))
         #expect(source.contains("receiver_membership_send_marker_semantics=widget_driver_dispatch_only"))
+        #expect(source.contains("receiver_membership_state_send_attempted=\\(receiverMembershipStateSendAttempted)"))
+        #expect(source.contains("receiver_membership_state_send_completed=\\(receiverMembershipStateSendCompleted)"))
+        #expect(source.contains("receiver_membership_state_send_http_bucket=\\(receiverMembershipStateSendHTTPBucket)"))
+        #expect(source.contains("receiver_membership_present_on_synapse=\\(receiverMembershipPresentOnSynapse)"))
         #expect(source.contains("receiver_matrixrtc_membership_published=\\(receiverMatrixRTCMembershipPublished)"))
         #expect(source.contains("receiver_remote_participant_seen=\\(receiverRemoteParticipantSeen)"))
         #expect(source.contains("matrixrtc_two_participants_seen=\\(matrixRTCTwoParticipantsSeen)"))
@@ -808,6 +812,8 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDriverResponseReceived()
         SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDispatchAttempted()
         SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDispatchCompleted()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendAttempted()
+        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendCompleted()
 
         var proof = try stage2FSimulatorProofText()
         #expect(proof.contains("receiver_widget_join_received=true"))
@@ -817,6 +823,10 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(proof.contains("receiver_widget_join_dispatch_completed=true"))
         #expect(proof.contains("receiver_membership_send_attempted=true"))
         #expect(proof.contains("receiver_membership_send_completed=true"))
+        #expect(proof.contains("receiver_membership_state_send_attempted=true"))
+        #expect(proof.contains("receiver_membership_state_send_completed=true"))
+        #expect(proof.contains("receiver_membership_state_send_http_bucket=2xx"))
+        #expect(proof.contains("receiver_membership_present_on_synapse=true"))
 
         #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
                                                                userSession: nil,
@@ -833,6 +843,10 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
         #expect(proof.contains("receiver_membership_send_attempted=false"))
         #expect(proof.contains("receiver_membership_send_completed=false"))
         #expect(proof.contains("receiver_membership_send_error_bucket=not_requested"))
+        #expect(proof.contains("receiver_membership_state_send_attempted=false"))
+        #expect(proof.contains("receiver_membership_state_send_completed=false"))
+        #expect(proof.contains("receiver_membership_state_send_http_bucket=not_requested"))
+        #expect(proof.contains("receiver_membership_present_on_synapse=false"))
     }
 
     private func stage2FSimulatorSignalingDebugSource() throws -> String {
