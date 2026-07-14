@@ -148,6 +148,32 @@ final class CallScreenViewModelTests {
         #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
     }
 
+    @Test
+    func roomCallJoinActionAcknowledgesWebAndForwardsToWidgetDriver() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var evaluatedScripts = [String]()
+        harness.viewModel.context.javaScriptEvaluator = { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+
+        let joinMessage = """
+        {"api":"fromWidget","action":"io.element.join","widgetId":"call-widget","requestId":"join-request","data":{}}
+        """
+
+        harness.viewModel.context.send(viewAction: .widgetAction(message: joinMessage))
+        await waitFor {
+            harness.widgetDriver.handleMessageCallsCount == 1 && !evaluatedScripts.isEmpty
+        }
+
+        #expect(harness.widgetDriver.handleMessageReceivedMessage == joinMessage)
+        #expect(evaluatedScripts.count == 1)
+        #expect(evaluatedScripts[0].contains("\"requestId\":\"join-request\""))
+        #expect(evaluatedScripts[0].contains("\"response\""))
+
+        harness.viewModel.stop()
+    }
+
     private struct CallScreenHarness {
         let viewModel: CallScreenViewModel
         let elementCallService: ElementCallServiceMock

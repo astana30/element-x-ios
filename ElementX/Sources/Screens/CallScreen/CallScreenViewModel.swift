@@ -697,6 +697,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             #endif
             schedulePreferredAudioRouteEnforcement()
             await acknowledgeWidgetRequest(requestPayload)
+            await forwardWidgetJoinRequestToDriver(message)
         case .mediaState:
             let audioEnabled = request.data?.audioEnabled ?? state.isMicrophoneEnabled
             let videoEnabled = request.data?.videoEnabled ?? state.isVideoEnabled
@@ -718,6 +719,15 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
         
         return true
+    }
+
+    private func forwardWidgetJoinRequestToDriver(_ message: String) async {
+        switch await widgetDriver.handleMessage(message) {
+        case .success:
+            MXLog.info("Element Call media diagnostics: widget_join_forwarded_to_driver=true start_mode=\(configuration.startMode)")
+        case .failure(let error):
+            MXLog.error("Element Call media diagnostics: widget_join_forwarded_to_driver=false error=\(error) start_mode=\(configuration.startMode)")
+        }
     }
     
     private func acknowledgeWidgetRequest(_ requestPayload: [String: Any], data: [String: Any]? = nil) async {
