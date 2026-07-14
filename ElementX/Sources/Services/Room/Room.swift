@@ -13,8 +13,12 @@ extension RoomProtocol {
         let isDirectRoom = await isDirect()
         
         if isDirectRoom {
+            if await hasActiveRoomCall() {
+                return .joinExisting
+            }
+
             // Direct calls should behave like regular 1:1 calls instead of persistent
-            // conference rooms, so we always start a fresh DM call intent.
+            // conference rooms, so only idle direct rooms start a fresh DM call.
             switch startMode {
             case .audio:
                 return .startCallDmVoice
