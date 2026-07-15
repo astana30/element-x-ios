@@ -1300,30 +1300,41 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
     
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        #if targetEnvironment(simulator)
-        // This gets called for no reason on simulators, where CallKit
-        // isn't even supported, ignore it.
-        #else
         handleEndCallAction(action, provider: provider)
-        #endif
     }
 
     func handleEndCallAction(_ action: any SalemXCallKitEndActionCompleting, provider _: any CXProviderProtocol) {
+        if salemXEmbeddedTerminatedCallIDs.contains(action.callUUID) {
+            action.fulfill()
+            return
+        }
+
+        guard let knownCallID = embeddedCallID(for: action.callUUID) else {
+            action.fail()
+            return
+        }
+
         guard salemXAnswerBridgeConfiguration.embeddedMatrixRTCAnswerBridgeEnabled else {
-            handleLegacyEndCallAction(action)
+            handleLegacyEndCallAction(action, knownCallID: knownCallID)
+            return
+        }
+
+        if activeCallSession?.callKitID == knownCallID.callKitID,
+           activeCallSession?.direction == .outgoing {
+            handleLegacyEndCallAction(action, knownCallID: knownCallID)
             return
         }
 
         handleEmbeddedMatrixRTCEndCallAction(action, source: .callKitLocalEnd)
     }
 
-    private func handleLegacyEndCallAction(_ action: any SalemXCallKitEndActionCompleting) {
+    private func handleLegacyEndCallAction(_ action: any SalemXCallKitEndActionCompleting, knownCallID: CallID) {
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-ENTRY] " +
             "ongoing_room_id=\(ongoingCallID?.roomID ?? "nil") " +
             "ongoing_callkit_id=\(ongoingCallID?.callKitID.uuidString ?? "nil") " +
             "active_room_id=\(activeCallSession?.roomID ?? "nil") " +
             "active_state=\(activeCallSession?.state.rawValue ?? "nil")")
-        if let ongoingCallID {
+        if let ongoingCallID, ongoingCallID.callKitID == knownCallID.callKitID {
             let isPreAnswerOutgoing = activeCallSession?.roomID == ongoingCallID.roomID &&
                 activeCallSession?.state == .outgoingRinging
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-BRANCH] " +
@@ -1347,7 +1358,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-DIRECT-HELPER] room_id=nil called=false reason=missing_ongoing_call_id")
         }
         
-        if let incomingCallID {
+        if let incomingCallID, incomingCallID.callKitID == knownCallID.callKitID {
             applySessionEvent(type: .reject, roomID: incomingCallID.roomID)
             suppressIncomingFallback(for: incomingCallID.roomID)
             clearIncomingCallState()

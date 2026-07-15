@@ -419,6 +419,24 @@ final class ElementCallServiceTests {
     }
 
     @Test
+    func duplicateCallKitAndAppUITerminationRequestsEmitUpstreamEndOnce() async {
+        let roomID = "redacted-room"
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall(let endedRoomID) = action, endedRoomID == roomID {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        await service.requestCallTermination(roomID: roomID)
+        await service.requestCallTermination(roomID: roomID)
+
+        #expect(endCallCount == 1)
+    }
+
+    @Test
     func incomingDirectCallStopsRingingWhenRemoteDeclines() async {
         service.setClientProxy(clientProxy)
 

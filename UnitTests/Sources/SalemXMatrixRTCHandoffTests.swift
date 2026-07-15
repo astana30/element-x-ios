@@ -1431,6 +1431,45 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
+    func callKitProviderRoutesExactLocalEndToEmbeddedBridge() async throws {
+        let endBridge = EndBridgeSpy(result: .terminationAccepted)
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        service.provider(CXProvider(configuration: CXProviderConfiguration()),
+                         perform: CXEndCallAction(call: callID))
+
+        #expect(await waitUntil { endBridge.calls.count == 1 })
+        #expect(endBridge.calls.map(\.callID) == [callID])
+        #expect(endBridge.calls.map(\.source) == [.callKitLocalEnd])
+    }
+
+    @Test
+    func unmatchedLocalEndFailsClosedAndPreservesExactCallMapping() async throws {
+        let endBridge = EndBridgeSpy(result: .terminationAccepted)
+        let bootstrapResolver = BootstrapResolverSpy()
+        let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
+                                                          endBridge: endBridge)
+
+        let unmatchedAction = EndActionSpy(callUUID: UUID())
+        service.handleEndCallAction(unmatchedAction, provider: callProvider)
+
+        #expect(unmatchedAction.failCount == 1)
+        #expect(unmatchedAction.fulfillCount == 0)
+        #expect(endBridge.calls.isEmpty)
+        #expect(bootstrapResolver.removedCallIDs.isEmpty)
+
+        let exactAction = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(exactAction, provider: callProvider)
+
+        #expect(await waitUntil { exactAction.fulfillCount == 1 })
+        #expect(exactAction.failCount == 0)
+        #expect(endBridge.calls.map(\.callID) == [callID])
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
     func terminationFailureFailsActionOnce() async throws {
         let endBridge = EndBridgeSpy(result: .failed)
         let bootstrapResolver = BootstrapResolverSpy()
@@ -1463,6 +1502,13 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(firstAction.failCount == 0)
         #expect(secondAction.failCount == 0)
         #expect(endBridge.calls.count == 1)
+
+        let lateAction = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(lateAction, provider: callProvider)
+
+        #expect(lateAction.fulfillCount == 1)
+        #expect(lateAction.failCount == 0)
+        #expect(endBridge.calls.count == 1)
     }
 
     @Test
@@ -1471,6 +1517,14 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         let bootstrapResolver = BootstrapResolverSpy()
         let callID = try await prepareOngoingEmbeddedCall(bootstrapResolver: bootstrapResolver,
                                                           endBridge: endBridge)
+        var localTerminationRequestCount = 0
+        service.actions
+            .sink { action in
+                if case .requestCallTermination = action {
+                    localTerminationRequestCount += 1
+                }
+            }
+            .store(in: &cancellables)
 
         service.handleEmbeddedMatrixRTCUpstreamTerminalEvent(callID: callID, source: .embeddedRemoteEnd)
         service.handleEmbeddedMatrixRTCUpstreamTerminalEvent(callID: callID, source: .embeddedRemoteEnd)
@@ -1479,6 +1533,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.uuid == callID)
         #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
         #expect(endBridge.calls.isEmpty)
+        #expect(localTerminationRequestCount == 0)
         #expect(bootstrapResolver.removedCallIDs == [callID])
     }
 
