@@ -865,17 +865,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
         switch action {
         case .close:
-            let sendHangupMessage: Bool
-            switch configuration.kind {
-            case .roomCall:
-                // Pre-join close in a direct room call must still emit a cancel/hangup signal.
-                sendHangupMessage = true
-            case .genericCallLink:
-                sendHangupMessage = hasJoinedWidgetCall
-            }
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-LOCAL-CLOSE] " +
-                "has_joined_widget_call=\(hasJoinedWidgetCall) send_hangup_message=\(sendHangupMessage)")
-            requestLocalCallTermination(sendHangupMessage: sendHangupMessage)
+                "has_joined_widget_call=\(hasJoinedWidgetCall) send_hangup_message=false source=upstream_widget")
+            requestLocalCallTermination(sendHangupMessage: false)
             Task { [weak self] in
                 await self?.acknowledgeWidgetRequest(requestPayload)
             }

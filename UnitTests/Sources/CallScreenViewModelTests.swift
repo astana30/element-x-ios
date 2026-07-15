@@ -144,6 +144,78 @@ final class CallScreenViewModelTests {
     }
 
     @Test
+    func pickupTimeoutWidgetCloseTearsDownLocalStateWithoutHostHangup() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        let ongoingCallRoomID = CurrentValueSubject<String?, Never>(harness.roomProxy.id)
+        harness.elementCallService.underlyingOngoingCallRoomIDPublisher = ongoingCallRoomID.asCurrentValuePublisher()
+        harness.elementCallService.tearDownCallSessionClosure = {
+            ongoingCallRoomID.send(nil)
+        }
+        var evaluatedScripts = [String]()
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+        installActiveWebViewBinding(in: harness) { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+
+        let closeMessage = """
+        {"api":"fromWidget","action":"io.element.close","widgetId":"call-widget","requestId":"pickup-timeout-close","data":{}}
+        """
+        harness.viewModel.context.send(viewAction: .widgetAction(message: closeMessage))
+
+        await waitFor {
+            dismissCount == 1 && evaluatedScripts.contains { $0.contains("pickup-timeout-close") }
+        }
+        #expect(evaluatedScripts.allSatisfy { !$0.contains("im.vector.hangup") })
+        #expect(harness.widgetDriver.handleMessageCallsCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        harness.viewModel.stop()
+
+        #expect(harness.elementCallService.tearDownCallSessionCallsCount == 1)
+        #expect(ongoingCallRoomID.value == nil)
+        withExtendedLifetime(actionsCancellable) { }
+    }
+
+    @Test
+    func duplicateWidgetCloseAndChromeEndDismissExactlyOnce() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var evaluatedScripts = [String]()
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+        installActiveWebViewBinding(in: harness) { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+
+        let closeMessage = """
+        {"api":"fromWidget","action":"io.element.close","widgetId":"call-widget","requestId":"authoritative-close","data":{}}
+        """
+        harness.viewModel.context.send(viewAction: .widgetAction(message: closeMessage))
+        await waitFor { dismissCount == 1 }
+
+        harness.viewModel.context.send(viewAction: .widgetAction(message: closeMessage))
+        harness.viewModel.context.send(viewAction: .endCall)
+
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(dismissCount == 1)
+        #expect(evaluatedScripts.allSatisfy { !$0.contains("im.vector.hangup") })
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+        harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
+    }
+
+    @Test
     func elementCallWebMediaDiagnosticsPayloadDescriptionIsRedacted() throws {
         let json = """
         {

@@ -394,6 +394,19 @@ final class SalemXStage2FSimulatorSignalingDebugTests {
     }
 
     @Test
+    func stage2FSimulatorSenderLocalStatePreflightFailsClosed() throws {
+        let source = try stage2FSimulatorSignalingDebugSource()
+
+        #expect(source.contains("/direct-call/stage2f-sim/sender-local-state-preflight"))
+        #expect(source.contains("salemXDebugStage2FCallKitLocalStateBucket"))
+        #expect(source.contains("proof.senderLocalActiveCallIdle = stateBucket == .idle"))
+        #expect(source.contains("proof.senderLocalStateCheckFingerprint = fingerprint"))
+        #expect(source.contains("proof.lastFailure = stateBucket == .idle ? \"none\" : \"activeCallAlreadyExists\""))
+        #expect(source.contains("sender_local_active_call_idle=\\(senderLocalActiveCallIdle)"))
+        #expect(source.contains("sender_local_call_state_bucket=\\(senderLocalCallStateBucket)"))
+    }
+
+    @Test
     func stage2FSimulatorBearerHeaderRejectsMissingAndBlankToken() {
         #expect(SalemXStage2FSimulatorSignalingDebug.bearerAuthorizationHeader(accessToken: nil) == nil)
         #expect(SalemXStage2FSimulatorSignalingDebug.bearerAuthorizationHeader(accessToken: "") == nil)

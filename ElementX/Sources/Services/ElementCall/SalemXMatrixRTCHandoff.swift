@@ -743,6 +743,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
             }
         case "/direct-call/stage2f-sim/sender-auth-preflight":
             Task { await preflightSenderAuthentication(userSession: userSession) }
+        case "/direct-call/stage2f-sim/sender-local-state-preflight":
+            preflightSenderLocalCallState(elementCallService: elementCallService,
+                                          checkNonce: queryItems["check_nonce"])
         case "/direct-call/stage2f-sim/sender-send-invite":
             Task {
                 await sendForegroundInvite(userSession: userSession,
@@ -1587,6 +1590,27 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
+    private static func preflightSenderLocalCallState(elementCallService: any ElementCallServiceProtocol,
+                                                      checkNonce: String?) {
+        guard let checkNonce = safeNonEmpty(checkNonce),
+              let fingerprint = executionNonceFingerprint(for: checkNonce),
+              let elementCallService = elementCallService as? ElementCallService else {
+            proof.senderLocalActiveCallIdle = false
+            proof.senderLocalCallStateBucket = "service_unavailable"
+            proof.senderLocalStateCheckFingerprint = "missing"
+            proof.lastFailure = "senderLocalCallStatePreflightUnavailable"
+            writeProof()
+            return
+        }
+
+        let stateBucket = elementCallService.salemXDebugStage2FCallKitLocalStateBucket
+        proof.senderLocalActiveCallIdle = stateBucket == .idle
+        proof.senderLocalCallStateBucket = stateBucket.rawValue
+        proof.senderLocalStateCheckFingerprint = fingerprint
+        proof.lastFailure = stateBucket == .idle ? "none" : "activeCallAlreadyExists"
+        writeProof()
+    }
+
     private static func claimReceiverMetadataAndReportCallKit(userSession: UserSessionProtocol?,
                                                               elementCallService: any ElementCallServiceProtocol,
                                                               metadataReference: String?,
@@ -2065,6 +2089,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var senderSameCredentialWhoamiSucceeded = false
         var senderSameCredentialWhoamiHTTPStatus = "not_requested"
         var senderSameCredentialWhoamiErrorBucket = "not_requested"
+        var senderLocalActiveCallIdle = false
+        var senderLocalCallStateBucket = "not_checked"
+        var senderLocalStateCheckFingerprint = "missing"
         var receiverCurrentSessionPresent = false
         var receiverCurrentAccessTokenPresent = false
         var receiverClaimAuthHeaderReady = false
@@ -2193,6 +2220,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "sender_same_credential_whoami_succeeded=\(senderSameCredentialWhoamiSucceeded)",
                 "sender_same_credential_whoami_http_status=\(senderSameCredentialWhoamiHTTPStatus)",
                 "sender_same_credential_whoami_error_bucket=\(senderSameCredentialWhoamiErrorBucket)",
+                "sender_local_active_call_idle=\(senderLocalActiveCallIdle)",
+                "sender_local_call_state_bucket=\(senderLocalCallStateBucket)",
+                "sender_local_state_check_fingerprint=\(senderLocalStateCheckFingerprint)",
                 "receiver_current_session_present=\(receiverCurrentSessionPresent)",
                 "receiver_current_access_token_present=\(receiverCurrentAccessTokenPresent)",
                 "receiver_claim_auth_header_ready=\(receiverClaimAuthHeaderReady)",
