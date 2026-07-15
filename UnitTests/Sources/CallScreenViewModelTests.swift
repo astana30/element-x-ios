@@ -358,6 +358,116 @@ final class CallScreenViewModelTests {
     }
 
     @Test
+    func roomCallMatrixRTCDelayedLeaveProofTracksOnlyThePreparedEvent() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+
+        setenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE", "1", 1)
+        defer { unsetenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE") }
+
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        let prepareMessage = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"prepare-leave","data":{"type":"org.matrix.msc3401.call.member","state_key":"redacted-state","content":{},"delay":8000}}
+        """
+        harness.viewModel.context.send(viewAction: .widgetAction(message: prepareMessage))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 1 }
+
+        var proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("matrixrtc_delayed_leave_prepare_attempted=true"))
+        #expect(proof.contains("matrixrtc_delayed_leave_prepared=false"))
+        #expect(proof.contains("matrixrtc_delayed_leave_prepare_http_bucket=pending"))
+
+        let prepareResponse = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"prepare-leave","response":{"delay_id":"opaque-delay"}}
+        """
+        harness.widgetDriver.messagePublisher.send(prepareResponse)
+        await waitFor {
+            (try? self.stage2FSimulatorProofText().contains("matrixrtc_delayed_leave_prepared=true")) == true
+        }
+
+        let mismatchedLeaveMessage = """
+        {"api":"fromWidget","action":"org.matrix.msc4157.update_delayed_event","widgetId":"call-widget","requestId":"stale-leave","data":{"delay_id":"other-delay","action":"send"}}
+        """
+        harness.viewModel.context.send(viewAction: .widgetAction(message: mismatchedLeaveMessage))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 2 }
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("matrixrtc_membership_leave_send_attempted=false"))
+
+        let leaveMessage = """
+        {"api":"fromWidget","action":"org.matrix.msc4157.update_delayed_event","widgetId":"call-widget","requestId":"current-leave","data":{"delay_id":"opaque-delay","action":"send"}}
+        """
+        harness.viewModel.context.send(viewAction: .widgetAction(message: leaveMessage))
+        await waitFor {
+            (try? self.stage2FSimulatorProofText().contains("matrixrtc_membership_leave_send_attempted=true")) == true
+        }
+
+        let leaveResponse = """
+        {"api":"fromWidget","action":"org.matrix.msc4157.update_delayed_event","widgetId":"call-widget","requestId":"current-leave","response":{}}
+        """
+        harness.widgetDriver.messagePublisher.send(leaveResponse)
+        await waitFor {
+            (try? self.stage2FSimulatorProofText().contains("matrixrtc_membership_leave_send_completed=true")) == true
+        }
+
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("matrixrtc_membership_leave_send_http_bucket=2xx"))
+
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+        proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("matrixrtc_delayed_leave_prepare_attempted=false"))
+        #expect(proof.contains("matrixrtc_delayed_leave_prepared=false"))
+        #expect(proof.contains("matrixrtc_delayed_leave_prepare_http_bucket=not_requested"))
+        #expect(proof.contains("matrixrtc_membership_leave_send_attempted=false"))
+        #expect(proof.contains("matrixrtc_membership_leave_send_completed=false"))
+        #expect(proof.contains("matrixrtc_membership_leave_send_http_bucket=not_requested"))
+
+        harness.viewModel.stop()
+    }
+
+    @Test
+    func roomCallMatrixRTCFallbackLeaveProofRecordsDriverFailure() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+
+        setenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE", "1", 1)
+        defer { unsetenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE") }
+
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        let leaveMessage = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"fallback-leave","data":{"type":"org.matrix.msc3401.call.member","state_key":"redacted-state","content":{}}}
+        """
+        harness.viewModel.context.send(viewAction: .widgetAction(message: leaveMessage))
+        await waitFor {
+            (try? self.stage2FSimulatorProofText().contains("matrixrtc_membership_leave_send_attempted=true")) == true
+        }
+
+        let failureResponse = """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"fallback-leave","response":{"error":{"message":"redacted","matrix_api_error":{"http_status":403}}}}
+        """
+        harness.widgetDriver.messagePublisher.send(failureResponse)
+        await waitFor {
+            (try? self.stage2FSimulatorProofText().contains("matrixrtc_membership_leave_send_http_bucket=forbidden")) == true
+        }
+
+        let proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("matrixrtc_membership_leave_send_completed=false"))
+
+        harness.viewModel.stop()
+    }
+
+    @Test
     func roomCallMembershipStateSendRecordsDriverFailureWithoutPublishing() async throws {
         let harness = try makeAudioRoomCallViewModel()
 

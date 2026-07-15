@@ -26,6 +26,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private enum MatrixRTCWidgetAction {
         static let membershipEventType = "org.matrix.msc3401.call.member"
         static let sendEvent = "send_event"
+        static let updateDelayedEvent = "org.matrix.msc4157.update_delayed_event"
+        static let sendDelayedEvent = "send"
     }
     #endif
     
@@ -51,6 +53,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     #if DEBUG
     private var pendingReceiverWidgetJoinRequestID: String?
     private var pendingReceiverMembershipStateSendRequestIDs = Set<String>()
+    private var pendingMatrixRTCDelayedLeavePrepareRequestIDs = Set<String>()
+    private var matrixRTCDelayedLeaveID: String?
+    private var pendingMatrixRTCMembershipLeaveRequestIDs = Set<String>()
     #endif
     
     private let actionsSubject: PassthroughSubject<CallScreenViewModelAction, Never> = .init()
@@ -154,7 +159,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 guard let self else { return }
 
                 #if DEBUG
-                recordReceiverWidgetJoinDriverResponseIfNeeded(receivedMessage)
+                recordMatrixRTCWidgetResponseIfNeeded(receivedMessage)
                 #endif
                 
                 Task {
@@ -228,6 +233,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         #if DEBUG
         pendingReceiverWidgetJoinRequestID = nil
         pendingReceiverMembershipStateSendRequestIDs.removeAll()
+        pendingMatrixRTCDelayedLeavePrepareRequestIDs.removeAll()
+        matrixRTCDelayedLeaveID = nil
+        pendingMatrixRTCMembershipLeaveRequestIDs.removeAll()
         #endif
         resetEmbeddedWebContentIfNeeded()
         let pendingSetupCallTask = setupCallTask
@@ -248,7 +256,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
     private func handleWidgetAction(message: String) async {
         #if DEBUG
-        recordReceiverMembershipStateSendAttemptIfNeeded(message)
+        recordMatrixRTCWidgetRequestIfNeeded(message)
         #endif
 
         if timeoutTask != nil,
@@ -786,7 +794,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
 
     #if DEBUG
-    private func recordReceiverWidgetJoinDriverResponseIfNeeded(_ message: String) {
+    private func recordMatrixRTCWidgetResponseIfNeeded(_ message: String) {
         guard let data = message.data(using: .utf8),
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               payload["api"] as? String == ElementCallWidgetMessage.Direction.fromWidget.rawValue,
@@ -802,6 +810,28 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDriverResponseReceived()
         }
 
+        if action == MatrixRTCWidgetAction.sendEvent,
+           pendingMatrixRTCDelayedLeavePrepareRequestIDs.remove(requestID) != nil {
+            if let error = response["error"] as? [String: Any] {
+                let matrixAPIError = error["matrix_api_error"] as? [String: Any]
+                SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCDelayedLeavePrepareError(httpStatus: matrixAPIError?["http_status"] as? Int)
+            } else if let delayID = response["delay_id"] as? String, !delayID.isEmpty {
+                matrixRTCDelayedLeaveID = delayID
+                SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCDelayedLeavePrepared()
+            } else {
+                SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCDelayedLeavePrepareError(httpStatus: nil)
+            }
+        }
+
+        if pendingMatrixRTCMembershipLeaveRequestIDs.remove(requestID) != nil {
+            if let error = response["error"] as? [String: Any] {
+                let matrixAPIError = error["matrix_api_error"] as? [String: Any]
+                SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendError(httpStatus: matrixAPIError?["http_status"] as? Int)
+            } else {
+                SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendCompleted()
+            }
+        }
+
         guard action == MatrixRTCWidgetAction.sendEvent,
               pendingReceiverMembershipStateSendRequestIDs.remove(requestID) != nil else {
             return
@@ -815,23 +845,44 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
     }
 
-    private func recordReceiverMembershipStateSendAttemptIfNeeded(_ message: String) {
+    private func recordMatrixRTCWidgetRequestIfNeeded(_ message: String) {
         guard let data = message.data(using: .utf8),
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               payload["api"] as? String == ElementCallWidgetMessage.Direction.fromWidget.rawValue,
-              payload["action"] as? String == MatrixRTCWidgetAction.sendEvent,
+              let action = payload["action"] as? String,
               let eventData = payload["data"] as? [String: Any],
-              eventData["type"] as? String == MatrixRTCWidgetAction.membershipEventType,
-              eventData["state_key"] is String,
-              eventData["delay"] == nil,
-              let content = eventData["content"] as? [String: Any],
-              !content.isEmpty,
-              let requestID = payload["requestId"] as? String,
-              pendingReceiverMembershipStateSendRequestIDs.insert(requestID).inserted else {
+              let requestID = payload["requestId"] as? String else {
             return
         }
 
-        SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendAttempted()
+        if action == MatrixRTCWidgetAction.updateDelayedEvent,
+           eventData["action"] as? String == MatrixRTCWidgetAction.sendDelayedEvent,
+           let delayID = eventData["delay_id"] as? String,
+           delayID == matrixRTCDelayedLeaveID,
+           pendingMatrixRTCMembershipLeaveRequestIDs.insert(requestID).inserted {
+            SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendAttempted()
+            return
+        }
+
+        guard action == MatrixRTCWidgetAction.sendEvent,
+              eventData["type"] as? String == MatrixRTCWidgetAction.membershipEventType,
+              eventData["state_key"] is String,
+              let content = eventData["content"] as? [String: Any] else {
+            return
+        }
+
+        if content.isEmpty {
+            if eventData["delay"] != nil,
+               pendingMatrixRTCDelayedLeavePrepareRequestIDs.insert(requestID).inserted {
+                SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCDelayedLeavePrepareAttempted()
+            } else if eventData["delay"] == nil,
+                      pendingMatrixRTCMembershipLeaveRequestIDs.insert(requestID).inserted {
+                SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendAttempted()
+            }
+        } else if eventData["delay"] == nil,
+                  pendingReceiverMembershipStateSendRequestIDs.insert(requestID).inserted {
+            SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendAttempted()
+        }
     }
     #endif
     

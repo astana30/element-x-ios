@@ -898,6 +898,64 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
+    static func recordMatrixRTCDelayedLeavePrepareAttempted() {
+        guard isMatrixRTCLifecycleProofEnabled else {
+            return
+        }
+
+        proof.matrixRTCDelayedLeavePrepareAttempted = true
+        proof.matrixRTCDelayedLeavePrepareHTTPBucket = "pending"
+        writeProof()
+    }
+
+    static func recordMatrixRTCDelayedLeavePrepared() {
+        guard isMatrixRTCLifecycleProofEnabled else {
+            return
+        }
+
+        proof.matrixRTCDelayedLeavePrepared = true
+        proof.matrixRTCDelayedLeavePrepareHTTPBucket = "2xx"
+        writeProof()
+    }
+
+    static func recordMatrixRTCDelayedLeavePrepareError(httpStatus: Int?) {
+        guard isMatrixRTCLifecycleProofEnabled else {
+            return
+        }
+
+        proof.matrixRTCDelayedLeavePrepareHTTPBucket = membershipStateSendHTTPBucket(status: httpStatus)
+        writeProof()
+    }
+
+    static func recordMatrixRTCMembershipLeaveSendAttempted() {
+        guard isMatrixRTCLifecycleProofEnabled else {
+            return
+        }
+
+        proof.matrixRTCMembershipLeaveSendAttempted = true
+        proof.matrixRTCMembershipLeaveSendHTTPBucket = "pending"
+        writeProof()
+    }
+
+    static func recordMatrixRTCMembershipLeaveSendCompleted() {
+        guard isMatrixRTCLifecycleProofEnabled else {
+            return
+        }
+
+        proof.matrixRTCMembershipLeaveSendCompleted = true
+        proof.matrixRTCMembershipLeaveSendHTTPBucket = "2xx"
+        writeProof()
+    }
+
+    static func recordMatrixRTCMembershipLeaveSendError(httpStatus: Int?) {
+        guard isMatrixRTCLifecycleProofEnabled else {
+            return
+        }
+
+        proof.matrixRTCMembershipLeaveSendHTTPBucket = membershipStateSendHTTPBucket(status: httpStatus)
+        writeProof()
+    }
+
     static func recordReceiverRTCTransportCredentialsRequested() {
         guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
             return
@@ -956,6 +1014,10 @@ enum SalemXStage2FSimulatorSignalingDebug {
         if proof.receiverMatrixRTCMembershipPublished, proof.receiverRemoteParticipantSeen {
             proof.matrixRTCTwoParticipantsSeen = true
         }
+    }
+
+    private static var isMatrixRTCLifecycleProofEnabled: Bool {
+        proof.senderExactRoomJoined || ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled
     }
 
     private static func membershipStateSendHTTPBucket(status: Int?) -> String {
@@ -2032,6 +2094,12 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var receiverMembershipStateSendCompleted = false
         var receiverMembershipStateSendHTTPBucket = "not_requested"
         var receiverMembershipPresentOnSynapse = false
+        var matrixRTCDelayedLeavePrepareAttempted = false
+        var matrixRTCDelayedLeavePrepared = false
+        var matrixRTCDelayedLeavePrepareHTTPBucket = "not_requested"
+        var matrixRTCMembershipLeaveSendAttempted = false
+        var matrixRTCMembershipLeaveSendCompleted = false
+        var matrixRTCMembershipLeaveSendHTTPBucket = "not_requested"
         var receiverMatrixRTCCredentialsRequested = false
         var receiverMatrixRTCCredentials2xx = false
         var receiverMatrixRTCCredentialsHTTPBucket = "not_requested"
@@ -2157,6 +2225,12 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "receiver_membership_state_send_completed=\(receiverMembershipStateSendCompleted)",
                 "receiver_membership_state_send_http_bucket=\(receiverMembershipStateSendHTTPBucket)",
                 "receiver_membership_present_on_synapse=\(receiverMembershipPresentOnSynapse)",
+                "matrixrtc_delayed_leave_prepare_attempted=\(matrixRTCDelayedLeavePrepareAttempted)",
+                "matrixrtc_delayed_leave_prepared=\(matrixRTCDelayedLeavePrepared)",
+                "matrixrtc_delayed_leave_prepare_http_bucket=\(matrixRTCDelayedLeavePrepareHTTPBucket)",
+                "matrixrtc_membership_leave_send_attempted=\(matrixRTCMembershipLeaveSendAttempted)",
+                "matrixrtc_membership_leave_send_completed=\(matrixRTCMembershipLeaveSendCompleted)",
+                "matrixrtc_membership_leave_send_http_bucket=\(matrixRTCMembershipLeaveSendHTTPBucket)",
                 "receiver_matrixrtc_credentials_requested=\(receiverMatrixRTCCredentialsRequested)",
                 "receiver_matrixrtc_credentials_2xx=\(receiverMatrixRTCCredentials2xx)",
                 "receiver_matrixrtc_credentials_http_bucket=\(receiverMatrixRTCCredentialsHTTPBucket)",
