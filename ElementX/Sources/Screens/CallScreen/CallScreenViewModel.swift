@@ -705,9 +705,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             _ = await hangup(waitingFor: setupTask)
         case .roomCall(let roomProxy, _, _, _, _, _, _):
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] room_id=\(roomProxy.id) step=start")
-            async let widgetHangup: Bool = hangup(waitingFor: setupTask)
+            let widgetHangupSent = await hangup(waitingFor: setupTask)
             await elementCallService.requestCallTermination(roomID: roomProxy.id)
-            let widgetHangupSent = await widgetHangup
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] room_id=\(roomProxy.id) step=done widget_hangup_sent=\(widgetHangupSent)")
         }
     }

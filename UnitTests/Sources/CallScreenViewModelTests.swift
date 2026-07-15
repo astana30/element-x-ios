@@ -182,8 +182,7 @@ final class CallScreenViewModelTests {
 
         harness.viewModel.context.send(viewAction: .endCall)
         await waitFor {
-            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1 &&
-                evaluatedScripts.contains { $0.contains("im.vector.hangup") }
+            evaluatedScripts.contains { $0.contains("im.vector.hangup") }
         }
 
         let hangupScript = try #require(evaluatedScripts.first { $0.contains("im.vector.hangup") })
@@ -194,19 +193,20 @@ final class CallScreenViewModelTests {
         #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
         #expect(harness.widgetDriver.handleMessageCallsCount == 0)
         #expect(dismissCount == 0)
-        #expect(harness.elementCallService.requestCallTerminationRoomIDCalled)
-        #expect(harness.elementCallService.requestCallTerminationRoomIDReceivedRoomID == harness.roomProxy.id)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
 
         var mismatchedPayload = payload
         mismatchedPayload.requestId = "mismatched-request"
         try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: mismatchedPayload)))
         try await Task.sleep(for: .milliseconds(50))
         #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
 
         try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: payload)))
         await waitFor {
-            dismissCount == 1
+            dismissCount == 1 && harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
         }
+        #expect(harness.elementCallService.requestCallTerminationRoomIDReceivedRoomID == harness.roomProxy.id)
 
         harness.viewModel.stop()
         withExtendedLifetime(actionsCancellable) { }
@@ -223,8 +223,7 @@ final class CallScreenViewModelTests {
 
         harness.viewModel.context.send(viewAction: .endCall)
         await waitFor {
-            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1 &&
-                evaluatedScripts.contains { $0.contains("querySelectorAll(\"audio, video\")") } &&
+            evaluatedScripts.contains { $0.contains("querySelectorAll(\"audio, video\")") } &&
                 evaluatedScripts.contains { $0.contains("im.vector.hangup") }
         }
 
@@ -241,11 +240,14 @@ final class CallScreenViewModelTests {
 
         #expect(evaluatedScripts.count == 2)
         #expect(harness.widgetDriver.handleMessageCallsCount == 0)
-        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
 
         let hangupScript = try #require(evaluatedScripts.first { $0.contains("im.vector.hangup") })
         let payload = try widgetMessage(from: hangupScript)
         try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: payload)))
+        await waitFor {
+            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
 
         harness.viewModel.stop()
     }
@@ -261,8 +263,7 @@ final class CallScreenViewModelTests {
 
         harness.viewModel.stop()
         await waitFor {
-            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1 &&
-                evaluatedScripts.contains { $0.contains("querySelectorAll(\"audio, video\")") } &&
+            evaluatedScripts.contains { $0.contains("querySelectorAll(\"audio, video\")") } &&
                 evaluatedScripts.contains { $0.contains("im.vector.hangup") }
         }
 
@@ -273,11 +274,14 @@ final class CallScreenViewModelTests {
         #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
         #expect(harness.elementCallService.tearDownCallSessionCalled)
         #expect(harness.widgetDriver.handleMessageCallsCount == 0)
-        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
 
         let hangupScript = try #require(evaluatedScripts.first { $0.contains("im.vector.hangup") })
         let payload = try widgetMessage(from: hangupScript)
         try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: payload)))
+        await waitFor {
+            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
     }
 
     @Test
