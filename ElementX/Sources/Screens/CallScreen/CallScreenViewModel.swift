@@ -13,6 +13,11 @@ import SwiftUI
 
 typealias CallScreenViewModelType = StateStoreViewModel<CallScreenViewState, CallScreenViewAction>
 
+private struct PendingWidgetHangupResponse {
+    let requestID: String
+    let continuation: CheckedContinuation<Bool, Never>
+}
+
 class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol {
     private enum NativeWidgetAction: String {
         case close = "io.element.close"
@@ -50,6 +55,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private var shouldSendHangupOnStop = true
     private var isDismissingAfterLocalHangup = false
     private var hasRequestedEmbeddedWebContentReset = false
+    private var pendingWidgetHangupResponse: PendingWidgetHangupResponse?
     #if DEBUG
     private var pendingReceiverWidgetJoinRequestID: String?
     private var pendingReceiverMembershipStateSendRequestIDs = Set<String>()
@@ -230,6 +236,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     func stop() {
         timeoutTask = nil
         audioRouteEnforcementTask = nil
+        finishPendingWidgetHangupResponse(received: false)
         #if DEBUG
         pendingReceiverWidgetJoinRequestID = nil
         pendingReceiverMembershipStateSendRequestIDs.removeAll()
@@ -255,6 +262,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     // MARK: - Private
 
     private func handleWidgetAction(message: String) async {
+        if handleWidgetHangupResponseIfNeeded(message) {
+            return
+        }
+
         #if DEBUG
         recordMatrixRTCWidgetRequestIfNeeded(message)
         #endif
@@ -635,7 +646,57 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             await setupTask?.value
         }
 
-        return await postJSONToWidget(json)
+        #if DEBUG
+        SalemXStage2FSimulatorSignalingDebug.recordSenderWidgetHangupPostAttempted()
+        #endif
+
+        return await withCheckedContinuation { continuation in
+            finishPendingWidgetHangupResponse(received: false)
+            pendingWidgetHangupResponse = .init(requestID: message.requestId,
+                                                continuation: continuation)
+
+            Task { [weak self] in
+                guard let self else { return }
+
+                let posted = await self.postJSONToWidget(json)
+                #if DEBUG
+                if posted {
+                    SalemXStage2FSimulatorSignalingDebug.recordSenderWidgetHangupPostCompleted()
+                }
+                #endif
+                if !posted {
+                    self.finishPendingWidgetHangupResponse(requestID: message.requestId, received: false)
+                }
+            }
+        }
+    }
+
+    private func handleWidgetHangupResponseIfNeeded(_ message: String) -> Bool {
+        guard let data = message.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              payload["api"] as? String == ElementCallWidgetMessage.Direction.toWidget.rawValue,
+              payload["action"] as? String == ElementCallWidgetMessage.Action.hangup.rawValue,
+              let requestID = payload["requestId"] as? String,
+              payload["response"] is [String: Any],
+              requestID == pendingWidgetHangupResponse?.requestID else {
+            return false
+        }
+
+        #if DEBUG
+        SalemXStage2FSimulatorSignalingDebug.recordSenderWidgetHangupResponseReceived()
+        #endif
+        finishPendingWidgetHangupResponse(requestID: requestID, received: true)
+        return true
+    }
+
+    private func finishPendingWidgetHangupResponse(requestID: String? = nil, received: Bool) {
+        guard let pendingWidgetHangupResponse,
+              requestID == nil || requestID == pendingWidgetHangupResponse.requestID else {
+            return
+        }
+
+        self.pendingWidgetHangupResponse = nil
+        pendingWidgetHangupResponse.continuation.resume(returning: received)
     }
     
     private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil) async {

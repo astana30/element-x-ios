@@ -956,6 +956,33 @@ enum SalemXStage2FSimulatorSignalingDebug {
         writeProof()
     }
 
+    static func recordSenderWidgetHangupPostAttempted() {
+        guard proof.senderExactRoomJoined else {
+            return
+        }
+
+        proof.senderWidgetHangupPostAttempted = true
+        writeProof()
+    }
+
+    static func recordSenderWidgetHangupPostCompleted() {
+        guard proof.senderExactRoomJoined else {
+            return
+        }
+
+        proof.senderWidgetHangupPostCompleted = true
+        writeProof()
+    }
+
+    static func recordSenderWidgetHangupResponseReceived() {
+        guard proof.senderExactRoomJoined else {
+            return
+        }
+
+        proof.senderWidgetHangupResponseReceived = true
+        writeProof()
+    }
+
     static func recordReceiverRTCTransportCredentialsRequested() {
         guard ProcessInfo.isSalemXStage2FSimulatorReceiverBridgeEnabled else {
             return
@@ -2100,6 +2127,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
         var matrixRTCMembershipLeaveSendAttempted = false
         var matrixRTCMembershipLeaveSendCompleted = false
         var matrixRTCMembershipLeaveSendHTTPBucket = "not_requested"
+        var senderWidgetHangupPostAttempted = false
+        var senderWidgetHangupPostCompleted = false
+        var senderWidgetHangupResponseReceived = false
         var receiverMatrixRTCCredentialsRequested = false
         var receiverMatrixRTCCredentials2xx = false
         var receiverMatrixRTCCredentialsHTTPBucket = "not_requested"
@@ -2231,6 +2261,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
                 "matrixrtc_membership_leave_send_attempted=\(matrixRTCMembershipLeaveSendAttempted)",
                 "matrixrtc_membership_leave_send_completed=\(matrixRTCMembershipLeaveSendCompleted)",
                 "matrixrtc_membership_leave_send_http_bucket=\(matrixRTCMembershipLeaveSendHTTPBucket)",
+                "sender_widget_hangup_post_attempted=\(senderWidgetHangupPostAttempted)",
+                "sender_widget_hangup_post_completed=\(senderWidgetHangupPostCompleted)",
+                "sender_widget_hangup_response_received=\(senderWidgetHangupResponseReceived)",
                 "receiver_matrixrtc_credentials_requested=\(receiverMatrixRTCCredentialsRequested)",
                 "receiver_matrixrtc_credentials_2xx=\(receiverMatrixRTCCredentials2xx)",
                 "receiver_matrixrtc_credentials_http_bucket=\(receiverMatrixRTCCredentialsHTTPBucket)",

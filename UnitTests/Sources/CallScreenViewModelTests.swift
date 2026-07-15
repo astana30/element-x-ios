@@ -169,6 +169,12 @@ final class CallScreenViewModelTests {
     func roomCallEndCallPostsHostHangupDirectlyToWidgetAndRequestsMatrixTermination() async throws {
         let harness = try makeAudioRoomCallViewModel()
         var evaluatedScripts = [String]()
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
         harness.viewModel.context.javaScriptEvaluator = { script in
             evaluatedScripts.append(script)
             return true
@@ -187,10 +193,23 @@ final class CallScreenViewModelTests {
         #expect(payload.action == .hangup)
         #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
         #expect(harness.widgetDriver.handleMessageCallsCount == 0)
+        #expect(dismissCount == 0)
         #expect(harness.elementCallService.requestCallTerminationRoomIDCalled)
         #expect(harness.elementCallService.requestCallTerminationRoomIDReceivedRoomID == harness.roomProxy.id)
 
+        var mismatchedPayload = payload
+        mismatchedPayload.requestId = "mismatched-request"
+        try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: mismatchedPayload)))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(dismissCount == 0)
+
+        try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: payload)))
+        await waitFor {
+            dismissCount == 1
+        }
+
         harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
     }
 
     @Test
@@ -224,6 +243,10 @@ final class CallScreenViewModelTests {
         #expect(harness.widgetDriver.handleMessageCallsCount == 0)
         #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
 
+        let hangupScript = try #require(evaluatedScripts.first { $0.contains("im.vector.hangup") })
+        let payload = try widgetMessage(from: hangupScript)
+        try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: payload)))
+
         harness.viewModel.stop()
     }
 
@@ -251,6 +274,10 @@ final class CallScreenViewModelTests {
         #expect(harness.elementCallService.tearDownCallSessionCalled)
         #expect(harness.widgetDriver.handleMessageCallsCount == 0)
         #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
+
+        let hangupScript = try #require(evaluatedScripts.first { $0.contains("im.vector.hangup") })
+        let payload = try widgetMessage(from: hangupScript)
+        try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: payload)))
     }
 
     @Test
@@ -618,6 +645,14 @@ final class CallScreenViewModelTests {
         let endIndex = try #require(script.range(of: suffix, range: startIndex..<script.endIndex)?.lowerBound)
         let data = try #require(String(script[startIndex..<endIndex]).data(using: .utf8))
         return try JSONDecoder().decode(ElementCallWidgetMessage.self, from: data)
+    }
+
+    private func widgetResponse(for message: ElementCallWidgetMessage) throws -> String {
+        let encodedMessage = try JSONEncoder().encode(message)
+        var payload = try #require(JSONSerialization.jsonObject(with: encodedMessage) as? [String: Any])
+        payload["response"] = [String: Any]()
+        let response = try JSONSerialization.data(withJSONObject: payload)
+        return try #require(String(data: response, encoding: .utf8))
     }
 
     private func stage2FSimulatorProofText() throws -> String {
