@@ -323,20 +323,17 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         pendingReceiverWidgetJoinRequestID = nil
         #endif
         setupCallTask = nil
-        resetEmbeddedWebContentIfNeeded()
         
         guard sendHangupMessage else {
+            resetEmbeddedWebContentIfNeeded()
             actionsSubject.send(.dismiss)
             return
         }
 
-        Task { [weak self] in
-            guard let self else {
-                return
-            }
-
-            await self.sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
-            self.actionsSubject.send(.dismiss)
+        Task {
+            await sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
+            resetEmbeddedWebContentIfNeeded()
+            actionsSubject.send(.dismiss)
         }
     }
 

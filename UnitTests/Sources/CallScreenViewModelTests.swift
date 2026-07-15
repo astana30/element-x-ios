@@ -166,6 +166,86 @@ final class CallScreenViewModelTests {
     }
 
     @Test
+    func directAudioChromeEndCallWaitsForMatrixRTCTermination() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var evaluatedScripts = [String]()
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+        harness.viewModel.context.javaScriptEvaluator = { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+
+        let callScreen = CallScreen(context: harness.viewModel.context)
+        callScreen.endCall()
+        await waitFor {
+            evaluatedScripts.contains { $0.contains("im.vector.hangup") }
+        }
+
+        #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
+        #expect(evaluatedScripts.count { $0.contains("querySelectorAll(\"audio, video\")") } == 0)
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        harness.elementCallServiceActions.send(.requestCallTermination(roomID: harness.roomProxy.id))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
+        #expect(dismissCount == 0)
+
+        await completeMatrixRTCHangup(in: harness)
+        await waitFor {
+            dismissCount == 1 && harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
+        await waitFor {
+            evaluatedScripts.contains { $0.contains("querySelectorAll(\"audio, video\")") }
+        }
+
+        #expect(evaluatedScripts.count { $0.contains("querySelectorAll(\"audio, video\")") } == 1)
+        harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
+    }
+
+    @Test
+    func unmatchedTerminationActionDoesNotEndActiveRoomCall() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var evaluatedScripts = [String]()
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+        harness.viewModel.context.javaScriptEvaluator = { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+
+        harness.elementCallServiceActions.send(.requestCallTermination(roomID: "unmatched-room"))
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(evaluatedScripts.isEmpty)
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        let callScreen = CallScreen(context: harness.viewModel.context)
+        callScreen.endCall()
+        await waitFor {
+            evaluatedScripts.contains { $0.contains("im.vector.hangup") }
+        }
+        await completeMatrixRTCHangup(in: harness)
+        await waitFor {
+            dismissCount == 1 && harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
+
+        harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
+    }
+
+    @Test
     func roomCallEndCallPostsHostHangupDirectlyToWidgetAndRequestsMatrixTermination() async throws {
         let harness = try makeAudioRoomCallViewModel()
         var evaluatedScripts = [String]()
@@ -239,22 +319,16 @@ final class CallScreenViewModelTests {
 
         harness.viewModel.context.send(viewAction: .endCall)
         await waitFor {
-            evaluatedScripts.contains { $0.contains("querySelectorAll(\"audio, video\")") } &&
-                evaluatedScripts.contains { $0.contains("im.vector.hangup") }
+            evaluatedScripts.contains { $0.contains("im.vector.hangup") }
         }
 
-        let resetScript = try #require(evaluatedScripts.first { $0.contains("querySelectorAll(\"audio, video\")") })
-        #expect(resetScript.contains("querySelectorAll(\"audio, video\")"))
-        #expect(resetScript.contains("track.stop()"))
-        #expect(resetScript.contains("srcObject = null"))
-        #expect(resetScript.contains("window.stop()"))
-        #expect(evaluatedScripts.count { $0.contains("querySelectorAll(\"audio, video\")") } == 1)
+        #expect(evaluatedScripts.count { $0.contains("querySelectorAll(\"audio, video\")") } == 0)
         #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
 
         harness.viewModel.context.send(viewAction: .endCall)
         try await Task.sleep(for: .milliseconds(100))
 
-        #expect(evaluatedScripts.count == 2)
+        #expect(evaluatedScripts.count == 1)
         #expect(harness.widgetDriver.handleMessageCallsCount == 0)
         #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
 
@@ -265,6 +339,16 @@ final class CallScreenViewModelTests {
         await waitFor {
             harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
         }
+        await waitFor {
+            evaluatedScripts.contains { $0.contains("querySelectorAll(\"audio, video\")") }
+        }
+
+        let resetScript = try #require(evaluatedScripts.first { $0.contains("querySelectorAll(\"audio, video\")") })
+        #expect(resetScript.contains("querySelectorAll(\"audio, video\")"))
+        #expect(resetScript.contains("track.stop()"))
+        #expect(resetScript.contains("srcObject = null"))
+        #expect(resetScript.contains("window.stop()"))
+        #expect(evaluatedScripts.count { $0.contains("querySelectorAll(\"audio, video\")") } == 1)
 
         harness.viewModel.stop()
     }
@@ -609,14 +693,15 @@ final class CallScreenViewModelTests {
     private struct CallScreenHarness {
         let viewModel: CallScreenViewModel
         let elementCallService: ElementCallServiceMock
+        let elementCallServiceActions: PassthroughSubject<ElementCallServiceAction, Never>
         let roomProxy: JoinedRoomProxyMock
         let widgetDriver: ElementCallWidgetDriverMock
     }
 
     private func makeAudioRoomCallViewModel() throws -> CallScreenHarness {
         let elementCallService = ElementCallServiceMock()
-        elementCallService.underlyingActions = PassthroughSubject<ElementCallServiceAction, Never>()
-            .eraseToAnyPublisher()
+        let elementCallServiceActions = PassthroughSubject<ElementCallServiceAction, Never>()
+        elementCallService.underlyingActions = elementCallServiceActions.eraseToAnyPublisher()
         elementCallService.underlyingOngoingCallRoomIDPublisher = CurrentValueSubject<String?, Never>(nil).asCurrentValuePublisher()
 
         let roomProxy = JoinedRoomProxyMock(.init(id: "redacted-room",
@@ -650,6 +735,7 @@ final class CallScreenViewModelTests {
 
         return CallScreenHarness(viewModel: viewModel,
                                  elementCallService: elementCallService,
+                                 elementCallServiceActions: elementCallServiceActions,
                                  roomProxy: roomProxy,
                                  widgetDriver: widgetDriver)
     }

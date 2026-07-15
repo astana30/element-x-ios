@@ -85,7 +85,7 @@ struct CallScreen: View {
                                                       context.send(viewAction: .toggleSpeakerphone)
                                                   },
                                                   endCallAction: {
-                                                      context.send(viewAction: .endCall)
+                                                      endCall()
                                                   })
                     }
                 } else {
@@ -100,7 +100,7 @@ struct CallScreen: View {
                                                   context.send(viewAction: .toggleVideo)
                                               },
                                               endCallAction: {
-                                                  context.send(viewAction: .endCall)
+                                                  endCall()
                                               },
                                               dismissAction: {
                                                   context.send(viewAction: .navigateBack)
@@ -120,6 +120,10 @@ struct CallScreen: View {
 
     private var hidesEmbeddedCallView: Bool {
         showsNativeDirectAudioChrome
+    }
+
+    func endCall() {
+        context.send(viewAction: .endCall)
     }
     
     var toolbar: some ToolbarContent {
