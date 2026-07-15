@@ -57,6 +57,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private var pendingMatrixRTCDelayedLeavePrepareRequestIDs = Set<String>()
     private var matrixRTCDelayedLeaveID: String?
     private var pendingMatrixRTCMembershipLeaveRequestIDs = Set<String>()
+    private var expectedCallWebViewID: UUID?
+    private var expectedCallWebViewIdentity: CallWebViewDocumentIdentity?
+    private var activeCallWebViewBinding: CallWebViewBinding?
     #if DEBUG
     private var pendingReceiverWidgetJoinRequestID: String?
     private var pendingReceiverMembershipStateSendRequestIDs = Set<String>()
@@ -98,6 +101,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         var isGenericCallLink = false
         var rtcTransportScript: String?
         var directRoomCallDetails: DirectRoomCallDetails?
+        let webViewSessionIdentity = CallWebViewSessionIdentity(roomID: configuration.callRoomID)
         switch configuration.kind {
         case .genericCallLink(let url):
             widgetDriver = GenericCallLinkWidgetDriver(url: url)
@@ -116,12 +120,13 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                                                          rtcTransportScript: rtcTransportScript,
                                                          isGenericCallLink: isGenericCallLink,
                                                          directRoomCallDetails: directRoomCallDetails,
+                                                         webViewSessionIdentity: webViewSessionIdentity,
                                                          isMicrophoneEnabled: true,
                                                          isVideoEnabled: configuration.startMode == .video,
                                                          isSpeakerphoneEnabled: preferredAudioRoute == .speaker,
                                                          certificateValidator: appHooks.certificateValidatorHook),
                    mediaProvider: mediaProvider)
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][CALL-VM-CONFIG] room_id=\(configuration.callRoomID) start_mode=\(configuration.startMode) " +
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][CALL-VM-CONFIG] start_mode=\(configuration.startMode) " +
             "is_video_enabled=\(state.isVideoEnabled) preferred_audio_route=\(preferredAudioRoute) " +
             "is_speakerphone_enabled=\(state.isSpeakerphoneEnabled)")
         
@@ -133,7 +138,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 switch action {
                 case let .setAudioEnabled(enabled, roomID):
                     guard roomID == configuration.callRoomID else {
-                        MXLog.error("Received mute request for a different room: \(roomID) != \(configuration.callRoomID)")
+                        MXLog.error("Received mute request for a different room.")
                         return
                     }
                     
@@ -149,7 +154,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                     requestLocalCallTermination(sendHangupMessage: false)
                 case let .requestCallTermination(roomID):
                     guard roomID == configuration.callRoomID else { return }
-                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-VM-REQUEST-RECEIVED] room_id=\(roomID)")
+                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-VM-REQUEST-RECEIVED]")
                     requestLocalCallTermination()
                 default:
                     break
@@ -202,7 +207,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         switch viewAction {
         case .urlChanged(let url):
             guard let url else { return }
-            MXLog.info("URL changed to: \(url)")
+            MXLog.info("Element Call URL changed: is_file_url=\(url.isFileURL)")
         case .pictureInPictureIsAvailable(let controller):
             actionsSubject.send(.pictureInPictureIsAvailable(controller))
         case .navigateBack:
@@ -226,6 +231,14 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             Task { await handleWidgetAction(message: message) }
         case .elementCallMediaDiagnostics(let message):
             handleElementCallMediaDiagnostics(message: message)
+        case .callWebViewCreated(let webViewID, let sessionIdentity):
+            handleCallWebViewCreated(webViewID: webViewID, sessionIdentity: sessionIdentity)
+        case .callWebViewDocumentLoading(let identity):
+            handleCallWebViewDocumentLoading(identity)
+        case .callWebViewBindingReady(let binding):
+            handleCallWebViewBindingReady(binding)
+        case .callWebViewDismantled(let identity):
+            handleCallWebViewDismantled(identity)
         }
     }
     
@@ -237,17 +250,17 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         pendingMatrixRTCDelayedLeavePrepareRequestIDs.removeAll()
         matrixRTCDelayedLeaveID = nil
         pendingMatrixRTCMembershipLeaveRequestIDs.removeAll()
+        resetEmbeddedWebContentIfNeeded()
         #if DEBUG
         pendingReceiverWidgetJoinRequestID = nil
         pendingReceiverMembershipStateSendRequestIDs.removeAll()
         #endif
-        resetEmbeddedWebContentIfNeeded()
         let pendingSetupCallTask = setupCallTask
         setupCallTask = nil
 
         if shouldSendHangupOnStop {
             Task {
-                await sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
+                _ = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
             }
         }
         
@@ -257,6 +270,74 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
     
     // MARK: - Private
+
+    #if DEBUG
+    var activeCallWebViewIdentity: CallWebViewDocumentIdentity? {
+        currentCallWebViewBinding?.identity
+    }
+
+    func evaluateActiveCallWebViewJavaScript(_ script: String) async throws -> Any? {
+        guard let binding = currentCallWebViewBinding else {
+            return nil
+        }
+
+        return try await binding.javaScriptEvaluator(script)
+    }
+    #endif
+
+    private func handleCallWebViewCreated(webViewID: UUID, sessionIdentity: CallWebViewSessionIdentity) {
+        guard sessionIdentity == state.webViewSessionIdentity else {
+            return
+        }
+
+        expectedCallWebViewIdentity = nil
+        activeCallWebViewBinding = nil
+        expectedCallWebViewID = webViewID
+    }
+
+    private func handleCallWebViewDocumentLoading(_ identity: CallWebViewDocumentIdentity) {
+        guard identity.sessionIdentity == state.webViewSessionIdentity,
+              identity.webViewID == expectedCallWebViewID else {
+            return
+        }
+
+        expectedCallWebViewIdentity = identity
+        activeCallWebViewBinding = nil
+    }
+
+    private func handleCallWebViewBindingReady(_ binding: CallWebViewBinding) {
+        guard binding.identity == expectedCallWebViewIdentity,
+              binding.identity.sessionIdentity == state.webViewSessionIdentity else {
+            return
+        }
+
+        activeCallWebViewBinding = binding
+    }
+
+    private func handleCallWebViewDismantled(_ identity: CallWebViewDocumentIdentity) {
+        guard identity.sessionIdentity == state.webViewSessionIdentity else {
+            return
+        }
+
+        if activeCallWebViewBinding?.identity == identity {
+            activeCallWebViewBinding = nil
+        }
+
+        if expectedCallWebViewIdentity == identity {
+            expectedCallWebViewIdentity = nil
+            expectedCallWebViewID = nil
+        }
+    }
+
+    private var currentCallWebViewBinding: CallWebViewBinding? {
+        guard let activeCallWebViewBinding,
+              activeCallWebViewBinding.identity == expectedCallWebViewIdentity,
+              activeCallWebViewBinding.identity.sessionIdentity == state.webViewSessionIdentity else {
+            return nil
+        }
+
+        return activeCallWebViewBinding
+    }
 
     private func handleWidgetAction(message: String) async {
         if handleWidgetHangupResponseIfNeeded(message) {
@@ -306,16 +387,19 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
 
     private func requestLocalCallTermination(sendHangupMessage: Bool = true) {
-        if sendHangupMessage {
-            hasRequestedLocalTermination = true
-        }
         guard !isDismissingAfterLocalHangup else {
             return
+        }
+
+        if sendHangupMessage {
+            guard currentCallWebViewBinding != nil else {
+                return
+            }
+            hasRequestedLocalTermination = true
         }
         
         let pendingSetupCallTask = setupCallTask
         isDismissingAfterLocalHangup = true
-        hasJoinedWidgetCall = false
         shouldSendHangupOnStop = false
         timeoutTask = nil
         audioRouteEnforcementTask = nil
@@ -331,7 +415,14 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         Task {
-            await sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
+            guard await sendCallTerminationSignal(waitingFor: pendingSetupCallTask) else {
+                isDismissingAfterLocalHangup = false
+                hasRequestedLocalTermination = false
+                shouldSendHangupOnStop = true
+                return
+            }
+
+            hasJoinedWidgetCall = false
             resetEmbeddedWebContentIfNeeded()
             actionsSubject.send(.dismiss)
         }
@@ -339,19 +430,19 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
     private func resetEmbeddedWebContentIfNeeded() {
         guard !hasRequestedEmbeddedWebContentReset,
-              state.bindings.javaScriptEvaluator != nil else {
+              let binding = currentCallWebViewBinding else {
             return
         }
 
         hasRequestedEmbeddedWebContentReset = true
         Task { [weak self] in
-            await self?.resetEmbeddedWebContent()
+            await self?.resetEmbeddedWebContent(using: binding)
         }
     }
 
-    private func resetEmbeddedWebContent() async {
+    private func resetEmbeddedWebContent(using binding: CallWebViewBinding) async {
         do {
-            _ = try await state.bindings.javaScriptEvaluator?(Self.embeddedWebContentResetJavaScript)
+            _ = try await binding.javaScriptEvaluator(Self.embeddedWebContentResetJavaScript)
             MXLog.info("Element Call lifecycle diagnostics: web_content_reset=true start_mode=\(configuration.startMode)")
         } catch {
             MXLog.info("Element Call lifecycle diagnostics: web_content_reset=false reason=javascript_error start_mode=\(configuration.startMode)")
@@ -594,7 +685,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
         guard state.url != nil,
               isPictureInPictureAllowed,
-              let requestPictureInPictureHandler = state.bindings.requestPictureInPictureHandler else {
+              let requestPictureInPictureHandler = currentCallWebViewBinding?.requestPictureInPictureHandler else {
             if configuration.startMode == .audio {
                 actionsSubject.send(.pictureInPictureStarted)
                 return
@@ -634,8 +725,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             return false
         }
 
-        if state.bindings.javaScriptEvaluator == nil {
+        if currentCallWebViewBinding == nil {
             await setupTask?.value
+        }
+
+        guard let binding = currentCallWebViewBinding else {
+            return false
         }
 
         #if DEBUG
@@ -650,7 +745,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             Task { [weak self] in
                 guard let self else { return }
 
-                let posted = await self.postJSONToWidget(json)
+                let posted = await self.postJSONToWidget(json, using: binding)
                 #if DEBUG
                 if posted {
                     SalemXStage2FSimulatorSignalingDebug.recordSenderWidgetHangupPostCompleted()
@@ -694,16 +789,21 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         pendingMatrixRTCMembershipLeaveResponse.continuation.resume(returning: completed)
     }
     
-    private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil) async {
+    private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil) async -> Bool {
         switch configuration.kind {
         case .genericCallLink:
-            _ = await hangup(waitingFor: setupTask)
+            return await hangup(waitingFor: setupTask)
         case .roomCall(let roomProxy, _, _, _, _, _, _):
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] room_id=\(roomProxy.id) step=start")
-            let matrixRTCMembershipLeaveCompleted = await hangup(waitingFor: setupTask)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=start")
+            guard await hangup(waitingFor: setupTask) else {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=rejected")
+                return false
+            }
+
             await elementCallService.requestCallTermination(roomID: roomProxy.id)
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] room_id=\(roomProxy.id) step=done " +
-                "matrixrtc_membership_leave_completed=\(matrixRTCMembershipLeaveCompleted)")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=done " +
+                "matrixrtc_membership_leave_completed=true")
+            return true
         }
     }
     
@@ -733,15 +833,19 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
     
     @discardableResult
-    private func postJSONToWidget(_ json: String) async -> Bool {
-        guard let javaScriptEvaluator = state.bindings.javaScriptEvaluator else {
+    private func postJSONToWidget(_ json: String, using binding: CallWebViewBinding? = nil) async -> Bool {
+        guard let binding = binding ?? currentCallWebViewBinding,
+              binding.identity == expectedCallWebViewIdentity else {
             return false
         }
 
         do {
             let message = "postMessage(\(json), '*')"
-            let result = try await javaScriptEvaluator(message)
-            MXLog.debug("Evaluated javascript: \(json) with result: \(String(describing: result))")
+            let result = try await binding.javaScriptEvaluator(message)
+            guard currentCallWebViewBinding?.identity == binding.identity else {
+                return false
+            }
+            MXLog.verbose("Element Call widget message evaluation completed: result_present=\(result != nil)")
             return true
         } catch {
             MXLog.error("Received javascript evaluation error: \(error)")
@@ -769,7 +873,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             case .genericCallLink:
                 sendHangupMessage = hasJoinedWidgetCall
             }
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-LOCAL-CLOSE] room_id=\(configuration.callRoomID) " +
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-LOCAL-CLOSE] " +
                 "has_joined_widget_call=\(hasJoinedWidgetCall) send_hangup_message=\(sendHangupMessage)")
             requestLocalCallTermination(sendHangupMessage: sendHangupMessage)
             Task { [weak self] in
@@ -1000,9 +1104,13 @@ extension CallScreenViewModel {
         }
         
         let javaScript = "window.controls.setAvailableOutputDevices([\(deviceList)])"
+        guard let binding = currentCallWebViewBinding else {
+            return
+        }
+
         do {
-            let result = try await state.bindings.javaScriptEvaluator?(javaScript)
-            MXLog.debug("Evaluated  with result: \(String(describing: result))")
+            let result = try await binding.javaScriptEvaluator(javaScript)
+            MXLog.verbose("Element Call output update evaluation completed: result_present=\(result != nil)")
         } catch {
             MXLog.error("Received javascript evaluation error: \(error)")
         }

@@ -23,12 +23,43 @@ struct DirectRoomCallDetails {
     let startMode: ElementCallStartMode
 }
 
+struct CallWebViewSessionIdentity: Equatable, CustomStringConvertible {
+    private let roomID: String
+    let sessionGeneration: UUID
+
+    init(roomID: String, sessionGeneration: UUID = UUID()) {
+        self.roomID = roomID
+        self.sessionGeneration = sessionGeneration
+    }
+
+    var description: String {
+        "room=redacted session_generation=redacted"
+    }
+}
+
+struct CallWebViewDocumentIdentity: Equatable, CustomStringConvertible {
+    let webViewID: UUID
+    let documentGeneration: UUID
+    let sessionIdentity: CallWebViewSessionIdentity
+
+    var description: String {
+        "webview=redacted document_generation=redacted \(sessionIdentity)"
+    }
+}
+
+struct CallWebViewBinding {
+    let identity: CallWebViewDocumentIdentity
+    let javaScriptEvaluator: (String) async throws -> Any?
+    let requestPictureInPictureHandler: (() async -> Result<Void, CallScreenError>)?
+}
+
 struct CallScreenViewState: BindableState {
     let script: String?
     let rtcTransportScript: String?
     var url: URL?
     let isGenericCallLink: Bool
     let directRoomCallDetails: DirectRoomCallDetails?
+    let webViewSessionIdentity: CallWebViewSessionIdentity
     var isMicrophoneEnabled: Bool
     var isVideoEnabled: Bool
     var isSpeakerphoneEnabled: Bool
@@ -39,13 +70,10 @@ struct CallScreenViewState: BindableState {
 }
 
 struct Bindings {
-    var javaScriptEvaluator: ((String) async throws -> Any)?
-    var requestPictureInPictureHandler: (() async -> Result<Void, CallScreenError>)?
-    
     var alertInfo: AlertInfo<UUID>?
 }
 
-enum CallScreenViewAction {
+enum CallScreenViewAction: CustomStringConvertible {
     case urlChanged(URL?)
     case pictureInPictureIsAvailable(AVPictureInPictureController)
     case navigateBack
@@ -58,6 +86,47 @@ enum CallScreenViewAction {
     case outputDeviceSelected(deviceID: String)
     case widgetAction(message: String)
     case elementCallMediaDiagnostics(message: String)
+    case callWebViewCreated(webViewID: UUID, sessionIdentity: CallWebViewSessionIdentity)
+    case callWebViewDocumentLoading(CallWebViewDocumentIdentity)
+    case callWebViewBindingReady(CallWebViewBinding)
+    case callWebViewDismantled(CallWebViewDocumentIdentity)
+
+    var description: String {
+        switch self {
+        case .urlChanged:
+            "urlChanged"
+        case .pictureInPictureIsAvailable:
+            "pictureInPictureIsAvailable"
+        case .navigateBack:
+            "navigateBack"
+        case .pictureInPictureWillStop:
+            "pictureInPictureWillStop"
+        case .endCall:
+            "endCall"
+        case .toggleMicrophone:
+            "toggleMicrophone"
+        case .toggleVideo:
+            "toggleVideo"
+        case .toggleSpeakerphone:
+            "toggleSpeakerphone"
+        case .mediaCapturePermissionGranted:
+            "mediaCapturePermissionGranted"
+        case .outputDeviceSelected:
+            "outputDeviceSelected"
+        case .widgetAction:
+            "widgetAction"
+        case .elementCallMediaDiagnostics:
+            "elementCallMediaDiagnostics"
+        case .callWebViewCreated:
+            "callWebViewCreated"
+        case .callWebViewDocumentLoading:
+            "callWebViewDocumentLoading"
+        case .callWebViewBindingReady:
+            "callWebViewBindingReady"
+        case .callWebViewDismantled:
+            "callWebViewDismantled"
+        }
+    }
 }
 
 enum CallScreenError: Error {

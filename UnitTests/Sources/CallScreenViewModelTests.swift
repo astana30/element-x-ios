@@ -10,9 +10,139 @@ import Combine
 @testable import ElementX
 import Foundation
 import Testing
+import WebKit
 
 @MainActor
 final class CallScreenViewModelTests {
+    @Test
+    func lifecycleBindingRejectsStaleCoordinatorAndPreservesActiveConsumer() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        await waitFor { harness.viewModel.context.viewState.url != nil }
+        var registrations = [@MainActor () -> Void]()
+        let scheduler: CallView.Coordinator.RegistrationScheduler = { registration in
+            registrations.append(registration)
+        }
+
+        let firstCoordinator = CallView.Coordinator(viewModelContext: harness.viewModel.context,
+                                                    registrationScheduler: scheduler)
+        let secondCoordinator = CallView.Coordinator(viewModelContext: harness.viewModel.context,
+                                                     registrationScheduler: scheduler)
+
+        #expect(firstCoordinator.webViewID != secondCoordinator.webViewID)
+        #expect(ObjectIdentifier(firstCoordinator.lifecycleProbeWebView) != ObjectIdentifier(secondCoordinator.lifecycleProbeWebView))
+
+        secondCoordinator.loadLifecycleProbeDocument(Self.lifecycleProbeDocument(marker: "active", consumerMounted: true))
+        await waitUntilLoaded(secondCoordinator.lifecycleProbeWebView)
+        await waitFor { registrations.count == 1 }
+        firstCoordinator.loadLifecycleProbeDocument(Self.lifecycleProbeDocument(marker: "stale", consumerMounted: false))
+        await waitUntilLoaded(firstCoordinator.lifecycleProbeWebView)
+        await waitFor { registrations.count == 2 }
+
+        registrations[0]()
+        registrations[1]()
+
+        #expect(firstCoordinator.documentGeneration != secondCoordinator.documentGeneration)
+
+        CallView.dismantleUIView(firstCoordinator.webViewWrapper, coordinator: firstCoordinator)
+
+        let activeIdentity = try #require(harness.viewModel.activeCallWebViewIdentity)
+        let marker = try #require(try await harness.viewModel.evaluateActiveCallWebViewJavaScript("window.lifecycleMarker") as? String)
+        let consumerMounted = try await harness.viewModel.evaluateActiveCallWebViewJavaScript("window.activeCallConsumerMounted") as? Bool
+
+        #expect(activeIdentity.webViewID == secondCoordinator.webViewID)
+        #expect(activeIdentity.documentGeneration == secondCoordinator.documentGeneration)
+        #expect(activeIdentity.sessionIdentity == harness.viewModel.context.viewState.webViewSessionIdentity)
+        #expect(activeIdentity.sessionIdentity.sessionGeneration == harness.viewModel.context.viewState.webViewSessionIdentity.sessionGeneration)
+        #expect(marker == "active")
+        #expect(consumerMounted == true)
+
+        let secondLoadCount = secondCoordinator.loadCount
+        CallView.updateCoordinator(secondCoordinator, url: URL(string: "about:blank"))
+        #expect(secondCoordinator.loadCount == secondLoadCount)
+
+        let mismatchedSessionIdentity = CallWebViewSessionIdentity(roomID: "redacted-other-room")
+        let mismatchedWebViewID = UUID()
+        let mismatchedIdentity = CallWebViewDocumentIdentity(webViewID: mismatchedWebViewID,
+                                                             documentGeneration: UUID(),
+                                                             sessionIdentity: mismatchedSessionIdentity)
+        harness.viewModel.context.send(viewAction: .callWebViewCreated(webViewID: mismatchedWebViewID,
+                                                                       sessionIdentity: mismatchedSessionIdentity))
+        harness.viewModel.context.send(viewAction: .callWebViewDocumentLoading(mismatchedIdentity))
+        harness.viewModel.context.send(viewAction: .callWebViewBindingReady(.init(identity: mismatchedIdentity,
+                                                                                  javaScriptEvaluator: { _ in "mismatched" },
+                                                                                  requestPictureInPictureHandler: nil)))
+        #expect(harness.viewModel.activeCallWebViewIdentity == activeIdentity)
+        #expect(harness.widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationCallsCount == 1)
+
+        CallView.dismantleUIView(secondCoordinator.webViewWrapper, coordinator: secondCoordinator)
+        #expect(harness.viewModel.activeCallWebViewIdentity == nil)
+        harness.viewModel.stop()
+    }
+
+    @Test
+    func delayedStaleEvaluationCannotTerminateNewDocumentSession() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var evaluatedScripts = [String]()
+        var delayedEvaluation: CheckedContinuation<Any?, Never>?
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+
+        let firstIdentity = installActiveWebViewBinding(in: harness) { script in
+            evaluatedScripts.append(script)
+            guard script.contains("im.vector.hangup") else {
+                return true
+            }
+
+            return await withCheckedContinuation { continuation in
+                delayedEvaluation = continuation
+            }
+        }
+
+        harness.viewModel.context.send(viewAction: .endCall)
+        await waitFor { delayedEvaluation != nil }
+
+        let loadingIdentity = CallWebViewDocumentIdentity(webViewID: firstIdentity.webViewID,
+                                                          documentGeneration: UUID(),
+                                                          sessionIdentity: firstIdentity.sessionIdentity)
+        harness.viewModel.context.send(viewAction: .callWebViewDocumentLoading(loadingIdentity))
+        #expect(harness.viewModel.activeCallWebViewIdentity == nil)
+
+        delayedEvaluation?.resume(returning: true)
+        delayedEvaluation = nil
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+        #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
+
+        installActiveWebViewBinding(in: harness) { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+        harness.viewModel.context.send(viewAction: .endCall)
+        await waitFor {
+            evaluatedScripts.count { $0.contains("im.vector.hangup") } == 2
+        }
+
+        harness.elementCallServiceActions.send(.requestCallTermination(roomID: harness.roomProxy.id))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 2)
+        #expect(dismissCount == 0)
+
+        await completeMatrixRTCHangup(in: harness)
+        await waitFor {
+            dismissCount == 1 && harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
+
+        #expect(harness.widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationCallsCount == 1)
+        harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
+    }
+
     @Test
     func elementCallWebMediaDiagnosticsPayloadDescriptionIsRedacted() throws {
         let json = """
@@ -175,7 +305,7 @@ final class CallScreenViewModelTests {
                 dismissCount += 1
             }
         }
-        harness.viewModel.context.javaScriptEvaluator = { script in
+        installActiveWebViewBinding(in: harness) { script in
             evaluatedScripts.append(script)
             return true
         }
@@ -219,7 +349,7 @@ final class CallScreenViewModelTests {
                 dismissCount += 1
             }
         }
-        harness.viewModel.context.javaScriptEvaluator = { script in
+        installActiveWebViewBinding(in: harness) { script in
             evaluatedScripts.append(script)
             return true
         }
@@ -255,7 +385,7 @@ final class CallScreenViewModelTests {
                 dismissCount += 1
             }
         }
-        harness.viewModel.context.javaScriptEvaluator = { script in
+        installActiveWebViewBinding(in: harness) { script in
             evaluatedScripts.append(script)
             return true
         }
@@ -312,7 +442,7 @@ final class CallScreenViewModelTests {
     func roomCallEndCallResetsEmbeddedWebContentForRepeatCall() async throws {
         let harness = try makeAudioRoomCallViewModel()
         var evaluatedScripts = [String]()
-        harness.viewModel.context.javaScriptEvaluator = { script in
+        installActiveWebViewBinding(in: harness) { script in
             evaluatedScripts.append(script)
             return true
         }
@@ -357,7 +487,7 @@ final class CallScreenViewModelTests {
     func roomCallStopResetsEmbeddedWebContentAndTearsDownCallSession() async throws {
         let harness = try makeAudioRoomCallViewModel()
         var evaluatedScripts = [String]()
-        harness.viewModel.context.javaScriptEvaluator = { script in
+        installActiveWebViewBinding(in: harness) { script in
             evaluatedScripts.append(script)
             return true
         }
@@ -390,7 +520,7 @@ final class CallScreenViewModelTests {
     func roomCallJoinActionAcknowledgesWebAndForwardsToWidgetDriver() async throws {
         let harness = try makeAudioRoomCallViewModel()
         var evaluatedScripts = [String]()
-        harness.viewModel.context.javaScriptEvaluator = { script in
+        installActiveWebViewBinding(in: harness) { script in
             evaluatedScripts.append(script)
             return true
         }
@@ -535,7 +665,7 @@ final class CallScreenViewModelTests {
             (try? self.stage2FSimulatorProofText().contains("matrixrtc_delayed_leave_prepared=true")) == true
         }
 
-        harness.viewModel.context.javaScriptEvaluator = { _ in true }
+        installActiveWebViewBinding(in: harness) { _ in true }
         harness.viewModel.context.send(viewAction: .endCall)
 
         let mismatchedLeaveMessage = """
@@ -738,6 +868,43 @@ final class CallScreenViewModelTests {
                                  elementCallServiceActions: elementCallServiceActions,
                                  roomProxy: roomProxy,
                                  widgetDriver: widgetDriver)
+    }
+
+    @discardableResult
+    private func installActiveWebViewBinding(in harness: CallScreenHarness,
+                                             evaluator: @escaping (String) async throws -> Any?) -> CallWebViewDocumentIdentity {
+        let webViewID = UUID()
+        let sessionIdentity = harness.viewModel.context.viewState.webViewSessionIdentity
+        let identity = CallWebViewDocumentIdentity(webViewID: webViewID,
+                                                   documentGeneration: UUID(),
+                                                   sessionIdentity: sessionIdentity)
+        harness.viewModel.context.send(viewAction: .callWebViewCreated(webViewID: webViewID,
+                                                                       sessionIdentity: sessionIdentity))
+        harness.viewModel.context.send(viewAction: .callWebViewDocumentLoading(identity))
+        harness.viewModel.context.send(viewAction: .callWebViewBindingReady(.init(identity: identity,
+                                                                                  javaScriptEvaluator: evaluator,
+                                                                                  requestPictureInPictureHandler: nil)))
+        return identity
+    }
+
+    private static func lifecycleProbeDocument(marker: String, consumerMounted: Bool) -> String {
+        """
+        <!doctype html>
+        <html>
+        <body>
+        <script>
+        window.lifecycleMarker = '\(marker)';
+        window.activeCallConsumerMounted = \(consumerMounted);
+        </script>
+        </body>
+        </html>
+        """
+    }
+
+    private func waitUntilLoaded(_ webView: WKWebView) async {
+        for _ in 0..<100 where webView.isLoading {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     private func waitFor(_ condition: @escaping @MainActor () -> Bool) async {

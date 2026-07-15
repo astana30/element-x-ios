@@ -489,7 +489,7 @@ private struct DirectRoomCallControlButton: View {
     }
 }
 
-private struct CallView: UIViewRepresentable {
+struct CallView: UIViewRepresentable {
     /// The top-level view this representable displays. It wraps the web view when picture in picture isn't running.
     typealias WebViewWrapper = UIView
     
@@ -505,40 +505,58 @@ private struct CallView: UIViewRepresentable {
     }
     
     func updateUIView(_ callWebView: WebViewWrapper, context: Context) {
-        if let url {
-            context.coordinator.load(url)
-        }
+        Self.updateCoordinator(context.coordinator, url: url)
+    }
+
+    static func dismantleUIView(_ uiView: WebViewWrapper, coordinator: Coordinator) {
+        coordinator.dismantle()
+    }
+
+    static func updateCoordinator(_ coordinator: Coordinator, url: URL?) {
+        guard let url else { return }
+        coordinator.load(url)
     }
     
     @MainActor
     class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate, AVPictureInPictureControllerDelegate {
+        typealias RegistrationScheduler = (@escaping @MainActor () -> Void) -> Void
+
         private weak var viewModelContext: CallScreenViewModel.Context?
         private let certificateValidator: CertificateValidatorHookProtocol
+        private let registrationScheduler: RegistrationScheduler
+        private let sessionIdentity: CallWebViewSessionIdentity
         
         private var webView: WKWebView!
         private var pictureInPictureController: AVPictureInPictureController?
         private let pictureInPictureViewController: AVPictureInPictureVideoCallViewController
         private let allowsPictureInPicture: Bool
         private var routePickerView: AVRoutePickerView!
+        private var navigationIdentities = [ObjectIdentifier: CallWebViewDocumentIdentity]()
         
         /// The view to be shown in the app. This will contain the web view when picture in picture isn't running.
         let webViewWrapper = WebViewWrapper(frame: .zero)
         
         private var url: URL!
-        
-        init(viewModelContext: CallScreenViewModel.Context) {
+        let webViewID = UUID()
+        private(set) var documentGeneration: UUID?
+        private(set) var loadCount = 0
+        private var currentDocumentIdentity: CallWebViewDocumentIdentity?
+
+        init(viewModelContext: CallScreenViewModel.Context,
+             registrationScheduler: @escaping RegistrationScheduler = { registration in
+                 DispatchQueue.main.async {
+                     registration()
+                 }
+             }) {
             self.viewModelContext = viewModelContext
             certificateValidator = viewModelContext.viewState.certificateValidator
+            sessionIdentity = viewModelContext.viewState.webViewSessionIdentity
             allowsPictureInPicture = viewModelContext.viewState.isGenericCallLink || viewModelContext.viewState.directRoomCallDetails?.startMode == .video
             pictureInPictureViewController = AVPictureInPictureVideoCallViewController()
             pictureInPictureViewController.preferredContentSize = CGSize(width: 1920, height: 1080)
+            self.registrationScheduler = registrationScheduler
             
             super.init()
-            
-            DispatchQueue.main.async { // Avoid `Publishing changes from within view update` warnings
-                viewModelContext.javaScriptEvaluator = self.evaluateJavaScript
-                viewModelContext.requestPictureInPictureHandler = self.requestPictureInPicture
-            }
             
             let configuration = WKWebViewConfiguration()
             
@@ -593,16 +611,77 @@ private struct CallView: UIViewRepresentable {
                 self.pictureInPictureController = pictureInPictureController
                 viewModelContext.send(viewAction: .pictureInPictureIsAvailable(pictureInPictureController))
             }
+
+            viewModelContext.send(viewAction: .callWebViewCreated(webViewID: webViewID, sessionIdentity: sessionIdentity))
         }
         
         func load(_ url: URL) {
+            guard url != self.url else {
+                return
+            }
+
             self.url = url
+            let identity = beginDocumentLoad()
+            let navigation: WKNavigation?
             // The only file URL we allow is the one coming from our own local ElementCall bundle, so it's okay to allow read permission only to our local EC bundle
             if url.isFileURL {
-                webView.loadFileURL(url, allowingReadAccessTo: EmbeddedElementCall.bundle.bundleURL)
+                navigation = webView.loadFileURL(url, allowingReadAccessTo: EmbeddedElementCall.bundle.bundleURL)
             } else {
                 let request = URLRequest(url: url)
-                webView.load(request)
+                navigation = webView.load(request)
+            }
+
+            track(navigation: navigation, identity: identity)
+        }
+
+        func dismantle() {
+            if let currentDocumentIdentity {
+                viewModelContext?.send(viewAction: .callWebViewDismantled(currentDocumentIdentity))
+            }
+            webView.navigationDelegate = nil
+            webView.uiDelegate = nil
+            CallScreenJavaScriptMessageName.allCases.forEach {
+                webView.configuration.userContentController.removeScriptMessageHandler(forName: $0.rawValue)
+            }
+        }
+
+        #if DEBUG
+        var lifecycleProbeWebView: WKWebView {
+            webView
+        }
+
+        func loadLifecycleProbeDocument(_ html: String) {
+            url = URL(string: "about:blank")
+            let identity = beginDocumentLoad()
+            let navigation = webView.loadHTMLString(html, baseURL: nil)
+            track(navigation: navigation, identity: identity)
+        }
+        #endif
+
+        private func beginDocumentLoad() -> CallWebViewDocumentIdentity {
+            let documentGeneration = UUID()
+            self.documentGeneration = documentGeneration
+            loadCount += 1
+            let identity = CallWebViewDocumentIdentity(webViewID: webViewID,
+                                                       documentGeneration: documentGeneration,
+                                                       sessionIdentity: sessionIdentity)
+            currentDocumentIdentity = identity
+            viewModelContext?.send(viewAction: .callWebViewDocumentLoading(identity))
+            return identity
+        }
+
+        private func track(navigation: WKNavigation?, identity: CallWebViewDocumentIdentity) {
+            guard let navigation else { return }
+            navigationIdentities[ObjectIdentifier(navigation)] = identity
+        }
+
+        private func registerBinding(for identity: CallWebViewDocumentIdentity) {
+            registrationScheduler { [weak self, weak viewModelContext] in
+                guard let self, let viewModelContext else { return }
+                let binding = CallWebViewBinding(identity: identity,
+                                                 javaScriptEvaluator: self.evaluateJavaScript,
+                                                 requestPictureInPictureHandler: self.requestPictureInPicture)
+                viewModelContext.send(viewAction: .callWebViewBindingReady(binding))
             }
         }
         
@@ -711,6 +790,12 @@ private struct CallView: UIViewRepresentable {
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             viewModelContext?.send(viewAction: .urlChanged(webView.url))
+            guard let navigation,
+                  let identity = navigationIdentities.removeValue(forKey: ObjectIdentifier(navigation)),
+                  identity == currentDocumentIdentity else {
+                return
+            }
+            registerBinding(for: identity)
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
