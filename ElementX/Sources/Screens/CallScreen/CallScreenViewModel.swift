@@ -631,22 +631,11 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             return false
         }
 
-        switch await widgetDriver.handleMessage(json) {
-        case .success:
-            return true
-        case .failure(.driverNotSetup):
+        if state.bindings.javaScriptEvaluator == nil {
             await setupTask?.value
-            switch await widgetDriver.handleMessage(json) {
-            case .success:
-                return true
-            case .failure(let error):
-                MXLog.error("Failed sending hangup to widget driver after setup with error: \(error)")
-                return false
-            }
-        case .failure(let error):
-            MXLog.error("Failed sending hangup to widget driver with error: \(error)")
-            return false
         }
+
+        return await postJSONToWidget(json)
     }
     
     private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil) async {

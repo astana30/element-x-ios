@@ -166,20 +166,27 @@ final class CallScreenViewModelTests {
     }
 
     @Test
-    func roomCallEndCallSendsHangupToWidgetAndMatrixTermination() async throws {
+    func roomCallEndCallPostsHostHangupDirectlyToWidgetAndRequestsMatrixTermination() async throws {
         let harness = try makeAudioRoomCallViewModel()
+        var evaluatedScripts = [String]()
+        harness.viewModel.context.javaScriptEvaluator = { script in
+            evaluatedScripts.append(script)
+            return true
+        }
 
         harness.viewModel.context.send(viewAction: .endCall)
         await waitFor {
-            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1 &&
+                evaluatedScripts.contains { $0.contains("im.vector.hangup") }
         }
 
-        let rawMessage = try #require(harness.widgetDriver.handleMessageReceivedMessage)
-        let jsonData = try #require(rawMessage.data(using: .utf8))
-        let payload = try JSONDecoder().decode(ElementCallWidgetMessage.self, from: jsonData)
+        let hangupScript = try #require(evaluatedScripts.first { $0.contains("im.vector.hangup") })
+        let payload = try widgetMessage(from: hangupScript)
 
         #expect(payload.direction == .toWidget)
         #expect(payload.action == .hangup)
+        #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
+        #expect(harness.widgetDriver.handleMessageCallsCount == 0)
         #expect(harness.elementCallService.requestCallTerminationRoomIDCalled)
         #expect(harness.elementCallService.requestCallTerminationRoomIDReceivedRoomID == harness.roomProxy.id)
 
@@ -197,21 +204,24 @@ final class CallScreenViewModelTests {
 
         harness.viewModel.context.send(viewAction: .endCall)
         await waitFor {
-            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1 &&
+                evaluatedScripts.contains { $0.contains("querySelectorAll(\"audio, video\")") } &&
+                evaluatedScripts.contains { $0.contains("im.vector.hangup") }
         }
 
-        let resetScript = try #require(evaluatedScripts.first)
+        let resetScript = try #require(evaluatedScripts.first { $0.contains("querySelectorAll(\"audio, video\")") })
         #expect(resetScript.contains("querySelectorAll(\"audio, video\")"))
         #expect(resetScript.contains("track.stop()"))
         #expect(resetScript.contains("srcObject = null"))
         #expect(resetScript.contains("window.stop()"))
-        #expect(evaluatedScripts.count == 1)
+        #expect(evaluatedScripts.count { $0.contains("querySelectorAll(\"audio, video\")") } == 1)
+        #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
 
         harness.viewModel.context.send(viewAction: .endCall)
         try await Task.sleep(for: .milliseconds(100))
 
-        #expect(evaluatedScripts.count == 1)
-        #expect(harness.widgetDriver.handleMessageCallsCount == 1)
+        #expect(evaluatedScripts.count == 2)
+        #expect(harness.widgetDriver.handleMessageCallsCount == 0)
         #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
 
         harness.viewModel.stop()
@@ -228,15 +238,18 @@ final class CallScreenViewModelTests {
 
         harness.viewModel.stop()
         await waitFor {
-            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+            harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1 &&
+                evaluatedScripts.contains { $0.contains("querySelectorAll(\"audio, video\")") } &&
+                evaluatedScripts.contains { $0.contains("im.vector.hangup") }
         }
 
-        let resetScript = try #require(evaluatedScripts.first)
+        let resetScript = try #require(evaluatedScripts.first { $0.contains("querySelectorAll(\"audio, video\")") })
         #expect(resetScript.contains("querySelectorAll(\"audio, video\")"))
         #expect(resetScript.contains("srcObject = null"))
-        #expect(evaluatedScripts.count == 1)
+        #expect(evaluatedScripts.count { $0.contains("querySelectorAll(\"audio, video\")") } == 1)
+        #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
         #expect(harness.elementCallService.tearDownCallSessionCalled)
-        #expect(harness.widgetDriver.handleMessageCallsCount == 1)
+        #expect(harness.widgetDriver.handleMessageCallsCount == 0)
         #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
     }
 
@@ -596,6 +609,15 @@ final class CallScreenViewModelTests {
             }
             try? await Task.sleep(for: .milliseconds(50))
         }
+    }
+
+    private func widgetMessage(from script: String) throws -> ElementCallWidgetMessage {
+        let prefix = "postMessage("
+        let suffix = ", '*')"
+        let startIndex = try #require(script.range(of: prefix)?.upperBound)
+        let endIndex = try #require(script.range(of: suffix, range: startIndex..<script.endIndex)?.lowerBound)
+        let data = try #require(String(script[startIndex..<endIndex]).data(using: .utf8))
+        return try JSONDecoder().decode(ElementCallWidgetMessage.self, from: data)
     }
 
     private func stage2FSimulatorProofText() throws -> String {
