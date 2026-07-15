@@ -285,7 +285,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
     private enum CallTerminationConstants {
         static let duplicateSuppression: TimeInterval = 1
-        static let noForeignParticipantGraceWindow: TimeInterval = 2
     }
 
     private struct CallID: Equatable {
@@ -304,7 +303,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private final class RoomCallPresenceTracker {
         var hasSeenActiveCall = false
         var hasSeenRemoteParticipant = false
-        var noForeignParticipantSince: Date?
     }
 
     private struct ForegroundRoomIncomingCallCandidate {
@@ -2548,23 +2546,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                 let hasRemoteParticipant = foreignParticipantsCount > 0
                 if hasRemoteParticipant {
                     tracker.hasSeenRemoteParticipant = true
-                    tracker.noForeignParticipantSince = nil
                 }
 
                 let shouldEndBecauseCallStopped = tracker.hasSeenActiveCall && !hasActiveCall
                 let shouldTrackNoForeignFallback = roomInfo.isDirect && tracker.hasSeenActiveCall && tracker.hasSeenRemoteParticipant
-                if shouldTrackNoForeignFallback && !hasRemoteParticipant && tracker.noForeignParticipantSince == nil {
-                    tracker.noForeignParticipantSince = self.timeProvider.now()
-                }
-
-                let noForeignParticipantElapsed: TimeInterval? = if let noForeignParticipantSince = tracker.noForeignParticipantSince {
-                    self.timeProvider.now().timeIntervalSince(noForeignParticipantSince)
-                } else {
-                    nil
-                }
                 let shouldEndBecauseRemoteLeft = shouldTrackNoForeignFallback &&
-                    !hasRemoteParticipant &&
-                    (noForeignParticipantElapsed ?? 0) >= CallTerminationConstants.noForeignParticipantGraceWindow
+                    !hasRemoteParticipant
 
                 guard shouldEndBecauseCallStopped || shouldEndBecauseRemoteLeft else {
                     return

@@ -607,9 +607,7 @@ final class ElementCallServiceTests {
     }
 
     @Test
-    func ongoingDirectCallEndsWhenRemoteLeavesCallMemberState() async {
-        service.setClientProxy(clientProxy)
-
+    func ongoingDirectCallEndsWhenRemoteLeavesCallMemberState() async throws {
         let roomID = "!room:example.com"
         let ownUserID = "@test:user.net"
         let remoteUserID = "@alice:example.com"
@@ -633,23 +631,28 @@ final class ElementCallServiceTests {
                                                                                              participants: [ownUserID, remoteUserID]))
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
 
+        service.setClientProxy(clientProxy)
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
-
-        await confirmation { confirmation in
-            service.actions
-                .sink { action in
-                    if case .endCall(let observedRoomID) = action, observedRoomID == roomID {
-                        confirmation()
-                    }
-                }
-                .store(in: &cancellables)
-
-            try? await Task.sleep(for: .milliseconds(120))
-            roomInfoSubject.send(makeRoomInfo(id: roomID,
-                                              isDirect: true,
-                                              hasRoomCall: true,
-                                              participants: [ownUserID]))
+        let timelineProxy = try #require(room.timeline as? TimelineProxyMock)
+        for _ in 0..<20 where timelineProxy.subscribeForUpdatesCallsCount == 0 {
+            try? await Task.sleep(for: .milliseconds(10))
         }
+        #expect(timelineProxy.subscribeForUpdatesCallsCount > 0)
+        await Task.yield()
+
+        let deferredEndCall = deferFulfillment(service.actions) { action in
+            if case .endCall(let observedRoomID) = action {
+                return observedRoomID == roomID
+            }
+            return false
+        }
+
+        try? await Task.sleep(for: .milliseconds(120))
+        roomInfoSubject.send(makeRoomInfo(id: roomID,
+                                          isDirect: true,
+                                          hasRoomCall: true,
+                                          participants: [ownUserID]))
+        try await deferredEndCall.fulfill()
 
         #expect(service.ongoingCallRoomIDPublisher.value == nil)
     }

@@ -13,8 +13,7 @@ import SwiftUI
 
 typealias CallScreenViewModelType = StateStoreViewModel<CallScreenViewState, CallScreenViewAction>
 
-private struct PendingWidgetHangupResponse {
-    let requestID: String
+private struct PendingMatrixRTCMembershipLeaveResponse {
     let continuation: CheckedContinuation<Bool, Never>
 }
 
@@ -27,14 +26,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case setAlwaysOnScreen = "set_always_on_screen"
     }
 
-    #if DEBUG
     private enum MatrixRTCWidgetAction {
         static let membershipEventType = "org.matrix.msc3401.call.member"
         static let sendEvent = "send_event"
         static let updateDelayedEvent = "org.matrix.msc4157.update_delayed_event"
         static let sendDelayedEvent = "send"
     }
-    #endif
     
     private enum PreferredAudioRoute {
         case systemDefault
@@ -55,13 +52,14 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private var shouldSendHangupOnStop = true
     private var isDismissingAfterLocalHangup = false
     private var hasRequestedEmbeddedWebContentReset = false
-    private var pendingWidgetHangupResponse: PendingWidgetHangupResponse?
-    #if DEBUG
-    private var pendingReceiverWidgetJoinRequestID: String?
-    private var pendingReceiverMembershipStateSendRequestIDs = Set<String>()
+    private var pendingWidgetHangupRequestID: String?
+    private var pendingMatrixRTCMembershipLeaveResponse: PendingMatrixRTCMembershipLeaveResponse?
     private var pendingMatrixRTCDelayedLeavePrepareRequestIDs = Set<String>()
     private var matrixRTCDelayedLeaveID: String?
     private var pendingMatrixRTCMembershipLeaveRequestIDs = Set<String>()
+    #if DEBUG
+    private var pendingReceiverWidgetJoinRequestID: String?
+    private var pendingReceiverMembershipStateSendRequestIDs = Set<String>()
     #endif
     
     private let actionsSubject: PassthroughSubject<CallScreenViewModelAction, Never> = .init()
@@ -164,9 +162,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             .sink { [weak self] receivedMessage in
                 guard let self else { return }
 
-                #if DEBUG
-                recordMatrixRTCWidgetResponseIfNeeded(receivedMessage)
-                #endif
+                handleMatrixRTCWidgetResponseIfNeeded(receivedMessage)
                 
                 Task {
                     await self.postJSONToWidget(receivedMessage)
@@ -236,13 +232,14 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     func stop() {
         timeoutTask = nil
         audioRouteEnforcementTask = nil
-        finishPendingWidgetHangupResponse(received: false)
-        #if DEBUG
-        pendingReceiverWidgetJoinRequestID = nil
-        pendingReceiverMembershipStateSendRequestIDs.removeAll()
+        finishPendingMatrixRTCMembershipLeaveResponse(completed: false)
+        pendingWidgetHangupRequestID = nil
         pendingMatrixRTCDelayedLeavePrepareRequestIDs.removeAll()
         matrixRTCDelayedLeaveID = nil
         pendingMatrixRTCMembershipLeaveRequestIDs.removeAll()
+        #if DEBUG
+        pendingReceiverWidgetJoinRequestID = nil
+        pendingReceiverMembershipStateSendRequestIDs.removeAll()
         #endif
         resetEmbeddedWebContentIfNeeded()
         let pendingSetupCallTask = setupCallTask
@@ -266,9 +263,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             return
         }
 
-        #if DEBUG
         recordMatrixRTCWidgetRequestIfNeeded(message)
-        #endif
 
         if timeoutTask != nil,
            let decodedMessage = try? DecodedWidgetMessage.decode(message: message),
@@ -651,9 +646,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         #endif
 
         return await withCheckedContinuation { continuation in
-            finishPendingWidgetHangupResponse(received: false)
-            pendingWidgetHangupResponse = .init(requestID: message.requestId,
-                                                continuation: continuation)
+            finishPendingMatrixRTCMembershipLeaveResponse(completed: false)
+            pendingWidgetHangupRequestID = message.requestId
+            pendingMatrixRTCMembershipLeaveResponse = .init(continuation: continuation)
 
             Task { [weak self] in
                 guard let self else { return }
@@ -665,7 +660,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 }
                 #endif
                 if !posted {
-                    self.finishPendingWidgetHangupResponse(requestID: message.requestId, received: false)
+                    self.finishPendingMatrixRTCMembershipLeaveResponse(completed: false)
                 }
             }
         }
@@ -677,26 +672,29 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
               payload["api"] as? String == ElementCallWidgetMessage.Direction.toWidget.rawValue,
               payload["action"] as? String == ElementCallWidgetMessage.Action.hangup.rawValue,
               let requestID = payload["requestId"] as? String,
-              payload["response"] is [String: Any],
-              requestID == pendingWidgetHangupResponse?.requestID else {
+              payload["response"] is [String: Any] else {
             return false
+        }
+
+        guard requestID == pendingWidgetHangupRequestID else {
+            return true
         }
 
         #if DEBUG
         SalemXStage2FSimulatorSignalingDebug.recordSenderWidgetHangupResponseReceived()
         #endif
-        finishPendingWidgetHangupResponse(requestID: requestID, received: true)
+        pendingWidgetHangupRequestID = nil
         return true
     }
 
-    private func finishPendingWidgetHangupResponse(requestID: String? = nil, received: Bool) {
-        guard let pendingWidgetHangupResponse,
-              requestID == nil || requestID == pendingWidgetHangupResponse.requestID else {
+    private func finishPendingMatrixRTCMembershipLeaveResponse(completed: Bool) {
+        guard let pendingMatrixRTCMembershipLeaveResponse else {
             return
         }
 
-        self.pendingWidgetHangupResponse = nil
-        pendingWidgetHangupResponse.continuation.resume(returning: received)
+        self.pendingMatrixRTCMembershipLeaveResponse = nil
+        pendingWidgetHangupRequestID = nil
+        pendingMatrixRTCMembershipLeaveResponse.continuation.resume(returning: completed)
     }
     
     private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil) async {
@@ -705,9 +703,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             _ = await hangup(waitingFor: setupTask)
         case .roomCall(let roomProxy, _, _, _, _, _, _):
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] room_id=\(roomProxy.id) step=start")
-            let widgetHangupSent = await hangup(waitingFor: setupTask)
+            let matrixRTCMembershipLeaveCompleted = await hangup(waitingFor: setupTask)
             await elementCallService.requestCallTermination(roomID: roomProxy.id)
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] room_id=\(roomProxy.id) step=done widget_hangup_sent=\(widgetHangupSent)")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] room_id=\(roomProxy.id) step=done " +
+                "matrixrtc_membership_leave_completed=\(matrixRTCMembershipLeaveCompleted)")
         }
     }
     
@@ -841,9 +840,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             MXLog.error("Element Call media diagnostics: widget_join_forwarded_to_driver=false error=\(error) start_mode=\(configuration.startMode)")
         }
     }
+}
 
-    #if DEBUG
-    private func recordMatrixRTCWidgetResponseIfNeeded(_ message: String) {
+extension CallScreenViewModel {
+    private func handleMatrixRTCWidgetResponseIfNeeded(_ message: String) {
         guard let data = message.data(using: .utf8),
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               payload["api"] as? String == ElementCallWidgetMessage.Direction.fromWidget.rawValue,
@@ -853,34 +853,49 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             return
         }
 
+        #if DEBUG
         if action == NativeWidgetAction.join.rawValue,
            requestID == pendingReceiverWidgetJoinRequestID {
             pendingReceiverWidgetJoinRequestID = nil
             SalemXStage2FSimulatorSignalingDebug.recordReceiverWidgetJoinDriverResponseReceived()
         }
+        #endif
 
         if action == MatrixRTCWidgetAction.sendEvent,
            pendingMatrixRTCDelayedLeavePrepareRequestIDs.remove(requestID) != nil {
             if let error = response["error"] as? [String: Any] {
+                #if DEBUG
                 let matrixAPIError = error["matrix_api_error"] as? [String: Any]
                 SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCDelayedLeavePrepareError(httpStatus: matrixAPIError?["http_status"] as? Int)
+                #endif
             } else if let delayID = response["delay_id"] as? String, !delayID.isEmpty {
                 matrixRTCDelayedLeaveID = delayID
+                #if DEBUG
                 SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCDelayedLeavePrepared()
+                #endif
             } else {
+                #if DEBUG
                 SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCDelayedLeavePrepareError(httpStatus: nil)
+                #endif
             }
         }
 
         if pendingMatrixRTCMembershipLeaveRequestIDs.remove(requestID) != nil {
             if let error = response["error"] as? [String: Any] {
+                #if DEBUG
                 let matrixAPIError = error["matrix_api_error"] as? [String: Any]
                 SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendError(httpStatus: matrixAPIError?["http_status"] as? Int)
+                #endif
+                finishPendingMatrixRTCMembershipLeaveResponse(completed: false)
             } else {
+                #if DEBUG
                 SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendCompleted()
+                #endif
+                finishPendingMatrixRTCMembershipLeaveResponse(completed: true)
             }
         }
 
+        #if DEBUG
         guard action == MatrixRTCWidgetAction.sendEvent,
               pendingReceiverMembershipStateSendRequestIDs.remove(requestID) != nil else {
             return
@@ -892,6 +907,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         } else {
             SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendCompleted()
         }
+        #endif
     }
 
     private func recordMatrixRTCWidgetRequestIfNeeded(_ message: String) {
@@ -905,11 +921,14 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         if action == MatrixRTCWidgetAction.updateDelayedEvent,
+           pendingMatrixRTCMembershipLeaveResponse != nil,
            eventData["action"] as? String == MatrixRTCWidgetAction.sendDelayedEvent,
            let delayID = eventData["delay_id"] as? String,
            delayID == matrixRTCDelayedLeaveID,
            pendingMatrixRTCMembershipLeaveRequestIDs.insert(requestID).inserted {
+            #if DEBUG
             SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendAttempted()
+            #endif
             return
         }
 
@@ -923,18 +942,27 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         if content.isEmpty {
             if eventData["delay"] != nil,
                pendingMatrixRTCDelayedLeavePrepareRequestIDs.insert(requestID).inserted {
+                #if DEBUG
                 SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCDelayedLeavePrepareAttempted()
+                #endif
             } else if eventData["delay"] == nil,
+                      pendingMatrixRTCMembershipLeaveResponse != nil,
                       pendingMatrixRTCMembershipLeaveRequestIDs.insert(requestID).inserted {
+                #if DEBUG
                 SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendAttempted()
+                #endif
             }
-        } else if eventData["delay"] == nil,
-                  pendingReceiverMembershipStateSendRequestIDs.insert(requestID).inserted {
-            SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendAttempted()
+        } else if eventData["delay"] == nil {
+            #if DEBUG
+            if pendingReceiverMembershipStateSendRequestIDs.insert(requestID).inserted {
+                SalemXStage2FSimulatorSignalingDebug.recordReceiverMembershipStateSendAttempted()
+            }
+            #endif
         }
     }
-    #endif
-    
+}
+
+extension CallScreenViewModel {
     @discardableResult
     private func acknowledgeWidgetRequest(_ requestPayload: [String: Any], data: [String: Any]? = nil) async -> Bool {
         var responsePayload = requestPayload

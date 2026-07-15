@@ -203,6 +203,22 @@ final class CallScreenViewModelTests {
         #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
 
         try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: payload)))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        let leaveRequestID = "membership-leave"
+        harness.viewModel.context.send(viewAction: .widgetAction(message: matrixRTCMembershipLeaveRequest(requestID: leaveRequestID)))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 1 }
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        harness.widgetDriver.messagePublisher.send(matrixRTCMembershipLeaveResponse(requestID: "mismatched-request"))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        harness.widgetDriver.messagePublisher.send(matrixRTCMembershipLeaveResponse(requestID: leaveRequestID))
         await waitFor {
             dismissCount == 1 && harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
         }
@@ -245,6 +261,7 @@ final class CallScreenViewModelTests {
         let hangupScript = try #require(evaluatedScripts.first { $0.contains("im.vector.hangup") })
         let payload = try widgetMessage(from: hangupScript)
         try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: payload)))
+        await completeMatrixRTCHangup(in: harness)
         await waitFor {
             harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
         }
@@ -279,6 +296,7 @@ final class CallScreenViewModelTests {
         let hangupScript = try #require(evaluatedScripts.first { $0.contains("im.vector.hangup") })
         let payload = try widgetMessage(from: hangupScript)
         try harness.viewModel.context.send(viewAction: .widgetAction(message: widgetResponse(for: payload)))
+        await completeMatrixRTCHangup(in: harness)
         await waitFor {
             harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
         }
@@ -432,6 +450,9 @@ final class CallScreenViewModelTests {
         await waitFor {
             (try? self.stage2FSimulatorProofText().contains("matrixrtc_delayed_leave_prepared=true")) == true
         }
+
+        harness.viewModel.context.javaScriptEvaluator = { _ in true }
+        harness.viewModel.context.send(viewAction: .endCall)
 
         let mismatchedLeaveMessage = """
         {"api":"fromWidget","action":"org.matrix.msc4157.update_delayed_event","widgetId":"call-widget","requestId":"stale-leave","data":{"delay_id":"other-delay","action":"send"}}
@@ -657,6 +678,26 @@ final class CallScreenViewModelTests {
         payload["response"] = [String: Any]()
         let response = try JSONSerialization.data(withJSONObject: payload)
         return try #require(String(data: response, encoding: .utf8))
+    }
+
+    private func completeMatrixRTCHangup(in harness: CallScreenHarness) async {
+        let requestID = "membership-leave"
+        let previousHandleMessageCallsCount = harness.widgetDriver.handleMessageCallsCount
+        harness.viewModel.context.send(viewAction: .widgetAction(message: matrixRTCMembershipLeaveRequest(requestID: requestID)))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == previousHandleMessageCallsCount + 1 }
+        harness.widgetDriver.messagePublisher.send(matrixRTCMembershipLeaveResponse(requestID: requestID))
+    }
+
+    private func matrixRTCMembershipLeaveRequest(requestID: String) -> String {
+        """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"\(requestID)","data":{"type":"org.matrix.msc3401.call.member","state_key":"redacted-state","content":{}}}
+        """
+    }
+
+    private func matrixRTCMembershipLeaveResponse(requestID: String) -> String {
+        """
+        {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"\(requestID)","response":{}}
+        """
     }
 
     private func stage2FSimulatorProofText() throws -> String {
