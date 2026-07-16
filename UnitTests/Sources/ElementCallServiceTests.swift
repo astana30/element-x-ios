@@ -756,6 +756,188 @@ final class ElementCallServiceTests {
     }
 
     @Test
+    func ongoingDirectCallReevaluatesRemoteMembershipAtExpiryAfterRoomInfoDropsRemote() async {
+        let roomID = "!membership-expiry:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let membershipCreatedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        currentDate = membershipCreatedAt
+        let (room, subscription) = makeOngoingCallRoom(id: roomID,
+                                                       ownUserID: ownUserID,
+                                                       initialHasRoomCall: true,
+                                                       initialParticipants: [ownUserID, remoteUserID],
+                                                       initialTimelineItems: [
+                                                           makeMatrixRTCMembershipTimelineItem(eventID: "$membership-expiry-local",
+                                                                                               roomID: roomID,
+                                                                                               userID: ownUserID,
+                                                                                               deviceID: "LOCAL_DEVICE",
+                                                                                               membershipID: "LOCAL_PARTY",
+                                                                                               createdAt: membershipCreatedAt),
+                                                           makeMatrixRTCMembershipTimelineItem(eventID: "$membership-expiry-remote",
+                                                                                               roomID: roomID,
+                                                                                               userID: remoteUserID,
+                                                                                               deviceID: "REMOTE_DEVICE",
+                                                                                               membershipID: "REMOTE_PARTY",
+                                                                                               createdAt: membershipCreatedAt,
+                                                                                               expiresInMilliseconds: 1000)
+                                                       ])
+        clientProxy.roomForIdentifierClosure = { _ in
+            .joined(room)
+        }
+
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall = action {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
+        #expect(await waitForRoomInfoSubscription(on: room))
+        #expect(await subscription.waitForTimelineSubscription())
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID, remoteUserID])))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        currentDate = membershipCreatedAt.addingTimeInterval(0.999)
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID])))
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(endCallCount == 0)
+        #expect(service.ongoingCallRoomIDPublisher.value == roomID)
+
+        currentDate = membershipCreatedAt.addingTimeInterval(1)
+        #expect(endCallCount == 0)
+        await testClock.advance(by: .milliseconds(1))
+        for _ in 0..<30 where endCallCount == 0 {
+            await Task.yield()
+        }
+
+        #expect(endCallCount == 1)
+        #expect(service.ongoingCallRoomIDPublisher.value == nil)
+        await testClock.advance(by: .seconds(1))
+        #expect(endCallCount == 1)
+    }
+
+    @Test
+    func ongoingDirectCallMembershipRefreshReschedulesExpiryReevaluation() async {
+        let roomID = "!membership-refresh:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let membershipCreatedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        currentDate = membershipCreatedAt
+        let localMembership = makeMatrixRTCMembershipTimelineItem(eventID: "$membership-refresh-local",
+                                                                  roomID: roomID,
+                                                                  userID: ownUserID,
+                                                                  deviceID: "LOCAL_DEVICE",
+                                                                  membershipID: "LOCAL_PARTY",
+                                                                  createdAt: membershipCreatedAt)
+        let remoteMembership = makeMatrixRTCMembershipTimelineItem(eventID: "$membership-refresh-remote",
+                                                                   roomID: roomID,
+                                                                   userID: remoteUserID,
+                                                                   deviceID: "REMOTE_DEVICE",
+                                                                   membershipID: "REMOTE_PARTY",
+                                                                   createdAt: membershipCreatedAt,
+                                                                   expiresInMilliseconds: 10000)
+        let (room, subscription) = makeOngoingCallRoom(id: roomID,
+                                                       ownUserID: ownUserID,
+                                                       initialHasRoomCall: true,
+                                                       initialParticipants: [ownUserID, remoteUserID],
+                                                       initialTimelineItems: [localMembership, remoteMembership])
+        clientProxy.roomForIdentifierClosure = { _ in
+            .joined(room)
+        }
+
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall = action {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
+        #expect(await waitForRoomInfoSubscription(on: room))
+        #expect(await subscription.waitForTimelineSubscription())
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID, remoteUserID])))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        currentDate = membershipCreatedAt.addingTimeInterval(0.999)
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID])))
+        #expect(subscription.receiveSDKTimelineUpdate([
+            localMembership,
+            makeMatrixRTCMembershipTimelineItem(eventID: "$membership-refresh-remote-new",
+                                                roomID: roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                createdAt: currentDate,
+                                                expiresInMilliseconds: 1000)
+        ]))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        currentDate = membershipCreatedAt.addingTimeInterval(1)
+        await testClock.advance(by: .milliseconds(1))
+        #expect(endCallCount == 0)
+        #expect(service.ongoingCallRoomIDPublisher.value == roomID)
+
+        currentDate = membershipCreatedAt.addingTimeInterval(1.5)
+        await testClock.advance(by: .milliseconds(500))
+        #expect(endCallCount == 0)
+
+        #expect(subscription.receiveSDKTimelineUpdate([
+            localMembership,
+            makeMatrixRTCMembershipTimelineItem(eventID: "$membership-refresh-remote-later",
+                                                roomID: roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                createdAt: currentDate,
+                                                expiresInMilliseconds: 10000)
+        ]))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        currentDate = membershipCreatedAt.addingTimeInterval(1.999)
+        await testClock.advance(by: .milliseconds(499))
+        #expect(endCallCount == 0)
+
+        currentDate = membershipCreatedAt.addingTimeInterval(2)
+        await testClock.advance(by: .milliseconds(1))
+        #expect(endCallCount == 0)
+        #expect(service.ongoingCallRoomIDPublisher.value == roomID)
+
+        currentDate = membershipCreatedAt.addingTimeInterval(11.499)
+        await testClock.advance(by: .milliseconds(9499))
+        #expect(endCallCount == 0)
+
+        currentDate = membershipCreatedAt.addingTimeInterval(11.5)
+        await testClock.advance(by: .milliseconds(1))
+        for _ in 0..<30 where endCallCount == 0 {
+            await Task.yield()
+        }
+
+        #expect(endCallCount == 1)
+        #expect(service.ongoingCallRoomIDPublisher.value == nil)
+        await testClock.advance(by: .seconds(10))
+        #expect(endCallCount == 1)
+    }
+
+    @Test
     func ongoingDirectCallLocalOnlyProjectionKeepsRemoteEndDecisionWhenLocalLaterLeaves() async {
         let roomID = "!local-only-transition:example.com"
         let ownUserID = "@test:user.net"
@@ -1266,6 +1448,85 @@ final class ElementCallServiceTests {
         try? await Task.sleep(for: .milliseconds(100))
 
         #expect(endedRoomIDs == [roomID])
+    }
+
+    @Test
+    func ongoingMembershipExpiryTaskRejectsReplacedCallIdentity() async throws {
+        let firstRoomID = "!first-expiry-room:example.com"
+        let secondRoomID = "!second-expiry-room:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let membershipCreatedAt = try #require(currentDate)
+        let (firstRoom, firstSubscription) = makeOngoingCallRoom(id: firstRoomID,
+                                                                 ownUserID: ownUserID,
+                                                                 initialHasRoomCall: true,
+                                                                 initialParticipants: [ownUserID, remoteUserID],
+                                                                 initialTimelineItems: [
+                                                                     makeMatrixRTCMembershipTimelineItem(eventID: "$first-expiry-local",
+                                                                                                         roomID: firstRoomID,
+                                                                                                         userID: ownUserID,
+                                                                                                         createdAt: membershipCreatedAt),
+                                                                     makeMatrixRTCMembershipTimelineItem(eventID: "$first-expiry-remote",
+                                                                                                         roomID: firstRoomID,
+                                                                                                         userID: remoteUserID,
+                                                                                                         deviceID: "REMOTE_DEVICE",
+                                                                                                         membershipID: "REMOTE_PARTY",
+                                                                                                         createdAt: membershipCreatedAt,
+                                                                                                         expiresInMilliseconds: 1000)
+                                                                 ])
+        let (secondRoom, secondSubscription) = makeOngoingCallRoom(id: secondRoomID,
+                                                                   ownUserID: ownUserID,
+                                                                   remoteUserID: remoteUserID)
+        clientProxy.roomForIdentifierClosure = { roomID in
+            switch roomID {
+            case firstRoomID: .joined(firstRoom)
+            case secondRoomID: .joined(secondRoom)
+            default: nil
+            }
+        }
+
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall = action {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: firstRoomID, roomDisplayName: "First")
+        #expect(await waitForRoomInfoSubscription(on: firstRoom))
+        #expect(await firstSubscription.waitForTimelineSubscription())
+        #expect(firstSubscription.receiveSDKUpdate(makeRoomInfo(id: firstRoomID,
+                                                                isDirect: true,
+                                                                hasRoomCall: true,
+                                                                participants: [ownUserID, remoteUserID])))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        currentDate = membershipCreatedAt.addingTimeInterval(0.999)
+        #expect(firstSubscription.receiveSDKUpdate(makeRoomInfo(id: firstRoomID,
+                                                                isDirect: true,
+                                                                hasRoomCall: true,
+                                                                participants: [ownUserID])))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        await service.setupCallSession(roomID: secondRoomID, roomDisplayName: "Second")
+        #expect(await waitForRoomInfoSubscription(on: secondRoom))
+        #expect(await secondSubscription.waitForTimelineSubscription())
+        #expect(secondSubscription.receiveSDKUpdate(makeRoomInfo(id: secondRoomID,
+                                                                 isDirect: true,
+                                                                 hasRoomCall: true,
+                                                                 participants: [ownUserID, remoteUserID])))
+
+        currentDate = membershipCreatedAt.addingTimeInterval(1)
+        await testClock.advance(by: .milliseconds(1))
+        for _ in 0..<10 {
+            await Task.yield()
+        }
+
+        #expect(endCallCount == 0)
+        #expect(service.ongoingCallRoomIDPublisher.value == secondRoomID)
     }
 
     @Test

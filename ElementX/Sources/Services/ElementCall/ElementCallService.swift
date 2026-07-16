@@ -481,6 +481,7 @@ private final class OngoingCallMembershipTracker {
     private var terminalEventEmitted = false
 
     private(set) var hasObservedRemoteMembershipForCurrentCall = false
+    private(set) var nextEvaluationTimestampMilliseconds: UInt64?
 
     init(ownUserID: String, ownDeviceID: String?) {
         self.ownUserID = ownUserID
@@ -511,7 +512,12 @@ private final class OngoingCallMembershipTracker {
         return evaluate(now: now)
     }
 
+    func reevaluate(now: Date) -> Bool {
+        evaluate(now: now)
+    }
+
     private func evaluate(now: Date) -> Bool {
+        nextEvaluationTimestampMilliseconds = nil
         let nowMilliseconds = UInt64(max(0, now.timeIntervalSince1970 * 1000))
         let activeMemberships = membershipStateByStateKey.values
             .flatMap(\.memberships)
@@ -519,9 +525,8 @@ private final class OngoingCallMembershipTracker {
 
         resolveExactLocalMembership(from: activeMemberships)
         let activeMembershipIdentities = Set(activeMemberships.map(\.identity))
-        let remoteMemberships = Set(activeMembershipIdentities.compactMap { membership in
-            isRemote(membership) ? membership : nil
-        })
+        let activeRemoteMemberships = activeMemberships.filter { isRemote($0.identity) }
+        let remoteMemberships = Set(activeRemoteMemberships.map(\.identity))
 
         if let latestRoomInfo {
             let confirmedRemoteMemberships = remoteMemberships.filter { membership in
@@ -537,16 +542,23 @@ private final class OngoingCallMembershipTracker {
 
         guard hasObservedRemoteMembershipForCurrentCall,
               !observedRemoteMemberships.isEmpty,
-              remoteMemberships.isEmpty,
               let latestRoomInfo,
               observedRemoteMemberships.allSatisfy({ membership in
                   !roomInfo(latestRoomInfo,
                             projects: membership,
                             among: activeMembershipIdentities)
-              }),
-              !terminalEventEmitted else {
+              }) else {
             return false
         }
+
+        guard remoteMemberships.isEmpty else {
+            nextEvaluationTimestampMilliseconds = activeRemoteMemberships
+                .map(\.expiresAtMilliseconds)
+                .min()
+            return false
+        }
+
+        guard !terminalEventEmitted else { return false }
 
         terminalEventEmitted = true
         return true
@@ -604,6 +616,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private enum IncomingFallbackConstants {
         static let unansweredTimeout: Duration = .seconds(45)
         static let suppressionDuration: TimeInterval = 30
+    }
+
+    private enum OngoingCallObservationConstants {
+        static let maximumMembershipReevaluationDelayMilliseconds: UInt64 = 86_400_000
     }
 
     private enum CallTerminationConstants {
@@ -727,6 +743,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     
     private var ongoingCallTimelineCancellable: AnyCancellable?
     private var ongoingCallRoomInfoCancellable: AnyCancellable?
+    private var ongoingCallMembershipExpiryTask: Task<Void, Never>?
     private var ongoingCallObservation: OngoingCallObservation?
     private var ongoingCallObservationRequestIdentity: OngoingCallObservationIdentity?
     private var recentlyEndedCallID: CallID?
@@ -2838,6 +2855,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
         ongoingCallTimelineCancellable = nil
         ongoingCallRoomInfoCancellable = nil
+        ongoingCallMembershipExpiryTask?.cancel()
+        ongoingCallMembershipExpiryTask = nil
         ongoingCallObservation = nil
     }
 
@@ -2907,11 +2926,15 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                                                         ongoingCallID: ongoingCallID,
                                                         itemProxies: itemProxies)
                     if observation.membershipTracker.updateTimeline(itemProxies, now: self.timeProvider.now()) {
+                        self.ongoingCallMembershipExpiryTask?.cancel()
+                        self.ongoingCallMembershipExpiryTask = nil
                         self.endOngoingCall(ongoingCallID,
                                             reason: .remoteEnded,
                                             deduplicationID: "ongoing-membership:\(ongoingCallID.callKitID.uuidString)")
                         return
                     }
+                    self.scheduleOngoingCallMembershipReevaluation(ongoingCallID: ongoingCallID,
+                                                                   observation: observation)
                     guard let terminationEvent = self.latestRemoteTerminationEvent(in: itemProxies, roomID: ongoingCallID.roomID) else { return }
                     guard terminationEvent.eventID != tracker.eventID else { return }
 
@@ -2986,13 +3009,57 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                 }
                 #endif
                 guard observation.membershipTracker.updateRoomInfo(roomInfo, now: self.timeProvider.now()) else {
+                    self.scheduleOngoingCallMembershipReevaluation(ongoingCallID: ongoingCallID,
+                                                                   observation: observation)
                     return
                 }
 
+                self.ongoingCallMembershipExpiryTask?.cancel()
+                self.ongoingCallMembershipExpiryTask = nil
                 self.endOngoingCall(ongoingCallID,
                                     reason: .remoteEnded,
                                     deduplicationID: "ongoing-membership:\(ongoingCallID.callKitID.uuidString)")
             }
+    }
+
+    private func scheduleOngoingCallMembershipReevaluation(ongoingCallID: CallID,
+                                                           observation: OngoingCallObservation) {
+        ongoingCallMembershipExpiryTask?.cancel()
+        ongoingCallMembershipExpiryTask = nil
+
+        guard let nextEvaluationTimestampMilliseconds = observation.membershipTracker.nextEvaluationTimestampMilliseconds else {
+            return
+        }
+
+        let identity = observation.identity
+        let nowMilliseconds = UInt64(max(0, timeProvider.now().timeIntervalSince1970 * 1000))
+        let unboundedDelayMilliseconds = nextEvaluationTimestampMilliseconds > nowMilliseconds
+            ? nextEvaluationTimestampMilliseconds - nowMilliseconds
+            : 0
+        let delayMilliseconds = Int64(min(unboundedDelayMilliseconds,
+                                          OngoingCallObservationConstants.maximumMembershipReevaluationDelayMilliseconds))
+        let clock = timeProvider.clock
+        ongoingCallMembershipExpiryTask = Task { @MainActor [weak self, weak observation] in
+            try? await clock.sleep(for: .milliseconds(delayMilliseconds))
+            guard !Task.isCancelled,
+                  let self,
+                  let observation,
+                  self.isCurrentOngoingCallObservation(identity),
+                  self.ongoingCallObservation === observation else {
+                return
+            }
+
+            self.ongoingCallMembershipExpiryTask = nil
+            guard observation.membershipTracker.reevaluate(now: self.timeProvider.now()) else {
+                self.scheduleOngoingCallMembershipReevaluation(ongoingCallID: ongoingCallID,
+                                                               observation: observation)
+                return
+            }
+
+            self.endOngoingCall(ongoingCallID,
+                                reason: .remoteEnded,
+                                deduplicationID: "ongoing-membership:\(ongoingCallID.callKitID.uuidString)")
+        }
     }
 
     private func roomInfoDeduplicationID(prefix: String, roomInfo: RoomInfoProxyProtocol) -> String {

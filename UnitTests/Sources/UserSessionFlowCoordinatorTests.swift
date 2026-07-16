@@ -10,6 +10,7 @@ import Combine
 @testable import ElementX
 import Foundation
 import Testing
+import UIKit
 
 @MainActor
 struct UserSessionFlowCoordinatorTests {
@@ -21,6 +22,7 @@ struct UserSessionFlowCoordinatorTests {
     
     private let networkReachabilitySubject: CurrentValueSubject<NetworkMonitorReachability, Never> = .init(.reachable)
     private let homeserverReachabilitySubject: CurrentValueSubject<NetworkMonitorReachability, Never> = .init(.reachable)
+    private let flowElementCallServiceActions = PassthroughSubject<ElementCallServiceAction, Never>()
     private var cancellables = Set<AnyCancellable>()
     
     private var tabCoordinator: NavigationTabCoordinator<UserSessionFlowCoordinator.HomeTab>? {
@@ -46,19 +48,27 @@ struct UserSessionFlowCoordinatorTests {
     init() async throws {
         rootCoordinator = NavigationRootCoordinator()
         
-        let clientProxy = ClientProxyMock(.init(userID: "hi@bob", roomSummaryProvider: RoomSummaryProviderMock(.init(state: .loaded(.mockRooms)))))
+        let clientProxy = ClientProxyMock(.init(userID: "hi@bob",
+                                                deviceID: "TEST_DEVICE",
+                                                roomSummaryProvider: RoomSummaryProviderMock(.init(state: .loaded(.mockRooms)))))
         clientProxy.homeserverReachabilityPublisher = homeserverReachabilitySubject.asCurrentValuePublisher()
         
         let networkMonitor = NetworkMonitorMock.default
         networkMonitor.reachabilityPublisher = networkReachabilitySubject.asCurrentValuePublisher()
         let appMediator = AppMediatorMock.default
         appMediator.networkMonitor = networkMonitor
+        let windowManager = WindowManagerMock()
+        windowManager.mainWindow = UIWindow()
+        appMediator.windowManager = windowManager
         
         userIndicatorController = UserIndicatorControllerMock()
+
+        let elementCallService = ElementCallServiceMock(.init())
+        elementCallService.underlyingActions = flowElementCallServiceActions.eraseToAnyPublisher()
         
         flowParameters = CommonFlowParameters(userSession: UserSessionMock(.init(clientProxy: clientProxy)),
                                               bugReportService: BugReportServiceMock(.init()),
-                                              elementCallService: ElementCallServiceMock(.init()),
+                                              elementCallService: elementCallService,
                                               directCallEngine: DirectCallEngine(ownUserID: "hi@bob") { _ in nil },
                                               timelineControllerFactory: TimelineControllerFactoryMock(.init()),
                                               emojiProvider: EmojiProvider(appSettings: ServiceLocator.shared.settings),
@@ -132,6 +142,26 @@ struct UserSessionFlowCoordinatorTests {
         await userSessionFlowCoordinator.presentEmbeddedElementCall(roomID: "1", startMode: .audio)
 
         #expect(tabCoordinator?.overlayCoordinator is CallScreenCoordinator)
+    }
+
+    @Test
+    func elementCallServiceEndCallDismissalIsOwnedByCallScreen() async throws {
+        let elementCallService = try #require(flowParameters.elementCallService as? ElementCallServiceMock)
+        let callScreenElementCallServiceActions = PassthroughSubject<ElementCallServiceAction, Never>()
+        elementCallService.underlyingActions = callScreenElementCallServiceActions.eraseToAnyPublisher()
+        await userSessionFlowCoordinator.presentEmbeddedElementCall(roomID: "1", startMode: .audio)
+
+        let tabCoordinator = try #require(tabCoordinator)
+        let callScreenCoordinator = try #require(tabCoordinator.overlayCoordinator as? CallScreenCoordinator)
+        let unexpectedDismissal = deferFailure(tabCoordinator.observe(\.overlayCoordinator), timeout: .milliseconds(100)) { $0 == nil }
+        flowElementCallServiceActions.send(.endCall(roomID: "1"))
+        try await unexpectedDismissal.fulfill()
+        #expect(tabCoordinator.overlayCoordinator === callScreenCoordinator)
+
+        let expectedDismissal = deferFulfillment(tabCoordinator.observe(\.overlayCoordinator)) { $0 == nil }
+        callScreenElementCallServiceActions.send(.endCall(roomID: "1"))
+        try await expectedDismissal.fulfill()
+        #expect(tabCoordinator.overlayCoordinator == nil)
     }
     
     @Test

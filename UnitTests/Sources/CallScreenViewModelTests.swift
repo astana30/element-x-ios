@@ -12,6 +12,25 @@ import Foundation
 import Testing
 import WebKit
 
+private actor OneShotGate {
+    private var isOpen = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func open() {
+        guard !isOpen else { return }
+        isOpen = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
 @MainActor
 final class CallScreenViewModelTests {
     @Test
@@ -79,6 +98,254 @@ final class CallScreenViewModelTests {
         harness.viewModel.stop()
     }
 
+    @Test
+    func topLevelWidgetHangupBridgesMembershipLeaveToNativeDriver() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+        let coordinator = CallView.Coordinator(viewModelContext: harness.viewModel.context) { registration in
+            registration()
+        }
+        coordinator.loadLifecycleProbeDocument(Self.topLevelHangupProbeDocument)
+        await waitUntilLoaded(coordinator.lifecycleProbeWebView)
+        await waitFor {
+            harness.viewModel.activeCallWebViewIdentity?.webViewID == coordinator.webViewID
+        }
+
+        harness.viewModel.context.send(viewAction: .endCall)
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 1 }
+
+        let isTopLevel = try await coordinator.evaluateJavaScript("window.isTopLevel") as? Bool
+        let terminationBridgeInstalled = try await coordinator.evaluateJavaScript("window.__elementXTerminationBridgeInstalled") as? Bool
+        let terminationBridgeActive = try await coordinator.evaluateJavaScript("window.__elementXTerminationBridgeActive") as? Bool
+        let postMessageRestored = try await coordinator.evaluateJavaScript("window.postMessage === window.originalPostMessage") as? Bool
+        let hangupReceived = try await coordinator.evaluateJavaScript("window.hangupReceived") as? Bool
+        let hangupAcknowledged = try await coordinator.evaluateJavaScript("window.hangupAcknowledged") as? Bool
+        let membershipLeavePosted = try await coordinator.evaluateJavaScript("window.membershipLeavePosted") as? Bool
+        let echoedTerminationOutputCount = try await coordinator.evaluateJavaScript("window.echoedTerminationOutputCount") as? Int
+        #expect(isTopLevel == true)
+        #expect(terminationBridgeInstalled == true)
+        #expect(terminationBridgeActive == false)
+        #expect(postMessageRestored == true)
+        #expect(hangupReceived == true)
+        #expect(hangupAcknowledged == true)
+        #expect(membershipLeavePosted == true)
+        #expect(echoedTerminationOutputCount == 0)
+        #expect(harness.widgetDriver.handleMessageReceivedMessage == matrixRTCMembershipLeaveRequest(requestID: "top-level-membership-leave"))
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        harness.widgetDriver.messagePublisher.send(matrixRTCMembershipLeaveResponse(requestID: "top-level-membership-leave"))
+        await waitFor {
+            dismissCount == 1 && harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
+
+        #expect(harness.elementCallService.requestCallTerminationRoomIDReceivedRoomID == harness.roomProxy.id)
+        CallView.dismantleUIView(coordinator.webViewWrapper, coordinator: coordinator)
+        harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
+    }
+
+    @Test
+    func failedTerminationDispatchCannotCompleteRetryFromStaleMembershipResponse() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        let firstEvaluationGate = OneShotGate()
+        let staleRequestID = "stale-membership-leave"
+        let retryRequestID = "retry-membership-leave"
+        var evaluatedScripts = [String]()
+        var hangupEvaluationCount = 0
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+        installActiveWebViewBinding(in: harness) { script in
+            evaluatedScripts.append(script)
+            guard script.contains("im.vector.hangup") else { return true }
+            hangupEvaluationCount += 1
+            if hangupEvaluationCount == 1 {
+                await firstEvaluationGate.wait()
+                return false
+            }
+            return true
+        }
+
+        harness.viewModel.context.send(viewAction: .endCall)
+        await waitFor { hangupEvaluationCount == 1 }
+        harness.viewModel.context.send(viewAction: .widgetAction(message: matrixRTCMembershipLeaveRequest(requestID: staleRequestID)))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 1 }
+        await firstEvaluationGate.open()
+
+        for _ in 0..<20 where hangupEvaluationCount < 2 {
+            harness.viewModel.context.send(viewAction: .endCall)
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(hangupEvaluationCount == 2)
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        harness.widgetDriver.messagePublisher.send(matrixRTCMembershipLeaveResponse(requestID: staleRequestID))
+        await waitFor {
+            evaluatedScripts.contains { $0.contains(staleRequestID) && $0.contains("response") }
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        harness.viewModel.context.send(viewAction: .widgetAction(message: matrixRTCMembershipLeaveRequest(requestID: retryRequestID)))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 2 }
+        harness.widgetDriver.messagePublisher.send(matrixRTCMembershipLeaveResponse(requestID: retryRequestID))
+        await waitFor {
+            dismissCount == 1 && harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1
+        }
+
+        harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
+    }
+
+    @Test
+    func serviceEndCallSupersedesPendingLocalTermination() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        let evaluatorGate = OneShotGate()
+        var evaluatedScripts = [String]()
+        var hangupEvaluationStarted = false
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+        installActiveWebViewBinding(in: harness) { script in
+            evaluatedScripts.append(script)
+            if script.contains("im.vector.hangup") {
+                hangupEvaluationStarted = true
+                await evaluatorGate.wait()
+            }
+            return true
+        }
+
+        setenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE", "1", 1)
+        defer { unsetenv("SALEM_X_STAGE2F_SIM_RECEIVER_BRIDGE") }
+        let clearURL = try #require(URL(string: "kz.salemx.msg://direct-call/stage2f-sim/clear"))
+        #expect(SalemXStage2FSimulatorSignalingDebug.handleURL(clearURL,
+                                                               userSession: nil,
+                                                               userSessionFlowCoordinator: nil,
+                                                               elementCallService: ElementCallServiceMock(.init())))
+
+        harness.viewModel.context.send(viewAction: .endCall)
+        await waitFor { hangupEvaluationStarted }
+
+        let leaveRequestID = "superseded-membership-leave"
+        harness.viewModel.context.send(viewAction: .widgetAction(message: matrixRTCMembershipLeaveRequest(requestID: leaveRequestID)))
+        await waitFor { harness.widgetDriver.handleMessageCallsCount == 1 }
+
+        #expect(dismissCount == 0)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        harness.elementCallServiceActions.send(.endCall(roomID: harness.roomProxy.id))
+        await waitFor {
+            dismissCount == 1
+        }
+
+        #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        await evaluatorGate.open()
+        harness.widgetDriver.messagePublisher.send(matrixRTCMembershipLeaveResponse(requestID: leaveRequestID))
+        await waitFor {
+            evaluatedScripts.contains { $0.contains(leaveRequestID) && $0.contains("response") }
+        }
+        harness.elementCallServiceActions.send(.endCall(roomID: harness.roomProxy.id))
+        harness.elementCallServiceActions.send(.setAudioEnabled(false, roomID: harness.roomProxy.id))
+        await waitFor { harness.viewModel.context.viewState.isMicrophoneEnabled == false }
+
+        let proof = try stage2FSimulatorProofText()
+        #expect(proof.contains("matrixrtc_membership_leave_send_completed=false"))
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+        #expect(dismissCount == 1)
+        harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
+    }
+
+    @Test
+    func serviceEndCallBeforeHangupContinuationDismissesWithoutPosting() async throws {
+        let setupGate = OneShotGate()
+        let harness = try makeAudioRoomCallViewModel { widgetDriver in
+            widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationClosure = { baseURL, _, _, _, _ in
+                await setupGate.wait()
+                return .success(baseURL)
+            }
+        }
+        var evaluatedScripts = [String]()
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+        installActiveWebViewBinding(in: harness) { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+        await waitFor {
+            harness.widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationCallsCount == 1
+        }
+
+        harness.viewModel.context.send(viewAction: .endCall)
+        let identity = try #require(harness.viewModel.activeCallWebViewIdentity)
+        harness.viewModel.context.send(viewAction: .callWebViewDismantled(identity))
+        await Task.yield()
+        harness.elementCallServiceActions.send(.endCall(roomID: harness.roomProxy.id))
+        harness.elementCallServiceActions.send(.setAudioEnabled(false, roomID: harness.roomProxy.id))
+        await waitFor {
+            harness.viewModel.context.viewState.isMicrophoneEnabled == false && dismissCount == 1
+        }
+
+        #expect(dismissCount == 1)
+        #expect(evaluatedScripts.allSatisfy { !$0.contains("im.vector.hangup") })
+
+        await setupGate.open()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(evaluatedScripts.allSatisfy { !$0.contains("im.vector.hangup") })
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+        harness.elementCallServiceActions.send(.endCall(roomID: harness.roomProxy.id))
+        harness.elementCallServiceActions.send(.setAudioEnabled(true, roomID: harness.roomProxy.id))
+        await waitFor { harness.viewModel.context.viewState.isMicrophoneEnabled == true }
+        #expect(dismissCount == 1)
+        harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
+    }
+
+    @Test
+    func serviceEndCallWithoutLocalTerminationDismisses() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var dismissCount = 0
+        let actionsCancellable = harness.viewModel.actions.sink { action in
+            if case .dismiss = action {
+                dismissCount += 1
+            }
+        }
+
+        harness.elementCallServiceActions.send(.endCall(roomID: harness.roomProxy.id))
+        await waitFor { dismissCount == 1 }
+
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+        harness.elementCallServiceActions.send(.endCall(roomID: harness.roomProxy.id))
+        harness.elementCallServiceActions.send(.setAudioEnabled(false, roomID: harness.roomProxy.id))
+        await waitFor { harness.viewModel.context.viewState.isMicrophoneEnabled == false }
+        #expect(dismissCount == 1)
+        harness.viewModel.stop()
+        withExtendedLifetime(actionsCancellable) { }
+    }
+}
+
+extension CallScreenViewModelTests {
     @Test
     func delayedStaleEvaluationCannotTerminateNewDocumentSession() async throws {
         let harness = try makeAudioRoomCallViewModel()
@@ -900,7 +1167,7 @@ final class CallScreenViewModelTests {
         let widgetDriver: ElementCallWidgetDriverMock
     }
 
-    private func makeAudioRoomCallViewModel() throws -> CallScreenHarness {
+    private func makeAudioRoomCallViewModel(configureWidgetDriver: (ElementCallWidgetDriverMock) -> Void = { _ in }) throws -> CallScreenHarness {
         let elementCallService = ElementCallServiceMock()
         let elementCallServiceActions = PassthroughSubject<ElementCallServiceAction, Never>()
         elementCallService.underlyingActions = elementCallServiceActions.eraseToAnyPublisher()
@@ -917,6 +1184,7 @@ final class CallScreenViewModelTests {
         widgetDriver.handleMessageReturnValue = .success(true)
         let elementCallBaseURL = try #require(URL(string: "https://call.element.io"))
         widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationReturnValue = .success(elementCallBaseURL)
+        configureWidgetDriver(widgetDriver)
 
         let appSettings = AppSettings()
         let analyticsService = AnalyticsService(client: AnalyticsClientMock(),
@@ -973,6 +1241,48 @@ final class CallScreenViewModelTests {
         """
     }
 
+    private static let topLevelHangupProbeDocument = """
+    <!doctype html>
+    <html>
+    <body>
+    <script>
+    window.isTopLevel = window.parent === window;
+    window.originalPostMessage = window.postMessage;
+    window.hangupReceived = false;
+    window.hangupAcknowledged = false;
+    window.membershipLeavePosted = false;
+    window.echoedTerminationOutputCount = 0;
+    window.addEventListener("message", (event) => {
+        const message = event.data;
+        const isHangupResponse = !!message?.response && message?.api === "toWidget";
+        const isWidgetRequest = !message?.response && message?.api === "fromWidget";
+        if (isHangupResponse || isWidgetRequest) {
+            window.echoedTerminationOutputCount += 1;
+        }
+        if (message?.api !== "toWidget" || message?.action !== "im.vector.hangup" || message?.response) {
+            return;
+        }
+        window.hangupReceived = true;
+        window.parent.postMessage({ ...message, response: {} }, "*");
+        window.hangupAcknowledged = true;
+        window.parent.postMessage({
+            api: "fromWidget",
+            action: "send_event",
+            widgetId: message.widgetId,
+            requestId: "top-level-membership-leave",
+            data: {
+                type: "org.matrix.msc3401.call.member",
+                state_key: "redacted-state",
+                content: {},
+            },
+        }, "*");
+        window.membershipLeavePosted = true;
+    });
+    </script>
+    </body>
+    </html>
+    """
+
     private func waitUntilLoaded(_ webView: WKWebView) async {
         for _ in 0..<100 where webView.isLoading {
             try? await Task.sleep(for: .milliseconds(10))
@@ -989,10 +1299,17 @@ final class CallScreenViewModelTests {
     }
 
     private func widgetMessage(from script: String) throws -> ElementCallWidgetMessage {
-        let prefix = "postMessage("
-        let suffix = ", '*')"
-        let startIndex = try #require(script.range(of: prefix)?.upperBound)
-        let endIndex = try #require(script.range(of: suffix, range: startIndex..<script.endIndex)?.lowerBound)
+        let startIndex: String.Index
+        let endIndex: String.Index
+        if let messageDeclaration = script.range(of: "const message = ") {
+            startIndex = messageDeclaration.upperBound
+            endIndex = try #require(script.range(of: ";", range: startIndex..<script.endIndex)?.lowerBound)
+        } else {
+            let prefix = "postMessage("
+            let suffix = ", '*')"
+            startIndex = try #require(script.range(of: prefix)?.upperBound)
+            endIndex = try #require(script.range(of: suffix, range: startIndex..<script.endIndex)?.lowerBound)
+        }
         let data = try #require(String(script[startIndex..<endIndex]).data(using: .utf8))
         return try JSONDecoder().decode(ElementCallWidgetMessage.self, from: data)
     }

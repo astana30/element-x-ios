@@ -13,8 +13,14 @@ import SwiftUI
 
 typealias CallScreenViewModelType = StateStoreViewModel<CallScreenViewState, CallScreenViewAction>
 
+private enum MatrixRTCMembershipLeaveOutcome {
+    case completed
+    case failed
+    case serviceEnded
+}
+
 private struct PendingMatrixRTCMembershipLeaveResponse {
-    let continuation: CheckedContinuation<Bool, Never>
+    let continuation: CheckedContinuation<MatrixRTCMembershipLeaveOutcome, Never>
 }
 
 class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol {
@@ -49,8 +55,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private var preferredAudioRoute: PreferredAudioRoute
     private var hasJoinedWidgetCall = false
     private var hasRequestedLocalTermination = false
+    private var serviceEndedDuringLocalTermination = false
     private var shouldSendHangupOnStop = true
     private var isDismissingAfterLocalHangup = false
+    private var hasCompletedCallScreenDismissal = false
     private var hasRequestedEmbeddedWebContentReset = false
     private var pendingWidgetHangupRequestID: String?
     private var pendingMatrixRTCMembershipLeaveResponse: PendingMatrixRTCMembershipLeaveResponse?
@@ -133,32 +141,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         elementCallService.actions
             .receive(on: DispatchQueue.main)
             .sink { [weak self] action in
-                guard let self else { return }
-                
-                switch action {
-                case let .setAudioEnabled(enabled, roomID):
-                    guard roomID == configuration.callRoomID else {
-                        MXLog.error("Received mute request for a different room.")
-                        return
-                    }
-                    
-                    Task {
-                        self.state.isMicrophoneEnabled = enabled
-                        await self.setMediaState(audioEnabled: enabled, videoEnabled: self.state.isVideoEnabled)
-                    }
-                case let .endCall(roomID):
-                    guard roomID == configuration.callRoomID else { return }
-                    if hasRequestedLocalTermination {
-                        return
-                    }
-                    requestLocalCallTermination(sendHangupMessage: false)
-                case let .requestCallTermination(roomID):
-                    guard roomID == configuration.callRoomID else { return }
-                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-VM-REQUEST-RECEIVED]")
-                    requestLocalCallTermination()
-                default:
-                    break
-                }
+                self?.handleElementCallServiceAction(action)
             }
             .store(in: &cancellables)
         
@@ -245,7 +228,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     func stop() {
         timeoutTask = nil
         audioRouteEnforcementTask = nil
-        finishPendingMatrixRTCMembershipLeaveResponse(completed: false)
+        finishPendingMatrixRTCMembershipLeaveResponse(outcome: .failed)
         pendingWidgetHangupRequestID = nil
         pendingMatrixRTCDelayedLeavePrepareRequestIDs.removeAll()
         matrixRTCDelayedLeaveID = nil
@@ -270,6 +253,39 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
     
     // MARK: - Private
+
+    private func handleElementCallServiceAction(_ action: ElementCallServiceAction) {
+        switch action {
+        case let .setAudioEnabled(enabled, roomID):
+            guard roomID == configuration.callRoomID else {
+                MXLog.error("Received mute request for a different room.")
+                return
+            }
+
+            Task {
+                state.isMicrophoneEnabled = enabled
+                await setMediaState(audioEnabled: enabled, videoEnabled: state.isVideoEnabled)
+            }
+        case let .endCall(roomID):
+            guard roomID == configuration.callRoomID else { return }
+            if hasRequestedLocalTermination {
+                serviceEndedDuringLocalTermination = true
+                pendingMatrixRTCDelayedLeavePrepareRequestIDs.removeAll()
+                matrixRTCDelayedLeaveID = nil
+                pendingMatrixRTCMembershipLeaveRequestIDs.removeAll()
+                finishPendingMatrixRTCMembershipLeaveResponse(outcome: .serviceEnded)
+                completeCallScreenDismissalIfNeeded()
+                return
+            }
+            requestLocalCallTermination(sendHangupMessage: false)
+        case let .requestCallTermination(roomID):
+            guard roomID == configuration.callRoomID else { return }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-VM-REQUEST-RECEIVED]")
+            requestLocalCallTermination()
+        default:
+            break
+        }
+    }
 
     #if DEBUG
     var activeCallWebViewIdentity: CallWebViewDocumentIdentity? {
@@ -396,6 +412,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 return
             }
             hasRequestedLocalTermination = true
+            serviceEndedDuringLocalTermination = false
         }
         
         let pendingSetupCallTask = setupCallTask
@@ -409,23 +426,31 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         setupCallTask = nil
         
         guard sendHangupMessage else {
-            resetEmbeddedWebContentIfNeeded()
-            actionsSubject.send(.dismiss)
+            completeCallScreenDismissalIfNeeded()
             return
         }
 
         Task {
-            guard await sendCallTerminationSignal(waitingFor: pendingSetupCallTask) else {
+            let callTerminationCompleted = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
+            guard callTerminationCompleted || serviceEndedDuringLocalTermination else {
                 isDismissingAfterLocalHangup = false
                 hasRequestedLocalTermination = false
+                serviceEndedDuringLocalTermination = false
                 shouldSendHangupOnStop = true
                 return
             }
 
-            hasJoinedWidgetCall = false
-            resetEmbeddedWebContentIfNeeded()
-            actionsSubject.send(.dismiss)
+            completeCallScreenDismissalIfNeeded()
         }
+    }
+
+    private func completeCallScreenDismissalIfNeeded() {
+        guard !hasCompletedCallScreenDismissal else { return }
+
+        hasCompletedCallScreenDismissal = true
+        hasJoinedWidgetCall = false
+        resetEmbeddedWebContentIfNeeded()
+        actionsSubject.send(.dismiss)
     }
 
     private func resetEmbeddedWebContentIfNeeded() {
@@ -717,20 +742,28 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
     
     @discardableResult
-    func hangup(waitingFor setupTask: Task<Void, Never>? = nil) async -> Bool {
+    private func hangup(waitingFor setupTask: Task<Void, Never>? = nil) async -> MatrixRTCMembershipLeaveOutcome {
+        guard !serviceEndedDuringLocalTermination else {
+            return .serviceEnded
+        }
+
         let message = ElementCallWidgetMessage(direction: .toWidget,
                                                action: .hangup,
                                                widgetId: widgetDriver.widgetID)
         guard let json = encodeMessage(message) else {
-            return false
+            return .failed
         }
 
         if currentCallWebViewBinding == nil {
             await setupTask?.value
         }
 
+        guard !serviceEndedDuringLocalTermination else {
+            return .serviceEnded
+        }
+
         guard let binding = currentCallWebViewBinding else {
-            return false
+            return .failed
         }
 
         #if DEBUG
@@ -738,21 +771,23 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         #endif
 
         return await withCheckedContinuation { continuation in
-            finishPendingMatrixRTCMembershipLeaveResponse(completed: false)
+            finishPendingMatrixRTCMembershipLeaveResponse(outcome: .failed)
             pendingWidgetHangupRequestID = message.requestId
             pendingMatrixRTCMembershipLeaveResponse = .init(continuation: continuation)
 
             Task { [weak self] in
                 guard let self else { return }
 
-                let posted = await self.postJSONToWidget(json, using: binding)
+                let posted = await self.postJSONToWidget(json,
+                                                         using: binding,
+                                                         usesSynchronousTerminationBridge: true)
                 #if DEBUG
                 if posted {
                     SalemXStage2FSimulatorSignalingDebug.recordSenderWidgetHangupPostCompleted()
                 }
                 #endif
                 if !posted {
-                    self.finishPendingMatrixRTCMembershipLeaveResponse(completed: false)
+                    self.finishPendingMatrixRTCMembershipLeaveResponse(outcome: .failed)
                 }
             }
         }
@@ -779,25 +814,50 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         return true
     }
 
-    private func finishPendingMatrixRTCMembershipLeaveResponse(completed: Bool) {
+    private func finishPendingMatrixRTCMembershipLeaveResponse(outcome: MatrixRTCMembershipLeaveOutcome) {
         guard let pendingMatrixRTCMembershipLeaveResponse else {
             return
         }
 
         self.pendingMatrixRTCMembershipLeaveResponse = nil
         pendingWidgetHangupRequestID = nil
-        pendingMatrixRTCMembershipLeaveResponse.continuation.resume(returning: completed)
+        pendingMatrixRTCMembershipLeaveRequestIDs.removeAll()
+        pendingMatrixRTCMembershipLeaveResponse.continuation.resume(returning: outcome)
     }
     
     private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil) async -> Bool {
         switch configuration.kind {
         case .genericCallLink:
-            return await hangup(waitingFor: setupTask)
+            let outcome = await hangup(waitingFor: setupTask)
+            if serviceEndedDuringLocalTermination {
+                return true
+            }
+            switch outcome {
+            case .completed, .serviceEnded:
+                return true
+            case .failed:
+                return false
+            }
         case .roomCall(let roomProxy, _, _, _, _, _, _):
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=start")
-            guard await hangup(waitingFor: setupTask) else {
+            switch await hangup(waitingFor: setupTask) {
+            case .failed:
+                if serviceEndedDuringLocalTermination {
+                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=service_ended")
+                    return true
+                }
                 IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=rejected")
                 return false
+            case .serviceEnded:
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=service_ended")
+                return true
+            case .completed:
+                break
+            }
+
+            guard !serviceEndedDuringLocalTermination else {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=service_ended")
+                return true
             }
 
             await elementCallService.requestCallTermination(roomID: roomProxy.id)
@@ -833,16 +893,26 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
     
     @discardableResult
-    private func postJSONToWidget(_ json: String, using binding: CallWebViewBinding? = nil) async -> Bool {
+    private func postJSONToWidget(_ json: String,
+                                  using binding: CallWebViewBinding? = nil,
+                                  usesSynchronousTerminationBridge: Bool = false) async -> Bool {
         guard let binding = binding ?? currentCallWebViewBinding,
               binding.identity == expectedCallWebViewIdentity else {
             return false
         }
 
         do {
-            let message = "postMessage(\(json), '*')"
+            let message = if usesSynchronousTerminationBridge {
+                Self.synchronousTerminationBridgeJavaScript(messageJSON: json)
+            } else {
+                "postMessage(\(json), '*')"
+            }
             let result = try await binding.javaScriptEvaluator(message)
             guard currentCallWebViewBinding?.identity == binding.identity else {
+                return false
+            }
+            if usesSynchronousTerminationBridge,
+               result as? Bool != true {
                 return false
             }
             MXLog.verbose("Element Call widget message evaluation completed: result_present=\(result != nil)")
@@ -852,7 +922,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             return false
         }
     }
-    
+
     private func handleNativeWidgetActionIfNeeded(_ message: String) async -> Bool {
         guard let data = message.data(using: .utf8),
               let requestPayloadObject = try? JSONSerialization.jsonObject(with: data),
@@ -936,6 +1006,41 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 }
 
 extension CallScreenViewModel {
+    private static func synchronousTerminationBridgeJavaScript(messageJSON: String) -> String {
+        """
+        (() => {
+            const message = \(messageJSON);
+            const nativeHandler = window.webkit?.messageHandlers?.widgetAction;
+            if (!nativeHandler || window.__elementXTerminationBridgeActive) {
+                return false;
+            }
+            const originalPostMessage = window.postMessage;
+            window.__elementXTerminationBridgeInstalled = true;
+            window.__elementXTerminationBridgeActive = true;
+            window.postMessage = (outgoingMessage, targetOrigin, transfer) => {
+                const isWidgetResponse = !!outgoingMessage?.response && outgoingMessage?.api === "toWidget";
+                const isWidgetRequest = !outgoingMessage?.response && outgoingMessage?.api === "fromWidget";
+                if (window.parent === window && (isWidgetResponse || isWidgetRequest)) {
+                    nativeHandler.postMessage(JSON.stringify(outgoingMessage));
+                    return;
+                }
+                return originalPostMessage.call(window, outgoingMessage, targetOrigin, transfer);
+            };
+            try {
+                window.dispatchEvent(new MessageEvent("message", {
+                    data: message,
+                    origin: window.location.origin,
+                    source: window,
+                }));
+                return true;
+            } finally {
+                window.postMessage = originalPostMessage;
+                window.__elementXTerminationBridgeActive = false;
+            }
+        })()
+        """
+    }
+
     private func handleMatrixRTCWidgetResponseIfNeeded(_ message: String) {
         guard let data = message.data(using: .utf8),
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -979,12 +1084,12 @@ extension CallScreenViewModel {
                 let matrixAPIError = error["matrix_api_error"] as? [String: Any]
                 SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendError(httpStatus: matrixAPIError?["http_status"] as? Int)
                 #endif
-                finishPendingMatrixRTCMembershipLeaveResponse(completed: false)
+                finishPendingMatrixRTCMembershipLeaveResponse(outcome: .failed)
             } else {
                 #if DEBUG
                 SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCMembershipLeaveSendCompleted()
                 #endif
-                finishPendingMatrixRTCMembershipLeaveResponse(completed: true)
+                finishPendingMatrixRTCMembershipLeaveResponse(outcome: .completed)
             }
         }
 

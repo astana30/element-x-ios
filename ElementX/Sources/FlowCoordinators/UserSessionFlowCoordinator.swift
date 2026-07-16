@@ -464,18 +464,6 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                 }
             }
             .store(in: &cancellables)
-        
-        flowParameters.elementCallService.actions
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] action in
-                switch action {
-                case .endCall:
-                    self?.dismissCallScreenIfNeeded()
-                default:
-                    break
-                }
-            }
-            .store(in: &cancellables)
     }
 
     private func observeSettingsFlowActionsIfNeeded() {
@@ -761,14 +749,6 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         navigationTabCoordinator.setOverlayPresentationMode(.minimized)
     }
     
-    private func dismissCallScreenIfNeeded() {
-        guard navigationTabCoordinator.overlayCoordinator is CallScreenCoordinator else {
-            return
-        }
-
-        navigationTabCoordinator.setOverlayCoordinator(nil)
-    }
-
     // MARK: - Logout
     
     private func runLogoutFlow() async {
