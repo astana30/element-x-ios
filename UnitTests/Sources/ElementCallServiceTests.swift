@@ -222,6 +222,7 @@ final class SalemXStage2FCallKitDebugBoundaryTests {
 }
 
 @MainActor
+// swiftlint:disable:next type_body_length
 final class ElementCallServiceTests {
     private let appSettings = AppSettings()
     private var callProvider: CXProviderMock!
@@ -630,33 +631,20 @@ final class ElementCallServiceTests {
         let ownUserID = "@test:user.net"
         let remoteUserID = "@alice:example.com"
 
-        let room = JoinedRoomProxyMock(.init(id: roomID,
-                                             name: "Room",
-                                             isDirect: true,
-                                             hasOngoingCall: true,
-                                             ownUserID: ownUserID))
+        let (room, roomInfoSubscription) = makeOngoingCallRoom(id: roomID,
+                                                               ownUserID: ownUserID,
+                                                               remoteUserID: remoteUserID)
         clientProxy.roomForIdentifierClosure = { _ in
             .joined(room)
         }
-        configureLiveTimeline(for: room)
-        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
-            .failure(.missingTransactionID)
-        }
-
-        let roomInfoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
-                                                                                             isDirect: true,
-                                                                                             hasRoomCall: true,
-                                                                                             participants: [ownUserID, remoteUserID]))
-        room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
 
         service.setClientProxy(clientProxy)
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
         let timelineProxy = try #require(room.timeline as? TimelineProxyMock)
-        for _ in 0..<20 where timelineProxy.subscribeForUpdatesCallsCount == 0 {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(timelineProxy.subscribeForUpdatesCallsCount > 0)
-        await Task.yield()
+        #expect(await waitForRoomInfoSubscription(on: room))
+        #expect(room.subscribeToRoomInfoUpdatesCallsCount == 1)
+        #expect(roomInfoSubscription.subscriptionStartCount == 1)
+        #expect(room.infoPublisher.value.activeRoomCallParticipants.count == 2)
 
         let deferredEndCall = deferFulfillment(service.actions) { action in
             if case .endCall(let observedRoomID) = action {
@@ -665,14 +653,179 @@ final class ElementCallServiceTests {
             return false
         }
 
-        try? await Task.sleep(for: .milliseconds(120))
-        roomInfoSubject.send(makeRoomInfo(id: roomID,
-                                          isDirect: true,
-                                          hasRoomCall: true,
-                                          participants: [ownUserID]))
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                                   isDirect: true,
+                                                                   hasRoomCall: true,
+                                                                   participants: [ownUserID])))
         try await deferredEndCall.fulfill()
 
         #expect(service.ongoingCallRoomIDPublisher.value == nil)
+        #expect(room.subscribeToRoomInfoUpdatesCallsCount == 1)
+        #expect(await roomInfoSubscription.waitForTimelineSubscription())
+        #expect(roomInfoSubscription.timelineSubscriptionStartCount == 1)
+        #expect(timelineProxy.subscribeForUpdatesCallsCount >= 1)
+    }
+
+    @Test
+    func ongoingRoomInfoSubscriptionRejectsStaleProxyAfterCallIdentityChanges() async {
+        let firstRoomID = "!first-room:example.com"
+        let secondRoomID = "!second-room:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let (firstRoom, firstSubscription) = makeOngoingCallRoom(id: firstRoomID,
+                                                                 ownUserID: ownUserID,
+                                                                 remoteUserID: remoteUserID)
+        let (secondRoom, secondSubscription) = makeOngoingCallRoom(id: secondRoomID,
+                                                                   ownUserID: ownUserID,
+                                                                   remoteUserID: remoteUserID)
+        clientProxy.roomForIdentifierClosure = { roomID in
+            switch roomID {
+            case firstRoomID:
+                .joined(firstRoom)
+            case secondRoomID:
+                .joined(secondRoom)
+            default:
+                nil
+            }
+        }
+
+        var endedRoomIDs = [String]()
+        service.actions
+            .sink { action in
+                if case .endCall(let roomID) = action {
+                    endedRoomIDs.append(roomID)
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: firstRoomID, roomDisplayName: "First")
+        #expect(await waitForRoomInfoSubscription(on: firstRoom))
+
+        await service.setupCallSession(roomID: secondRoomID, roomDisplayName: "Second")
+        #expect(await waitForRoomInfoSubscription(on: secondRoom))
+
+        #expect(firstSubscription.receiveSDKUpdate(makeRoomInfo(id: firstRoomID,
+                                                                isDirect: true,
+                                                                hasRoomCall: true,
+                                                                participants: [ownUserID])))
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(service.ongoingCallRoomIDPublisher.value == secondRoomID)
+        #expect(endedRoomIDs.isEmpty)
+
+        #expect(secondSubscription.receiveSDKUpdate(makeRoomInfo(id: secondRoomID,
+                                                                 isDirect: true,
+                                                                 hasRoomCall: true,
+                                                                 participants: [ownUserID])))
+        for _ in 0..<30 where endedRoomIDs.isEmpty {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(endedRoomIDs == [secondRoomID])
+        #expect(firstRoom.subscribeToRoomInfoUpdatesCallsCount == 1)
+        #expect(secondRoom.subscribeToRoomInfoUpdatesCallsCount == 1)
+        #expect(await firstSubscription.waitForTimelineSubscription())
+        #expect(await secondSubscription.waitForTimelineSubscription())
+        #expect(firstSubscription.timelineSubscriptionStartCount == 1)
+        #expect(secondSubscription.timelineSubscriptionStartCount == 1)
+    }
+
+    @Test
+    func staleObservationTaskCannotClearNewCallSubscription() async {
+        let firstRoomID = "!delayed-room:example.com"
+        let secondRoomID = "!current-room:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let (firstRoom, _) = makeOngoingCallRoom(id: firstRoomID,
+                                                 ownUserID: ownUserID,
+                                                 remoteUserID: remoteUserID)
+        let (secondRoom, secondSubscription) = makeOngoingCallRoom(id: secondRoomID,
+                                                                   ownUserID: ownUserID,
+                                                                   remoteUserID: remoteUserID)
+        let firstLookupStarted = CurrentValueSubject<Bool, Never>(false)
+        clientProxy.roomForIdentifierClosure = { roomID in
+            switch roomID {
+            case firstRoomID:
+                firstLookupStarted.send(true)
+                try? await Task.sleep(for: .milliseconds(200))
+                return .joined(firstRoom)
+            case secondRoomID:
+                return .joined(secondRoom)
+            default:
+                return nil
+            }
+        }
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: firstRoomID, roomDisplayName: "Delayed")
+        for _ in 0..<30 where !firstLookupStarted.value {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(firstLookupStarted.value)
+
+        await service.setupCallSession(roomID: secondRoomID, roomDisplayName: "Current")
+        #expect(await waitForRoomInfoSubscription(on: secondRoom))
+        try? await Task.sleep(for: .milliseconds(250))
+
+        #expect(firstRoom.subscribeToRoomInfoUpdatesCallsCount == 0)
+        #expect(secondRoom.subscribeToRoomInfoUpdatesCallsCount == 1)
+        #expect(secondSubscription.subscriptionStartCount == 1)
+        #expect(service.ongoingCallRoomIDPublisher.value == secondRoomID)
+        service.tearDownCallSession()
+    }
+
+    @Test
+    func completedCallReleasesProxyAndSubsequentCallCreatesNewSubscription() async throws {
+        let firstRoomID = "!released-room:example.com"
+        let secondRoomID = "!subsequent-room:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        var firstRoom: JoinedRoomProxyMock? = makeOngoingCallRoom(id: firstRoomID,
+                                                                  ownUserID: ownUserID,
+                                                                  remoteUserID: remoteUserID).0
+        let firstSubscription = RoomInfoSubscriptionHarness(initialValue: makeRoomInfo(id: firstRoomID,
+                                                                                       isDirect: true,
+                                                                                       hasRoomCall: true,
+                                                                                       participants: [ownUserID, remoteUserID]))
+        try firstSubscription.install(on: #require(firstRoom))
+        weak var weakFirstRoom = firstRoom
+
+        let (secondRoom, secondSubscription) = makeOngoingCallRoom(id: secondRoomID,
+                                                                   ownUserID: ownUserID,
+                                                                   remoteUserID: remoteUserID)
+        clientProxy.roomForIdentifierClosure = { roomID in
+            switch roomID {
+            case firstRoomID:
+                if let firstRoom {
+                    .joined(firstRoom)
+                } else {
+                    nil
+                }
+            case secondRoomID:
+                .joined(secondRoom)
+            default:
+                nil
+            }
+        }
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: firstRoomID, roomDisplayName: "Released")
+        #expect(await waitForRoomInfoSubscription(on: firstRoom))
+        try? await Task.sleep(for: .milliseconds(800))
+
+        service.tearDownCallSession()
+        firstRoom = nil
+        for _ in 0..<30 where weakFirstRoom != nil {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(weakFirstRoom == nil)
+
+        await service.setupCallSession(roomID: secondRoomID, roomDisplayName: "Subsequent")
+        #expect(await waitForRoomInfoSubscription(on: secondRoom))
+        #expect(secondRoom.subscribeToRoomInfoUpdatesCallsCount == 1)
+        #expect(secondSubscription.subscriptionStartCount == 1)
+        #expect((secondRoom.timeline as? TimelineProxyMock)?.subscribeForUpdatesCallsCount == 1)
+        service.tearDownCallSession()
     }
 
     @Test
@@ -1234,10 +1387,51 @@ final class ElementCallServiceTests {
         return info
     }
 
+    private func makeOngoingCallRoom(id: String,
+                                     ownUserID: String,
+                                     remoteUserID: String) -> (JoinedRoomProxyMock, RoomInfoSubscriptionHarness) {
+        let room = JoinedRoomProxyMock(.init(id: id,
+                                             name: "Room",
+                                             isDirect: true,
+                                             hasOngoingCall: true,
+                                             ownUserID: ownUserID))
+        configureLiveTimeline(for: room)
+        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
+            .failure(.missingTransactionID)
+        }
+
+        let subscription = RoomInfoSubscriptionHarness(initialValue: makeRoomInfo(id: id,
+                                                                                  isDirect: true,
+                                                                                  hasRoomCall: true,
+                                                                                  participants: [ownUserID, remoteUserID]))
+        subscription.install(on: room)
+        return (room, subscription)
+    }
+
+    private func waitForRoomInfoSubscription(on room: JoinedRoomProxyMock?) async -> Bool {
+        guard let room else {
+            return false
+        }
+
+        for _ in 0..<30 {
+            if room.subscribeToRoomInfoUpdatesCallsCount == 1 {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        return false
+    }
+
     private func makeCallTimelineItem(eventID: String,
                                       sender: String,
                                       isOwn: Bool,
                                       eventType: MessageLikeEventType) -> TimelineItemProxy {
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        lazyProvider.debugInfoReturnValue = .init(model: "call event",
+                                                  originalJson: nil,
+                                                  latestEditJson: nil)
         let content = TimelineItemContent.msgLike(content: .init(kind: .other(eventType: eventType),
                                                                  reactions: [],
                                                                  inReplyTo: nil,
@@ -1246,7 +1440,8 @@ final class ElementCallServiceTests {
         let item = EventTimelineItem(configuration: .init(eventID: eventID,
                                                           sender: sender,
                                                           isOwn: isOwn,
-                                                          content: content))
+                                                          content: content,
+                                                          lazyProvider: lazyProvider))
         let proxy = EventTimelineItemProxy(item: item, uniqueID: .init(UUID().uuidString))
         return .event(proxy)
     }
@@ -1257,6 +1452,7 @@ final class ElementCallServiceTests {
             return
         }
 
+        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerReturnValue = .failure(.missingTransactionID)
         let timelineUpdates = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>(([], .initial))
         timelineItemProvider.itemProxies = []
         timelineItemProvider.updatePublisher = timelineUpdates.eraseToAnyPublisher()
@@ -1739,6 +1935,49 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
                     isFavourite: false,
                     isTombstoned: false,
                     activeRoomCallParticipants: participants)
+    }
+}
+
+private final class RoomInfoSubscriptionHarness {
+    private let subject: CurrentValueSubject<RoomInfoProxyProtocol, Never>
+    private(set) var subscriptionStartCount = 0
+    private(set) var timelineSubscriptionStartCount = 0
+
+    init(initialValue: RoomInfoProxyProtocol) {
+        subject = .init(initialValue)
+    }
+
+    func install(on room: JoinedRoomProxyMock) {
+        room.infoPublisher = subject.asCurrentValuePublisher()
+        room.subscribeToRoomInfoUpdatesClosure = { [weak self] in
+            self?.subscriptionStartCount += 1
+        }
+        (room.timeline as? TimelineProxyMock)?.subscribeForUpdatesClosure = { [weak self] in
+            guard let self, timelineSubscriptionStartCount == 0 else { return }
+            timelineSubscriptionStartCount += 1
+        }
+    }
+
+    func waitForTimelineSubscription() async -> Bool {
+        for _ in 0..<30 {
+            if timelineSubscriptionStartCount == 1 {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        return false
+    }
+
+    @discardableResult
+    func receiveSDKUpdate(_ roomInfo: RoomInfoProxyProtocol) -> Bool {
+        guard subscriptionStartCount > 0 else {
+            return false
+        }
+
+        subject.send(roomInfo)
+        return true
     }
 }
 

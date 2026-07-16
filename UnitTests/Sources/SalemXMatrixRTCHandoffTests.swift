@@ -1525,6 +1525,78 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
+    func roomInfoSubscriptionRemoteLeaveEndsCallKitAndUIExactlyOnce() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge)
+
+        let callID = try await reportIncomingCall()
+        bootstrapResolver.bootstrapByCallID[callID] = verifiedBootstrap(callID: callID)
+        let answerAction = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(answerAction, provider: callProvider)
+        #expect(await waitUntil { answerAction.fulfillCount == 1 })
+
+        let remoteUserID = "@alice:example.com"
+        let room = JoinedRoomProxyMock(.init(id: Self.roomID,
+                                             name: "Room",
+                                             isDirect: true,
+                                             hasOngoingCall: true,
+                                             ownUserID: localUserID))
+        configureLiveTimeline(for: room)
+        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
+            .failure(.missingTransactionID)
+        }
+        let roomInfoSubscription = EmbeddedRoomInfoSubscriptionHarness(initialValue: makeRoomInfo(participants: [localUserID, remoteUserID]))
+        roomInfoSubscription.install(on: room)
+
+        let clientProxy = ClientProxyMock(.init(userID: localUserID))
+        clientProxy.roomForIdentifierClosure = { _ in .joined(room) }
+        var endCallCount = 0
+        var localTerminationRequestCount = 0
+        var startCallCount = 0
+        service.actions
+            .sink { action in
+                switch action {
+                case .endCall:
+                    endCallCount += 1
+                case .requestCallTermination:
+                    localTerminationRequestCount += 1
+                case .startCall:
+                    startCallCount += 1
+                case .receivedIncomingCallRequest, .setAudioEnabled:
+                    break
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        #expect(await waitUntil { room.subscribeToRoomInfoUpdatesCallsCount == 1 })
+        #expect(roomInfoSubscription.subscriptionStartCount == 1)
+        #expect(room.infoPublisher.value.activeRoomCallParticipants.count == 2)
+
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID])))
+        #expect(await waitUntil {
+            self.callProvider.reportCallWithEndedAtReasonCallsCount == 1 &&
+                endCallCount == 1 &&
+                self.service.ongoingCallRoomIDPublisher.value == nil
+        })
+
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID])))
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.uuid == callID)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+        #expect(endCallCount == 1)
+        #expect(localTerminationRequestCount == 0)
+        #expect(startCallCount == 0)
+        #expect(room.subscribeToRoomInfoUpdatesCallsCount == 1)
+        #expect(await roomInfoSubscription.waitForTimelineSubscription())
+        #expect(roomInfoSubscription.timelineSubscriptionStartCount == 1)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
     func remoteTerminalEventReportsCallKitEndedOnce() async throws {
         let endBridge = EndBridgeSpy(result: .terminationAccepted)
         let bootstrapResolver = BootstrapResolverSpy()
@@ -1771,6 +1843,43 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
                      activeCallState: .active)
     }
 
+    private func makeRoomInfo(participants: [String]) -> RoomInfoProxyProtocol {
+        let info = RoomInfoProxyMock()
+        info.id = Self.roomID
+        info.isEncrypted = true
+        info.isDirect = true
+        info.isSpace = false
+        info.isFavourite = false
+        info.membership = .joined
+        info.activeMembersCount = 2
+        info.invitedMembersCount = 0
+        info.joinedMembersCount = 2
+        info.highlightCount = 0
+        info.notificationCount = 0
+        info.hasRoomCall = true
+        info.activeRoomCallParticipants = participants
+        info.isMarkedUnread = false
+        info.unreadMessagesCount = 0
+        info.unreadNotificationsCount = 0
+        info.unreadMentionsCount = 0
+        info.pinnedEventIDs = []
+        info.historyVisibility = .shared
+        return info
+    }
+
+    private func configureLiveTimeline(for room: JoinedRoomProxyMock) {
+        guard let timelineProxy = room.timeline as? TimelineProxyMock,
+              let timelineItemProvider = timelineProxy.timelineItemProvider as? TimelineItemProviderMock else {
+            return
+        }
+
+        let timelineUpdates = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>(([], .initial))
+        timelineItemProvider.itemProxies = []
+        timelineItemProvider.updatePublisher = timelineUpdates.eraseToAnyPublisher()
+        timelineItemProvider.paginationState = .initial
+        timelineItemProvider.kind = .live
+    }
+
     private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
         for _ in 0..<30 {
             if condition() {
@@ -1784,6 +1893,49 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     static let roomID = "!room:example.com"
+}
+
+private final class EmbeddedRoomInfoSubscriptionHarness {
+    private let subject: CurrentValueSubject<RoomInfoProxyProtocol, Never>
+    private(set) var subscriptionStartCount = 0
+    private(set) var timelineSubscriptionStartCount = 0
+
+    init(initialValue: RoomInfoProxyProtocol) {
+        subject = .init(initialValue)
+    }
+
+    func install(on room: JoinedRoomProxyMock) {
+        room.infoPublisher = subject.asCurrentValuePublisher()
+        room.subscribeToRoomInfoUpdatesClosure = { [weak self] in
+            self?.subscriptionStartCount += 1
+        }
+        (room.timeline as? TimelineProxyMock)?.subscribeForUpdatesClosure = { [weak self] in
+            guard let self, timelineSubscriptionStartCount == 0 else { return }
+            timelineSubscriptionStartCount += 1
+        }
+    }
+
+    func waitForTimelineSubscription() async -> Bool {
+        for _ in 0..<30 {
+            if timelineSubscriptionStartCount == 1 {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        return false
+    }
+
+    @discardableResult
+    func receiveSDKUpdate(_ roomInfo: RoomInfoProxyProtocol) -> Bool {
+        guard subscriptionStartCount > 0 else {
+            return false
+        }
+
+        subject.send(roomInfo)
+        return true
+    }
 }
 
 private class Stage2DPKPushPayloadMock: PKPushPayload {

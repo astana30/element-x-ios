@@ -296,6 +296,21 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         let startedAt: Date
     }
 
+    private struct OngoingCallObservationIdentity: Equatable {
+        let callKitID: UUID
+        let roomID: String
+
+        init(callID: CallID) {
+            callKitID = callID.callKitID
+            roomID = callID.roomID
+        }
+    }
+
+    private struct OngoingCallObservation {
+        let identity: OngoingCallObservationIdentity
+        let roomProxy: JoinedRoomProxyProtocol
+    }
+
     private final class TerminationEventTracker {
         var eventID: String?
     }
@@ -358,7 +373,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             // observation set in `incomingCallID` occurs *before* the user session is restored.
             // So observe when the client proxy is set to fix this (the method guards for the call).
             Task { await observeIncomingCall() }
-            Task { await observeOngoingCall() }
+            clearOngoingCallObservation(matching: nil)
+            clearOngoingCallObservationRequest(matching: nil)
+            let expectedCallID = ongoingCallID
+            Task { await observeOngoingCall(expectedCallID: expectedCallID) }
             observeIncomingCallFallback()
         }
     }
@@ -375,6 +393,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     
     private var ongoingCallTimelineCancellable: AnyCancellable?
     private var ongoingCallRoomInfoCancellable: AnyCancellable?
+    private var ongoingCallObservation: OngoingCallObservation?
+    private var ongoingCallObservationRequestIdentity: OngoingCallObservationIdentity?
     private var recentlyEndedCallID: CallID?
     private var cachedRTCNotificationIDByRoomID: [String: String] = [:]
     private var cachedRTCNotificationOwnershipByRoomID: [String: Bool] = [:]
@@ -385,7 +405,15 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private var ongoingCallID: CallID? {
         didSet {
             ongoingCallRoomIDSubject.send(ongoingCallID?.roomID)
-            Task { await observeOngoingCall() }
+            let previousIdentity = oldValue.map(OngoingCallObservationIdentity.init)
+            let currentIdentity = ongoingCallID.map(OngoingCallObservationIdentity.init)
+            if previousIdentity != currentIdentity {
+                clearOngoingCallObservation(matching: previousIdentity)
+                clearOngoingCallObservationRequest(matching: previousIdentity)
+            }
+
+            let expectedCallID = ongoingCallID
+            Task { await observeOngoingCall(expectedCallID: expectedCallID) }
         }
     }
     
@@ -2400,33 +2428,89 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         declineListenerHandle = handle
     }
 
-    private func observeOngoingCall() async {
-        ongoingCallTimelineCancellable = nil
-        ongoingCallRoomInfoCancellable = nil
+    private func observeOngoingCall(expectedCallID: CallID?) async {
+        guard let expectedCallID else {
+            return
+        }
+
+        let identity = OngoingCallObservationIdentity(callID: expectedCallID)
+        guard ongoingCallMatches(identity),
+              ongoingCallObservation?.identity != identity,
+              ongoingCallObservationRequestIdentity != identity else {
+            return
+        }
+
+        ongoingCallObservationRequestIdentity = identity
+        defer { clearOngoingCallObservationRequest(matching: identity) }
+
         ongoingDeclineRefreshTask?.cancel()
         ongoingDeclineRefreshTask = nil
         let ongoingDeclineHandles = drainOngoingDeclineListenerHandles()
         ongoingDeclineHandles.forEach { $0.cancel() }
         finishResolvingOngoingDeclines()
 
-        guard let ongoingCallID else {
-            return
-        }
-
         guard let clientProxy else {
             MXLog.warning("A ClientProxy is needed to observe an ongoing call.")
             return
         }
 
-        guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(ongoingCallID.roomID) else {
+        guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(expectedCallID.roomID) else {
             MXLog.warning("Failed to fetch a joined room for the ongoing call.")
             return
         }
-        await observeOngoingCallTimeline(roomProxy: roomProxy, ongoingCallID: ongoingCallID)
-        await observeOngoingCallRoomInfo(roomProxy: roomProxy, ongoingCallID: ongoingCallID)
 
-        await startObservingOngoingDeclines(roomProxy: roomProxy, ongoingCallID: ongoingCallID)
-        scheduleOngoingDeclineRefresh(roomProxy: roomProxy, ongoingCallID: ongoingCallID)
+        guard ongoingCallMatches(identity), ongoingCallObservation == nil else {
+            return
+        }
+
+        ongoingCallObservation = .init(identity: identity, roomProxy: roomProxy)
+        roomProxy.subscribeToRoomInfoUpdates()
+        observeOngoingCallRoomInfo(roomProxy: roomProxy,
+                                   ongoingCallID: expectedCallID,
+                                   identity: identity)
+        await observeOngoingCallTimeline(roomProxy: roomProxy,
+                                         ongoingCallID: expectedCallID,
+                                         identity: identity)
+
+        guard isCurrentOngoingCallObservation(identity) else {
+            return
+        }
+
+        await startObservingOngoingDeclines(roomProxy: roomProxy, ongoingCallID: expectedCallID)
+        guard isCurrentOngoingCallObservation(identity) else {
+            return
+        }
+        scheduleOngoingDeclineRefresh(roomProxy: roomProxy, ongoingCallID: expectedCallID)
+    }
+
+    private func ongoingCallMatches(_ identity: OngoingCallObservationIdentity) -> Bool {
+        ongoingCallID?.callKitID == identity.callKitID && ongoingCallID?.roomID == identity.roomID
+    }
+
+    private func isCurrentOngoingCallObservation(_ identity: OngoingCallObservationIdentity) -> Bool {
+        ongoingCallMatches(identity) && ongoingCallObservation?.identity == identity
+    }
+
+    private func clearOngoingCallObservation(matching identity: OngoingCallObservationIdentity?) {
+        if let identity,
+           let ongoingCallObservation,
+           ongoingCallObservation.identity != identity {
+            return
+        }
+
+        ongoingCallTimelineCancellable = nil
+        ongoingCallRoomInfoCancellable = nil
+        ongoingCallObservation = nil
+    }
+
+    private func clearOngoingCallObservationRequest(matching identity: OngoingCallObservationIdentity?) {
+        if let identity,
+           let ongoingCallObservationRequestIdentity,
+           ongoingCallObservationRequestIdentity != identity {
+            return
+        }
+
+        ongoingCallObservationRequestIdentity = nil
     }
 
     private func observeIncomingCallTimeline(roomProxy: JoinedRoomProxyProtocol, incomingCallID: CallID) async {
@@ -2457,8 +2541,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
     }
 
-    private func observeOngoingCallTimeline(roomProxy: JoinedRoomProxyProtocol, ongoingCallID: CallID) async {
+    private func observeOngoingCallTimeline(roomProxy: JoinedRoomProxyProtocol,
+                                            ongoingCallID: CallID,
+                                            identity: OngoingCallObservationIdentity) async {
         await ensureTimelineSubscribed(for: roomProxy, roomID: ongoingCallID.roomID)
+
+        guard isCurrentOngoingCallObservation(identity) else {
+            return
+        }
 
         let timelineItemProvider = await MainActor.run {
             roomProxy.timeline.timelineItemProvider
@@ -2470,7 +2560,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                 .map(\.0)
                 .sink { [weak self] itemProxies in
                     guard let self else { return }
-                    guard self.ongoingCallID?.callKitID == ongoingCallID.callKitID else { return }
+                    guard self.isCurrentOngoingCallObservation(identity) else { return }
                     self.cacheLatestCallContext(in: itemProxies, for: ongoingCallID.roomID)
                     self.refreshOngoingDeclineListeners(roomProxy: roomProxy,
                                                         ongoingCallID: ongoingCallID,
@@ -2528,7 +2618,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             }
     }
 
-    private func observeOngoingCallRoomInfo(roomProxy: JoinedRoomProxyProtocol, ongoingCallID: CallID) async {
+    private func observeOngoingCallRoomInfo(roomProxy: JoinedRoomProxyProtocol,
+                                            ongoingCallID: CallID,
+                                            identity: OngoingCallObservationIdentity) {
         let tracker = RoomCallPresenceTracker()
         let ownUserID = roomProxy.ownUserID
 
@@ -2536,7 +2628,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             .receive(on: DispatchQueue.main)
             .sink { [weak self] roomInfo in
                 guard let self else { return }
-                guard self.ongoingCallID?.callKitID == ongoingCallID.callKitID else { return }
+                guard self.isCurrentOngoingCallObservation(identity) else { return }
 
                 let participants = Set(roomInfo.activeRoomCallParticipants)
                 let hasActiveCall = roomInfo.hasRoomCall || !participants.isEmpty
