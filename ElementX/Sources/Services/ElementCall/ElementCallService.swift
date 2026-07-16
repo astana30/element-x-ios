@@ -276,6 +276,329 @@ struct ForegroundCurrentRoomCallEvent {
     let deduplicationID: String
 }
 
+private struct MatrixRTCCallScope: Hashable {
+    static let directRoom = MatrixRTCCallScope(application: "m.call", callID: "ROOM", scope: "m.room")
+
+    let application: String
+    let callID: String
+    let scope: String
+}
+
+private struct MatrixRTCCallMembershipIdentity: Hashable {
+    let callScope: MatrixRTCCallScope
+    let userID: String
+    let deviceID: String
+    let partyID: String
+    let membershipID: String?
+}
+
+private struct MatrixRTCCallMembership {
+    let identity: MatrixRTCCallMembershipIdentity
+    let expiresAtMilliseconds: UInt64
+}
+
+private struct MatrixRTCCallMembershipStateUpdate {
+    let eventID: String
+    let stateKey: String
+    let timestampMilliseconds: UInt64
+    let memberships: [MatrixRTCCallMembership]
+}
+
+/// Parses the exact call membership identity that the SDK's `RoomInfo` projection intentionally omits.
+///
+/// This uses the same raw SDK event surface as `RoomCallEventParser`; raw content is never logged or retained.
+private enum MatrixRTCCallMembershipEventParser {
+    private static let eventType = "org.matrix.msc3401.call.member"
+    private static let defaultExpiryMilliseconds: UInt64 = 14_400_000
+
+    static func parse(_ itemProxy: TimelineItemProxy) -> MatrixRTCCallMembershipStateUpdate? {
+        guard case let .event(eventProxy) = itemProxy,
+              let eventID = eventProxy.id.eventID,
+              let rawJSONString = eventProxy.debugInfo.originalJSON,
+              let data = rawJSONString.data(using: .utf8),
+              let rawEvent = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              rawEvent["type"] as? String == eventType,
+              let sender = nonEmptyString(rawEvent["sender"]),
+              let stateKey = nonEmptyString(rawEvent["state_key"]),
+              let timestampMilliseconds = unsignedInteger(rawEvent["origin_server_ts"]),
+              let content = rawEvent["content"] as? [String: Any],
+              timelineContentMatches(eventProxy.content, stateKey: stateKey) else {
+            return nil
+        }
+
+        if isRemovalContent(content) {
+            return .init(eventID: eventID,
+                         stateKey: stateKey,
+                         timestampMilliseconds: timestampMilliseconds,
+                         memberships: [])
+        }
+
+        let memberships: [MatrixRTCCallMembership]
+        if let legacyMemberships = content["memberships"] as? [[String: Any]] {
+            guard !legacyMemberships.isEmpty else {
+                return .init(eventID: eventID,
+                             stateKey: stateKey,
+                             timestampMilliseconds: timestampMilliseconds,
+                             memberships: [])
+            }
+
+            memberships = legacyMemberships.compactMap { membership in
+                parseMembership(membership,
+                                sender: sender,
+                                partyID: nonEmptyString(membership["membershipID"]),
+                                fallbackTimestampMilliseconds: timestampMilliseconds,
+                                requiresMembershipID: true)
+            }
+            guard memberships.count == legacyMemberships.count else {
+                return nil
+            }
+        } else {
+            guard let membership = parseMembership(content,
+                                                   sender: sender,
+                                                   partyID: stateKey,
+                                                   fallbackTimestampMilliseconds: timestampMilliseconds,
+                                                   requiresMembershipID: false) else {
+                return nil
+            }
+            memberships = [membership]
+        }
+
+        return .init(eventID: eventID,
+                     stateKey: stateKey,
+                     timestampMilliseconds: timestampMilliseconds,
+                     memberships: memberships)
+    }
+
+    private static func timelineContentMatches(_ content: TimelineItemContent, stateKey: String) -> Bool {
+        switch content {
+        case .state(let timelineStateKey, let content):
+            guard timelineStateKey == stateKey,
+                  case .custom(let timelineEventType) = content else {
+                return false
+            }
+            return timelineEventType == eventType
+        case .failedToParseState(let timelineEventType, let timelineStateKey, _):
+            return timelineEventType == eventType && timelineStateKey == stateKey
+        default:
+            return false
+        }
+    }
+
+    private static func isRemovalContent(_ content: [String: Any]) -> Bool {
+        content.isEmpty || Set(content.keys).isSubset(of: ["leave_reason"])
+    }
+
+    private static func parseMembership(_ content: [String: Any],
+                                        sender: String,
+                                        partyID: String?,
+                                        fallbackTimestampMilliseconds: UInt64,
+                                        requiresMembershipID: Bool) -> MatrixRTCCallMembership? {
+        guard content["application"] as? String == MatrixRTCCallScope.directRoom.application,
+              let rawCallID = content["call_id"] as? String,
+              rawCallID.isEmpty || rawCallID == MatrixRTCCallScope.directRoom.callID,
+              content["scope"] as? String == MatrixRTCCallScope.directRoom.scope,
+              let deviceID = nonEmptyString(content["device_id"]),
+              let partyID else {
+            return nil
+        }
+
+        let membershipID = nonEmptyString(content["membershipID"])
+        guard !requiresMembershipID || membershipID != nil else {
+            return nil
+        }
+
+        if !requiresMembershipID {
+            guard let activeFocus = content["focus_active"] as? [String: Any],
+                  nonEmptyString(activeFocus["type"]) != nil else {
+                return nil
+            }
+            if let rawPreferredFoci = content["foci_preferred"] {
+                guard let preferredFoci = rawPreferredFoci as? [Any],
+                      preferredFoci.allSatisfy({ focus in
+                          guard let focus = focus as? [String: Any] else { return false }
+                          return nonEmptyString(focus["type"]) != nil
+                      }) else {
+                    return nil
+                }
+            }
+        }
+
+        if let createdTimestamp = content["created_ts"], unsignedInteger(createdTimestamp) == nil {
+            return nil
+        }
+        if let expiry = content["expires"], unsignedInteger(expiry) == nil {
+            return nil
+        }
+
+        let createdTimestamp = unsignedInteger(content["created_ts"]) ?? fallbackTimestampMilliseconds
+        let expiryDuration = unsignedInteger(content["expires"]) ?? defaultExpiryMilliseconds
+        let (expiresAtMilliseconds, overflow) = createdTimestamp.addingReportingOverflow(expiryDuration)
+        guard !overflow else {
+            return nil
+        }
+
+        return .init(identity: .init(callScope: .directRoom,
+                                     userID: sender,
+                                     deviceID: deviceID,
+                                     partyID: partyID,
+                                     membershipID: membershipID),
+                     expiresAtMilliseconds: expiresAtMilliseconds)
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String, !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    private static func unsignedInteger(_ value: Any?) -> UInt64? {
+        guard let number = value as? NSNumber,
+              !(value is Bool),
+              number.doubleValue.isFinite,
+              number.doubleValue >= 0,
+              number.doubleValue.rounded() == number.doubleValue,
+              number.doubleValue <= Double(UInt64.max) else {
+            return nil
+        }
+        return number.uint64Value
+    }
+}
+
+private final class OngoingCallMembershipTracker {
+    private struct MembershipState {
+        let timestampMilliseconds: UInt64
+        let memberships: [MatrixRTCCallMembership]
+    }
+
+    private let ownUserID: String
+    private let ownDeviceID: String?
+    private var membershipStateByStateKey = [String: MembershipState]()
+    private var processedEventIDs = Set<String>()
+    private var exactLocalMembership: MatrixRTCCallMembershipIdentity?
+    private var observedRemoteMemberships = Set<MatrixRTCCallMembershipIdentity>()
+    private var latestRoomInfo: RoomInfoProxyProtocol?
+    private var terminalEventEmitted = false
+
+    private(set) var hasObservedRemoteMembershipForCurrentCall = false
+
+    init(ownUserID: String, ownDeviceID: String?) {
+        self.ownUserID = ownUserID
+        self.ownDeviceID = ownDeviceID
+    }
+
+    func updateRoomInfo(_ roomInfo: RoomInfoProxyProtocol, now: Date) -> Bool {
+        latestRoomInfo = roomInfo
+        return evaluate(now: now)
+    }
+
+    func updateTimeline(_ itemProxies: [TimelineItemProxy], now: Date) -> Bool {
+        for itemProxy in itemProxies {
+            guard let update = MatrixRTCCallMembershipEventParser.parse(itemProxy),
+                  processedEventIDs.insert(update.eventID).inserted else {
+                continue
+            }
+
+            if let currentState = membershipStateByStateKey[update.stateKey],
+               currentState.timestampMilliseconds > update.timestampMilliseconds {
+                continue
+            }
+
+            membershipStateByStateKey[update.stateKey] = .init(timestampMilliseconds: update.timestampMilliseconds,
+                                                               memberships: update.memberships)
+        }
+
+        return evaluate(now: now)
+    }
+
+    private func evaluate(now: Date) -> Bool {
+        let nowMilliseconds = UInt64(max(0, now.timeIntervalSince1970 * 1000))
+        let activeMemberships = membershipStateByStateKey.values
+            .flatMap(\.memberships)
+            .filter { $0.expiresAtMilliseconds > nowMilliseconds }
+
+        resolveExactLocalMembership(from: activeMemberships)
+        let activeMembershipIdentities = Set(activeMemberships.map(\.identity))
+        let remoteMemberships = Set(activeMembershipIdentities.compactMap { membership in
+            isRemote(membership) ? membership : nil
+        })
+
+        if let latestRoomInfo {
+            let confirmedRemoteMemberships = remoteMemberships.filter { membership in
+                roomInfo(latestRoomInfo,
+                         projects: membership,
+                         among: activeMembershipIdentities)
+            }
+            if !confirmedRemoteMemberships.isEmpty {
+                hasObservedRemoteMembershipForCurrentCall = true
+                observedRemoteMemberships.formUnion(confirmedRemoteMemberships)
+            }
+        }
+
+        guard hasObservedRemoteMembershipForCurrentCall,
+              !observedRemoteMemberships.isEmpty,
+              remoteMemberships.isEmpty,
+              let latestRoomInfo,
+              observedRemoteMemberships.allSatisfy({ membership in
+                  !roomInfo(latestRoomInfo,
+                            projects: membership,
+                            among: activeMembershipIdentities)
+              }),
+              !terminalEventEmitted else {
+            return false
+        }
+
+        terminalEventEmitted = true
+        return true
+    }
+
+    private func resolveExactLocalMembership(from memberships: [MatrixRTCCallMembership]) {
+        guard exactLocalMembership == nil, let ownDeviceID else {
+            return
+        }
+
+        let candidates = memberships.filter { membership in
+            membership.identity.userID == ownUserID && membership.identity.deviceID == ownDeviceID
+        }
+        guard candidates.count == 1 else {
+            return
+        }
+
+        exactLocalMembership = candidates[0].identity
+    }
+
+    private func isRemote(_ membership: MatrixRTCCallMembershipIdentity) -> Bool {
+        guard membership.callScope == .directRoom else {
+            return false
+        }
+
+        if let exactLocalMembership {
+            return membership != exactLocalMembership
+        }
+
+        guard let ownDeviceID else {
+            return false
+        }
+        return membership.userID != ownUserID || membership.deviceID != ownDeviceID
+    }
+
+    private func roomInfo(_ roomInfo: RoomInfoProxyProtocol,
+                          projects remoteMembership: MatrixRTCCallMembershipIdentity,
+                          among activeMemberships: Set<MatrixRTCCallMembershipIdentity>) -> Bool {
+        let projectedMembershipCount = roomInfo.activeRoomCallParticipants.filter { participant in
+            Self.participant(participant, belongsTo: remoteMembership.userID)
+        }.count
+        let activeLocalMembershipCount = activeMemberships.filter { membership in
+            membership.userID == remoteMembership.userID && !isRemote(membership)
+        }.count
+        return projectedMembershipCount > activeLocalMembershipCount
+    }
+
+    private static func participant(_ participant: String, belongsTo userID: String) -> Bool {
+        participant == userID || participant.hasPrefix("_\(userID)_")
+    }
+}
+
 // swiftlint:disable type_body_length
 class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDelegate, CXProviderDelegate {
     private enum IncomingFallbackConstants {
@@ -299,16 +622,27 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private struct OngoingCallObservationIdentity: Equatable {
         let callKitID: UUID
         let roomID: String
+        let callScope: MatrixRTCCallScope
 
         init(callID: CallID) {
             callKitID = callID.callKitID
             roomID = callID.roomID
+            callScope = .directRoom
         }
     }
 
-    private struct OngoingCallObservation {
+    private final class OngoingCallObservation {
         let identity: OngoingCallObservationIdentity
         let roomProxy: JoinedRoomProxyProtocol
+        let membershipTracker: OngoingCallMembershipTracker
+
+        init(identity: OngoingCallObservationIdentity,
+             roomProxy: JoinedRoomProxyProtocol,
+             ownDeviceID: String?) {
+            self.identity = identity
+            self.roomProxy = roomProxy
+            membershipTracker = .init(ownUserID: roomProxy.ownUserID, ownDeviceID: ownDeviceID)
+        }
     }
 
     private final class TerminationEventTracker {
@@ -2463,14 +2797,16 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return
         }
 
-        ongoingCallObservation = .init(identity: identity, roomProxy: roomProxy)
+        let observation = OngoingCallObservation(identity: identity,
+                                                 roomProxy: roomProxy,
+                                                 ownDeviceID: clientProxy.deviceID)
+        ongoingCallObservation = observation
         roomProxy.subscribeToRoomInfoUpdates()
-        observeOngoingCallRoomInfo(roomProxy: roomProxy,
-                                   ongoingCallID: expectedCallID,
-                                   identity: identity)
+        observeOngoingCallRoomInfo(ongoingCallID: expectedCallID,
+                                   observation: observation)
         await observeOngoingCallTimeline(roomProxy: roomProxy,
                                          ongoingCallID: expectedCallID,
-                                         identity: identity)
+                                         observation: observation)
 
         guard isCurrentOngoingCallObservation(identity) else {
             return
@@ -2543,9 +2879,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
     private func observeOngoingCallTimeline(roomProxy: JoinedRoomProxyProtocol,
                                             ongoingCallID: CallID,
-                                            identity: OngoingCallObservationIdentity) async {
+                                            observation: OngoingCallObservation) async {
         await ensureTimelineSubscribed(for: roomProxy, roomID: ongoingCallID.roomID)
 
+        let identity = observation.identity
         guard isCurrentOngoingCallObservation(identity) else {
             return
         }
@@ -2558,13 +2895,21 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         ongoingCallTimelineCancellable = await MainActor.run {
             timelineItemProvider.updatePublisher
                 .map(\.0)
+                .receive(on: DispatchQueue.main)
                 .sink { [weak self] itemProxies in
                     guard let self else { return }
-                    guard self.isCurrentOngoingCallObservation(identity) else { return }
+                    guard self.isCurrentOngoingCallObservation(identity),
+                          self.ongoingCallObservation === observation else { return }
                     self.cacheLatestCallContext(in: itemProxies, for: ongoingCallID.roomID)
                     self.refreshOngoingDeclineListeners(roomProxy: roomProxy,
                                                         ongoingCallID: ongoingCallID,
                                                         itemProxies: itemProxies)
+                    if observation.membershipTracker.updateTimeline(itemProxies, now: self.timeProvider.now()) {
+                        self.endOngoingCall(ongoingCallID,
+                                            reason: .remoteEnded,
+                                            deduplicationID: "ongoing-membership:\(ongoingCallID.callKitID.uuidString)")
+                        return
+                    }
                     guard let terminationEvent = self.latestRemoteTerminationEvent(in: itemProxies, roomID: ongoingCallID.roomID) else { return }
                     guard terminationEvent.eventID != tracker.eventID else { return }
 
@@ -2618,52 +2963,33 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             }
     }
 
-    private func observeOngoingCallRoomInfo(roomProxy: JoinedRoomProxyProtocol,
-                                            ongoingCallID: CallID,
-                                            identity: OngoingCallObservationIdentity) {
-        let tracker = RoomCallPresenceTracker()
-        let ownUserID = roomProxy.ownUserID
-
-        ongoingCallRoomInfoCancellable = roomProxy.infoPublisher
+    private func observeOngoingCallRoomInfo(ongoingCallID: CallID,
+                                            observation: OngoingCallObservation) {
+        let identity = observation.identity
+        ongoingCallRoomInfoCancellable = observation.roomProxy.infoPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] roomInfo in
                 guard let self else { return }
-                guard self.isCurrentOngoingCallObservation(identity) else { return }
+                guard self.isCurrentOngoingCallObservation(identity),
+                      self.ongoingCallObservation === observation else { return }
 
-                let participants = Set(roomInfo.activeRoomCallParticipants)
-                let hasActiveCall = roomInfo.hasRoomCall || !participants.isEmpty
-                let hasLocalParticipant = participants.contains { self.participantBelongsToUser($0, userID: ownUserID) }
                 #if DEBUG
+                let participants = roomInfo.activeRoomCallParticipants
+                let hasLocalParticipant = participants.contains { self.participantBelongsToUser($0, userID: observation.roomProxy.ownUserID) }
                 Task { @MainActor in
                     SalemXStage2FSimulatorSignalingDebug.recordMatrixRTCObservation(participantCount: participants.count,
-                                                                                    hasActiveCall: hasActiveCall,
+                                                                                    hasActiveCall: roomInfo.hasRoomCall || !participants.isEmpty,
                                                                                     localParticipantPresent: hasLocalParticipant,
-                                                                                    remoteParticipantPresent: participants.contains { !self.participantBelongsToUser($0, userID: ownUserID) })
+                                                                                    remoteParticipantPresent: observation.membershipTracker.hasObservedRemoteMembershipForCurrentCall)
                 }
                 #endif
-                if hasActiveCall {
-                    tracker.hasSeenActiveCall = true
-                }
-
-                let foreignParticipantsCount = participants.filter { !self.participantBelongsToUser($0, userID: ownUserID) }.count
-                let hasRemoteParticipant = foreignParticipantsCount > 0
-                if hasRemoteParticipant {
-                    tracker.hasSeenRemoteParticipant = true
-                }
-
-                let shouldEndBecauseCallStopped = tracker.hasSeenActiveCall && !hasActiveCall
-                let shouldTrackNoForeignFallback = roomInfo.isDirect && tracker.hasSeenActiveCall && tracker.hasSeenRemoteParticipant
-                let shouldEndBecauseRemoteLeft = shouldTrackNoForeignFallback &&
-                    !hasRemoteParticipant
-
-                guard shouldEndBecauseCallStopped || shouldEndBecauseRemoteLeft else {
+                guard observation.membershipTracker.updateRoomInfo(roomInfo, now: self.timeProvider.now()) else {
                     return
                 }
 
                 self.endOngoingCall(ongoingCallID,
                                     reason: .remoteEnded,
-                                    deduplicationID: self.roomInfoDeduplicationID(prefix: "ongoing-info",
-                                                                                  roomInfo: roomInfo))
+                                    deduplicationID: "ongoing-membership:\(ongoingCallID.callKitID.uuidString)")
             }
     }
 
