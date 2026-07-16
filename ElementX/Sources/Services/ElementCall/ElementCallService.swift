@@ -829,7 +829,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
     
     func setClientProxy(_ clientProxy: any ClientProxyProtocol) {
-        self.clientProxy = clientProxy
+        if self.clientProxy !== clientProxy {
+            self.clientProxy = clientProxy
+        }
         Task { await registerVoIPPusherIfNeeded() }
     }
 

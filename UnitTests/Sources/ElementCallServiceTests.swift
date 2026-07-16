@@ -688,6 +688,281 @@ final class ElementCallServiceTests {
     }
 
     @Test
+    func ongoingDirectCallRoomInfoFirstThenTimelineRemovalEndsExactlyOnce() async {
+        let roomID = "!room-info-first:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let (room, subscription) = makeOngoingCallRoom(id: roomID,
+                                                       ownUserID: ownUserID,
+                                                       remoteUserID: remoteUserID)
+        clientProxy.roomForIdentifierClosure = { _ in
+            .joined(room)
+        }
+
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall = action {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
+        #expect(await waitForRoomInfoSubscription(on: room))
+        #expect(await subscription.waitForTimelineSubscription())
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID, remoteUserID])))
+
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: false,
+                                                           participants: [])))
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(endCallCount == 0)
+        #expect(service.ongoingCallRoomIDPublisher.value == roomID)
+
+        let remoteRemoval = [
+            makeMatrixRTCMembershipTimelineItem(eventID: "$room-info-first-local-current",
+                                                roomID: roomID,
+                                                userID: ownUserID,
+                                                deviceID: "LOCAL_DEVICE",
+                                                membershipID: "LOCAL_PARTY",
+                                                isActive: true),
+            makeMatrixRTCMembershipTimelineItem(eventID: "$room-info-first-remote-empty",
+                                                roomID: roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                isActive: false)
+        ]
+        #expect(subscription.receiveSDKTimelineUpdate(remoteRemoval))
+        for _ in 0..<30 where endCallCount == 0 {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(endCallCount == 1)
+        #expect(service.ongoingCallRoomIDPublisher.value == nil)
+        #expect(subscription.receiveSDKTimelineUpdate(remoteRemoval))
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: false,
+                                                           participants: [])))
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(endCallCount == 1)
+    }
+
+    @Test
+    func ongoingDirectCallLocalOnlyProjectionKeepsRemoteEndDecisionWhenLocalLaterLeaves() async {
+        let roomID = "!local-only-transition:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let (room, subscription) = makeOngoingCallRoom(id: roomID,
+                                                       ownUserID: ownUserID,
+                                                       remoteUserID: remoteUserID)
+        clientProxy.roomForIdentifierClosure = { _ in
+            .joined(room)
+        }
+
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall = action {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
+        #expect(await waitForRoomInfoSubscription(on: room))
+        #expect(await subscription.waitForTimelineSubscription())
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID, remoteUserID])))
+
+        #expect(subscription.receiveSDKTimelineUpdate([
+            makeMatrixRTCMembershipTimelineItem(eventID: "$local-only-local-current",
+                                                roomID: roomID,
+                                                userID: ownUserID,
+                                                deviceID: "LOCAL_DEVICE",
+                                                membershipID: "LOCAL_PARTY",
+                                                isActive: true),
+            makeMatrixRTCMembershipTimelineItem(eventID: "$local-only-remote-empty",
+                                                roomID: roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                isActive: false)
+        ]))
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID])))
+        for _ in 0..<30 where endCallCount == 0 {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(endCallCount == 1)
+
+        #expect(subscription.receiveSDKTimelineUpdate([
+            makeMatrixRTCMembershipTimelineItem(eventID: "$local-only-local-empty",
+                                                roomID: roomID,
+                                                userID: ownUserID,
+                                                deviceID: "LOCAL_DEVICE",
+                                                membershipID: "LOCAL_PARTY",
+                                                isActive: false),
+            makeMatrixRTCMembershipTimelineItem(eventID: "$local-only-remote-empty-duplicate",
+                                                roomID: roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                isActive: false)
+        ]))
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: false,
+                                                           participants: [])))
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(endCallCount == 1)
+    }
+
+    @Test
+    func ongoingDirectCallCoalescedTwoToZeroEndsExactlyOnce() async {
+        let roomID = "!coalesced-zero:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let (room, subscription) = makeOngoingCallRoom(id: roomID,
+                                                       ownUserID: ownUserID,
+                                                       remoteUserID: remoteUserID)
+        clientProxy.roomForIdentifierClosure = { _ in
+            .joined(room)
+        }
+
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall = action {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
+        #expect(await waitForRoomInfoSubscription(on: room))
+        #expect(await subscription.waitForTimelineSubscription())
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID, remoteUserID])))
+
+        let emptyMemberships = [
+            makeMatrixRTCMembershipTimelineItem(eventID: "$coalesced-local-empty",
+                                                roomID: roomID,
+                                                userID: ownUserID,
+                                                deviceID: "LOCAL_DEVICE",
+                                                membershipID: "LOCAL_PARTY",
+                                                isActive: false),
+            makeMatrixRTCMembershipTimelineItem(eventID: "$coalesced-remote-empty",
+                                                roomID: roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                isActive: false)
+        ]
+        #expect(subscription.receiveSDKTimelineUpdate(emptyMemberships))
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(endCallCount == 0)
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: false,
+                                                           participants: [])))
+        for _ in 0..<30 where endCallCount == 0 {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(endCallCount == 1)
+        #expect(service.ongoingCallRoomIDPublisher.value == nil)
+        #expect(subscription.receiveSDKTimelineUpdate(emptyMemberships))
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: false,
+                                                           participants: [])))
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(endCallCount == 1)
+    }
+
+    @Test
+    func ongoingDirectCallAmbiguousLocalMembershipIdentityFailsClosed() async {
+        let roomID = "!ambiguous-local:example.com"
+        let ownUserID = "@test:user.net"
+        let firstLocalMembership = makeMatrixRTCMembershipTimelineItem(eventID: "$ambiguous-local-first",
+                                                                       roomID: roomID,
+                                                                       userID: ownUserID,
+                                                                       deviceID: "LOCAL_DEVICE",
+                                                                       membershipID: "LOCAL_PARTY_ONE",
+                                                                       isActive: true)
+        let secondLocalMembership = makeMatrixRTCMembershipTimelineItem(eventID: "$ambiguous-local-second",
+                                                                        roomID: roomID,
+                                                                        userID: ownUserID,
+                                                                        deviceID: "LOCAL_DEVICE",
+                                                                        membershipID: "LOCAL_PARTY_TWO",
+                                                                        isActive: true)
+        let (room, subscription) = makeOngoingCallRoom(id: roomID,
+                                                       ownUserID: ownUserID,
+                                                       initialHasRoomCall: true,
+                                                       initialParticipants: [ownUserID, ownUserID],
+                                                       initialTimelineItems: [firstLocalMembership, secondLocalMembership])
+        clientProxy.roomForIdentifierClosure = { _ in
+            .joined(room)
+        }
+
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall = action {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
+        #expect(await waitForRoomInfoSubscription(on: room))
+        #expect(await subscription.waitForTimelineSubscription())
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID, ownUserID])))
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: false,
+                                                           participants: [])))
+        #expect(subscription.receiveSDKTimelineUpdate([
+            makeMatrixRTCMembershipTimelineItem(eventID: "$ambiguous-local-first-empty",
+                                                roomID: roomID,
+                                                userID: ownUserID,
+                                                deviceID: "LOCAL_DEVICE",
+                                                membershipID: "LOCAL_PARTY_ONE",
+                                                isActive: false),
+            makeMatrixRTCMembershipTimelineItem(eventID: "$ambiguous-local-second-empty",
+                                                roomID: roomID,
+                                                userID: ownUserID,
+                                                deviceID: "LOCAL_DEVICE",
+                                                membershipID: "LOCAL_PARTY_TWO",
+                                                isActive: false)
+        ]))
+        try? await Task.sleep(for: .milliseconds(100))
+
+        #expect(endCallCount == 0)
+        #expect(service.ongoingCallRoomIDPublisher.value == roomID)
+    }
+
+    @Test
     func ongoingDirectCallInitialEmptyRoomInfoDoesNotEndBeforeRemoteMembershipIsObserved() async {
         let roomID = "!empty-room:example.com"
         let ownUserID = "@test:user.net"
@@ -1087,6 +1362,94 @@ final class ElementCallServiceTests {
         #expect(secondRoom.subscribeToRoomInfoUpdatesCallsCount == 1)
         #expect(firstSubscription.timelineSubscriptionStartCount == 1)
         #expect(secondSubscription.timelineSubscriptionStartCount == 1)
+    }
+
+    @Test
+    func differentClientSessionReplacesObservationAndRejectsPreviousProxyCallbacks() async {
+        let roomID = "!session-replacement-room:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let (firstRoom, firstSubscription) = makeOngoingCallRoom(id: roomID,
+                                                                 ownUserID: ownUserID,
+                                                                 remoteUserID: remoteUserID)
+        let (replacementRoom, replacementSubscription) = makeOngoingCallRoom(id: roomID,
+                                                                             ownUserID: ownUserID,
+                                                                             initialHasRoomCall: true,
+                                                                             initialParticipants: [ownUserID],
+                                                                             initialTimelineItems: [
+                                                                                 makeMatrixRTCMembershipTimelineItem(eventID: "$replacement-local-membership",
+                                                                                                                     roomID: roomID,
+                                                                                                                     userID: ownUserID,
+                                                                                                                     deviceID: "LOCAL_DEVICE",
+                                                                                                                     membershipID: "LOCAL_PARTY",
+                                                                                                                     isActive: true)
+                                                                             ])
+        clientProxy.roomForIdentifierClosure = { _ in
+            .joined(firstRoom)
+        }
+
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall = action {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
+        #expect(await waitForRoomInfoSubscription(on: firstRoom))
+        #expect(await firstSubscription.waitForTimelineSubscription())
+        #expect(firstSubscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                                isDirect: true,
+                                                                hasRoomCall: true,
+                                                                participants: [ownUserID, remoteUserID])))
+
+        let replacementClientProxy = ClientProxyMock(.init(userID: ownUserID, deviceID: "LOCAL_DEVICE"))
+        replacementClientProxy.roomForIdentifierClosure = { _ in
+            .joined(replacementRoom)
+        }
+        service.setClientProxy(replacementClientProxy)
+        #expect(await waitForRoomInfoSubscription(on: replacementRoom))
+        #expect(await replacementSubscription.waitForTimelineSubscription())
+
+        #expect(firstSubscription.receiveSDKTimelineUpdate([
+            makeMatrixRTCMembershipTimelineItem(eventID: "$stale-local-current",
+                                                roomID: roomID,
+                                                userID: ownUserID,
+                                                deviceID: "LOCAL_DEVICE",
+                                                membershipID: "LOCAL_PARTY",
+                                                isActive: true),
+            makeMatrixRTCMembershipTimelineItem(eventID: "$stale-remote-empty",
+                                                roomID: roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                isActive: false)
+        ]))
+        #expect(firstSubscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                                isDirect: true,
+                                                                hasRoomCall: true,
+                                                                participants: [ownUserID])))
+        #expect(replacementSubscription.receiveSDKTimelineUpdate([
+            makeMatrixRTCMembershipTimelineItem(eventID: "$replacement-local-empty",
+                                                roomID: roomID,
+                                                userID: ownUserID,
+                                                deviceID: "LOCAL_DEVICE",
+                                                membershipID: "LOCAL_PARTY",
+                                                isActive: false)
+        ]))
+        #expect(replacementSubscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                                      isDirect: true,
+                                                                      hasRoomCall: false,
+                                                                      participants: [])))
+        try? await Task.sleep(for: .milliseconds(100))
+
+        #expect(endCallCount == 0)
+        #expect(service.ongoingCallRoomIDPublisher.value == roomID)
+        #expect(firstRoom.subscribeToRoomInfoUpdatesCallsCount == 1)
+        #expect(replacementRoom.subscribeToRoomInfoUpdatesCallsCount == 1)
     }
 
     @Test

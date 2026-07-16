@@ -1619,6 +1619,109 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
+    func roomInfoFirstRemoteLeaveSurvivesSameClientReinjectionAndEndsExactlyOnce() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge)
+
+        let callID = try await reportIncomingCall()
+        bootstrapResolver.bootstrapByCallID[callID] = verifiedBootstrap(callID: callID)
+        let answerAction = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(answerAction, provider: callProvider)
+        #expect(await waitUntil { answerAction.fulfillCount == 1 })
+
+        let remoteUserID = "@alice:example.com"
+        let room = JoinedRoomProxyMock(.init(id: Self.roomID,
+                                             name: "Room",
+                                             isDirect: true,
+                                             hasOngoingCall: true,
+                                             ownUserID: localUserID))
+        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
+            .failure(.missingTransactionID)
+        }
+        let roomInfoSubscription = EmbeddedRoomInfoSubscriptionHarness(initialValue: makeRoomInfo(participants: [localUserID, remoteUserID]))
+        let localMembership = makeMatrixRTCMembershipTimelineItem(eventID: "$reinjection-local-membership",
+                                                                  roomID: Self.roomID,
+                                                                  userID: localUserID,
+                                                                  deviceID: "LOCAL_DEVICE",
+                                                                  membershipID: "LOCAL_PARTY",
+                                                                  isActive: true)
+        roomInfoSubscription.install(on: room, initialTimelineItems: [
+            localMembership,
+            makeMatrixRTCMembershipTimelineItem(eventID: "$reinjection-remote-membership",
+                                                roomID: Self.roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                isActive: true)
+        ])
+
+        let clientProxy = ClientProxyMock(.init(userID: localUserID, deviceID: "LOCAL_DEVICE"))
+        clientProxy.roomForIdentifierClosure = { _ in .joined(room) }
+        var endCallCount = 0
+        var localTerminationRequestCount = 0
+        var startCallCount = 0
+        service.actions
+            .sink { action in
+                switch action {
+                case .endCall:
+                    endCallCount += 1
+                case .requestCallTermination:
+                    localTerminationRequestCount += 1
+                case .startCall:
+                    startCallCount += 1
+                case .receivedIncomingCallRequest, .setAudioEnabled:
+                    break
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        #expect(await waitUntil { room.subscribeToRoomInfoUpdatesCallsCount == 1 })
+        #expect(await roomInfoSubscription.waitForTimelineSubscription())
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID, remoteUserID])))
+
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [])))
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(endCallCount == 0)
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
+
+        service.setClientProxy(clientProxy)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(room.subscribeToRoomInfoUpdatesCallsCount == 1)
+        #expect(roomInfoSubscription.subscriptionStartCount == 1)
+
+        let remoteRemoval = [
+            localMembership,
+            makeMatrixRTCMembershipTimelineItem(eventID: "$reinjection-remote-membership-empty",
+                                                roomID: Self.roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                isActive: false)
+        ]
+        #expect(roomInfoSubscription.receiveSDKTimelineUpdate(remoteRemoval))
+        #expect(await waitUntil {
+            self.callProvider.reportCallWithEndedAtReasonCallsCount == 1 &&
+                endCallCount == 1 &&
+                self.service.ongoingCallRoomIDPublisher.value == nil
+        })
+
+        #expect(roomInfoSubscription.receiveSDKTimelineUpdate(remoteRemoval))
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [])))
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.uuid == callID)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+        #expect(endCallCount == 1)
+        #expect(localTerminationRequestCount == 0)
+        #expect(startCallCount == 0)
+        #expect(bootstrapResolver.removedCallIDs == [callID])
+    }
+
+    @Test
     func remoteTerminalEventReportsCallKitEndedOnce() async throws {
         let endBridge = EndBridgeSpy(result: .terminationAccepted)
         let bootstrapResolver = BootstrapResolverSpy()
