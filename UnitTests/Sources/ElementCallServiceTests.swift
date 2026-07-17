@@ -91,13 +91,19 @@ final class EmbeddedElementCallProductionHandoffTests {
     }
 
     @Test
-    func audioIntentDoesNotExposeMediaCredentials() {
+    func audioOnlyDirectCallDoesNotRequestVideoOrCameraTrack() async {
         let preparation = EmbeddedElementCallPreparation.audio(roomID: "!room:example.org", intent: .startNew)
         let exposedLabels = Mirror(reflecting: preparation).children.compactMap(\.label).joined(separator: ",")
+        let room = RoomSDKMock()
+        room.hasActiveRoomCallReturnValue = false
+        room.isDirectReturnValue = true
+        let widgetDriver = ElementCallWidgetDriver(room: room, deviceID: "redacted-device")
 
         #expect(preparation.startMode == .audio)
         #expect(preparation.cameraRequested == false)
         #expect(preparation.videoEnabled == false)
+        #expect(await room.joinCallIntent == .startCallDmVoice)
+        #expect(widgetDriver.startMode == .audio)
         #expect(preparation.lifecycleEvents == EmbeddedElementCallLifecycleEvent.allCases)
         #expect(!exposedLabels.localizedCaseInsensitiveContains("livekit"))
         #expect(!exposedLabels.localizedCaseInsensitiveContains("token"))
@@ -219,6 +225,31 @@ final class SalemXStage2FCallKitDebugBoundaryTests {
         #expect(errorBucket == .filteredByDoNotDisturb)
         #expect(result.outcomeBucket == "provider_failed_filtered_by_do_not_disturb")
         #expect(service.salemXDebugStage2FCallKitLocalStateBucket == .idle)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+    }
+
+    @Test
+    func terminalIdentityIgnoresDuplicateForegroundInvite() async throws {
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        let firstResult = await service.salemXDebugReportStage2FSimulatorIncomingCall(roomID: "redacted-room",
+                                                                                      roomDisplayName: "Call",
+                                                                                      startMode: .audio,
+                                                                                      rtcNotificationID: "redacted-notification",
+                                                                                      remoteCallID: "redacted-session") { _ in }
+        _ = try #require(firstResult.reportedCallID)
+
+        await service.declineIncomingCall()
+
+        let duplicateResult = await service.salemXDebugReportStage2FSimulatorIncomingCall(roomID: "redacted-room",
+                                                                                          roomDisplayName: "Call",
+                                                                                          startMode: .audio,
+                                                                                          rtcNotificationID: "redacted-notification",
+                                                                                          remoteCallID: "redacted-session") { _ in }
+
+        #expect(duplicateResult == .blockedByConsumedCallIdentity)
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
     }
 }
@@ -2396,7 +2427,7 @@ final class ElementCallServiceTests {
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
 
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
-            .success(TaskHandle(noHandle: .init()))
+            .success(TaskHandleSDKMock())
         }
 
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
@@ -2451,7 +2482,7 @@ final class ElementCallServiceTests {
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
 
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
-            .success(TaskHandle(noHandle: .init()))
+            .success(TaskHandleSDKMock())
         }
 
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
@@ -2509,7 +2540,7 @@ final class ElementCallServiceTests {
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
 
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
-            .success(TaskHandle(noHandle: .init()))
+            .success(TaskHandleSDKMock())
         }
         room.declineCallNotificationIDClosure = { _ in
             .success(())
@@ -2600,6 +2631,13 @@ final class ElementCallServiceTests {
     }
 
     @Test
+    func incomingAudioPushReportsCallKitWithoutVideo() async {
+        await assertIncomingPush(callIntentKey: "call_type",
+                                 callIntent: "audio",
+                                 expectsVideo: false)
+    }
+
+    @Test
     func incomingPushCallIntentParsingIsCaseInsensitive() async {
         await assertIncomingPush(callIntentKey: "CALL_INTENT",
                                  callIntent: "STARTCALLDMVOICE",
@@ -2610,15 +2648,11 @@ final class ElementCallServiceTests {
     }
 
     @Test
-    func incomingPushWithUnknownCallIntentUsesVideoFallback() async {
+    func incomingPushWithMissingOrUnknownTypeFallsBackToAudio() async {
         await assertIncomingPush(callIntentKey: "callIntent",
                                  callIntent: "unknown",
-                                 expectsVideo: true)
-    }
-
-    @Test
-    func incomingPushWithoutCallIntentUsesVideoFallback() async {
-        await assertIncomingPush(expectsVideo: true)
+                                 expectsVideo: false)
+        await assertIncomingPush(expectsVideo: false)
     }
 
     @Test
@@ -3070,7 +3104,9 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
                             isDirect: true,
                             hasOngoingCall: true,
                             participants: [remoteUserID],
-                            lastCallEvent: .init(state: .incoming, intent: .audio))
+                            lastCallEvent: .init(state: .incoming,
+                                                 intent: .audio,
+                                                 callID: "redacted-fresh-session"))
         ])
         #expect(await waitForIncomingCallReports(count: 1))
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionReceivedArguments?.update.hasVideo == false)
@@ -3156,7 +3192,7 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @Test
-    func foregroundCurrentRoomRepeatIncomingAfterEndReportsAgain() async {
+    func foregroundCurrentRoomNewIdentityAfterTerminalReportsAgain() async {
         let roomID = "redacted-room"
         let remoteUserID = "redacted-remote"
         configureRoomSummaryProvider()
@@ -3168,12 +3204,19 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
             completion(nil)
         }
 
-        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+        handleForegroundCall(roomID: roomID,
+                             callID: "redacted-session-a",
+                             deduplicationID: "redacted-current-call-a")
         #expect(await waitForIncomingCallReports(count: 1))
 
         await service.declineIncomingCall()
 
-        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-b")
+        service.stopObservingForegroundRoom(roomID: roomID)
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        handleForegroundCall(roomID: roomID,
+                             callID: "redacted-session-b",
+                             deduplicationID: "redacted-current-call-b")
 
         #expect(await waitForIncomingCallReports(count: 2))
     }
@@ -3235,7 +3278,7 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @Test
-    func foregroundCurrentRoomDuplicateCallEventDoesNotReportTwice() async {
+    func terminalIdentityIgnoresDuplicateMatrixRTCNotification() async {
         let roomID = "redacted-room"
         let remoteUserID = "redacted-remote"
         configureRoomSummaryProvider()
@@ -3247,12 +3290,19 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
             completion(nil)
         }
 
-        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+        handleForegroundCall(roomID: roomID,
+                             callID: "redacted-session-a",
+                             deduplicationID: "redacted-current-call-a")
         #expect(await waitForIncomingCallReports(count: 1))
 
         await service.declineIncomingCall()
 
-        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+        service.stopObservingForegroundRoom(roomID: roomID)
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+
+        handleForegroundCall(roomID: roomID,
+                             callID: "redacted-session-a",
+                             deduplicationID: "redacted-current-call-a")
 
         #expect(await waitForIncomingCallReports(count: 2) == false)
     }
@@ -3285,12 +3335,15 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
 
     private func handleForegroundCall(roomID: String,
                                       state: RoomCallEvent.State = .incoming,
+                                      callID: String? = nil,
                                       deduplicationID: String) {
         service.handleForegroundCurrentRoomCallEvent(.init(roomID: roomID,
                                                            roomDisplayName: "Room",
                                                            isDirect: true,
                                                            isOwnEvent: false,
-                                                           callEvent: .init(state: state, intent: .audio),
+                                                           callEvent: .init(state: state,
+                                                                            intent: .audio,
+                                                                            callID: callID),
                                                            deduplicationID: deduplicationID))
     }
 
@@ -3311,8 +3364,9 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         room.infoPublisher = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
                                                                                             activeParticipants: activeParticipants)).asCurrentValuePublisher()
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
-            .success(TaskHandle(noHandle: .init()))
+            .success(TaskHandleSDKMock())
         }
+        room.declineCallNotificationIDClosure = { _ in .success(()) }
 
         if let timelineProxy = room.timeline as? TimelineProxyMock,
            let timelineItemProvider = timelineProxy.timelineItemProvider as? TimelineItemProviderMock {

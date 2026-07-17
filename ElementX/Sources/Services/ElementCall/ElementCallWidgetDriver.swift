@@ -66,7 +66,7 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
     private let deviceID: String
     
     private var widgetDriver: WidgetDriverAndHandle?
-    var startMode: ElementCallStartMode = .video
+    var startMode: ElementCallStartMode = .audio
     
     let widgetID = UUID().uuidString
     let messagePublisher = PassthroughSubject<String, Never>()

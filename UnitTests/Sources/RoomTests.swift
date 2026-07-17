@@ -23,11 +23,11 @@ struct RoomTests {
         
         room.isDirectReturnValue = true
         callIntent = await room.joinCallIntent
-        #expect(callIntent == .startCallDm)
+        #expect(callIntent == .startCallDmVoice)
         
         room.hasActiveRoomCallReturnValue = true
         callIntent = await room.joinCallIntent
-        #expect(callIntent == .joinExistingDm)
+        #expect(callIntent == .joinExistingDmVoice)
 
         callIntent = await room.joinCallIntent(for: .audio)
         #expect(callIntent == .joinExistingDmVoice)

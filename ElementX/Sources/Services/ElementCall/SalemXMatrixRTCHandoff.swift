@@ -1694,7 +1694,9 @@ enum SalemXStage2FSimulatorSignalingDebug {
         proof.receiverVerifiedBootstrapCreationAttempted = true
         let reportResult = await concreteElementCallService.salemXDebugReportStage2FSimulatorIncomingCall(roomID: metadata.roomID,
                                                                                                           roomDisplayName: "SalemX audio",
-                                                                                                          startMode: .audio) { callID in
+                                                                                                          startMode: .audio,
+                                                                                                          rtcNotificationID: metadataReference,
+                                                                                                          remoteCallID: metadata.callID) { callID in
             proof.receiverBootstrapStoreInvoked = true
             let claimedMetadata = SalemXMatrixRTCClaimedMetadata(roomID: metadata.roomID,
                                                                  localUserID: clientProxy.userID,
@@ -2023,19 +2025,23 @@ enum SalemXStage2FSimulatorSignalingDebug {
     }
 
     private struct IncomingPendingMetadata {
+        let callID: String
         let roomID: String
         let peerUserID: String
 
         init?(payload: [String: Any]) {
             guard payload["version"] as? Int == 1,
+                  let callID = payload["call_id"] as? String,
                   let roomID = payload["room_id"] as? String,
                   let peerUserID = payload["peer_user_id"] as? String,
                   payload["direction"] as? String == "incoming",
                   payload["intent"] as? String == "audio",
+                  !callID.isEmpty,
                   !roomID.isEmpty,
                   !peerUserID.isEmpty else {
                 return nil
             }
+            self.callID = callID
             self.roomID = roomID
             self.peerUserID = peerUserID
         }

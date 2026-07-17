@@ -35,6 +35,7 @@ enum SalemXStage2FCallKitReportErrorBucket: String, Equatable {
 
 enum SalemXStage2FCallKitReportResult: Equatable {
     case reported(UUID)
+    case blockedByConsumedCallIdentity
     case blockedByExistingIncomingCall
     case blockedByExistingOngoingCall
     case providerFailed(callID: UUID, errorBucket: SalemXStage2FCallKitReportErrorBucket)
@@ -49,6 +50,8 @@ enum SalemXStage2FCallKitReportResult: Equatable {
 
     var localStateBucket: SalemXStage2FCallKitLocalStateBucket {
         switch self {
+        case .blockedByConsumedCallIdentity:
+            .idle
         case .blockedByExistingIncomingCall:
             .incomingCallActive
         case .blockedByExistingOngoingCall:
@@ -62,6 +65,8 @@ enum SalemXStage2FCallKitReportResult: Equatable {
         switch self {
         case .reported:
             "reported"
+        case .blockedByConsumedCallIdentity:
+            "blocked_consumed_call_identity"
         case .blockedByExistingIncomingCall:
             "blocked_existing_incoming_call"
         case .blockedByExistingOngoingCall:
@@ -639,6 +644,10 @@ private final class DirectRoomInfoTerminationStateMachine {
     private(set) var exactRemoteSeen = false
     private(set) var exactRemoteSeenSequence: UInt64?
 
+    var exactRemoteMembershipIdentities: Set<MatrixRTCCallMembershipIdentity> {
+        observedRemoteMemberships
+    }
+
     init(context: DirectRoomInfoTerminationContext,
          ownUserID: String,
          ownDeviceID: String?) {
@@ -851,6 +860,19 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         let startedAt: Date
     }
 
+    private enum ConsumedDirectCallIdentityComponent: Hashable {
+        case callKit(UUID)
+        case rtcNotification(String)
+        case remoteCall(String)
+        case membership(MatrixRTCCallMembershipIdentity)
+    }
+
+    private struct ConsumedDirectCallIdentityKey: Hashable {
+        let roomID: String
+        let callScope: MatrixRTCCallScope
+        let component: ConsumedDirectCallIdentityComponent
+    }
+
     private struct OngoingCallObservationIdentity: Equatable {
         let callKitID: UUID
         let roomID: String
@@ -1012,6 +1034,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private var foregroundRoomID: String?
     private var foregroundRoomTimelineCancellable: AnyCancellable?
     private var handledForegroundIncomingCallByRoomID: [String: String] = [:]
+    private var consumedDirectCallIdentityKeys = Set<ConsumedDirectCallIdentityKey>()
     private var ongoingDeclineListenerHandles: [String: TaskHandle] = [:]
     private var isResolvingOngoingDeclines = false
     private let ongoingDeclineObservationLock = NSLock()
@@ -1051,7 +1074,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             self.callProvider = callProvider
         } else {
             let configuration = CXProviderConfiguration()
-            configuration.supportsVideo = true
+            configuration.supportsVideo = false
             configuration.includesCallsInRecents = true
             configuration.ringtoneSound = "message.caf"
             
@@ -1144,7 +1167,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
     
     func setupCallSession(roomID: String, roomDisplayName: String) async {
-        await setupCallSession(roomID: roomID, roomDisplayName: roomDisplayName, startMode: .video)
+        await setupCallSession(roomID: roomID, roomDisplayName: roomDisplayName, startMode: .audio)
     }
 
     func setupCallSession(roomID: String, roomDisplayName: String, startMode: ElementCallStartMode) async {
@@ -1294,6 +1317,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         
         guard let rtcNotificationID = payload.dictionaryPayload[ElementCallServiceNotificationKey.rtcNotifyEventID.rawValue] as? String else {
             MXLog.error("Something went wrong, missing rtc notification event identifier for incoming voip call: \(payload)")
+            completion()
+            return
+        }
+
+        guard !isConsumedDirectCallIdentity(roomID: roomID, rtcNotificationID: rtcNotificationID) else {
             completion()
             return
         }
@@ -1793,7 +1821,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             removeVerifiedBootstrapOnce(for: callID)
         }
 
-        if incomingCallID != nil {
+        if let incomingCallID {
+            markConsumedDirectCallIdentity(incomingCallID)
             clearIncomingCallState(cancelEmbeddedAnswer: false)
         }
 
@@ -1845,6 +1874,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
 
     private func clearEmbeddedMatrixRTCState(for knownCallID: CallID) {
+        markConsumedDirectCallIdentity(knownCallID)
         suppressIncomingFallback(for: knownCallID.roomID)
 
         if incomingCallID?.callKitID == knownCallID.callKitID {
@@ -1970,6 +2000,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         if let incomingCallID, incomingCallID.callKitID == knownCallID.callKitID {
             applySessionEvent(type: .reject, roomID: incomingCallID.roomID)
             suppressIncomingFallback(for: incomingCallID.roomID)
+            markConsumedDirectCallIdentity(incomingCallID)
             clearIncomingCallState()
             Task {
                 _ = await sendDeclineCallEventWithRetry(in: incomingCallID.roomID,
@@ -1983,11 +2014,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     // MARK: - Private
     
     private func tearDownCallSession(sendEndCallAction: Bool = true) {
-        #if targetEnvironment(simulator)
-        ongoingCallID = nil
-        #else
-        if sendEndCallAction, let ongoingCallID {
-            let transaction = CXTransaction(action: CXEndCallAction(call: ongoingCallID.callKitID))
+        let terminatingCallID = ongoingCallID
+
+        #if !targetEnvironment(simulator)
+        if sendEndCallAction, let terminatingCallID {
+            let transaction = CXTransaction(action: CXEndCallAction(call: terminatingCallID.callKitID))
             callController.request(transaction) { error in
                 if let error {
                     MXLog.error("Failed transaction with error: \(error)")
@@ -1996,11 +2027,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
         #endif
         
-        if let ongoingCallID {
-            suppressIncomingFallback(for: ongoingCallID.roomID)
-            recentlyEndedCallID = ongoingCallID
-            if let rtcNotificationID = ongoingCallID.rtcNotificationID {
-                cacheRTCNotificationID(rtcNotificationID, for: ongoingCallID.roomID)
+        if let terminatingCallID {
+            markConsumedDirectCallIdentity(terminatingCallID)
+            suppressIncomingFallback(for: terminatingCallID.roomID)
+            recentlyEndedCallID = terminatingCallID
+            if let rtcNotificationID = terminatingCallID.rtcNotificationID {
+                cacheRTCNotificationID(rtcNotificationID, for: terminatingCallID.roomID)
             }
         }
         
@@ -2086,22 +2118,25 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return
         }
 
+        guard let lastCallEvent = roomSummary.lastCallEvent,
+              !Self.isTerminalCallEvent(lastCallEvent),
+              let remoteCallID = lastCallEvent.callID,
+              !remoteCallID.isEmpty,
+              !isConsumedDirectCallIdentity(roomID: roomSummary.id, remoteCallID: remoteCallID) else {
+            return
+        }
+
         suppressIncomingFallback(for: roomSummary.id)
         Task { [weak self] in
-            let isVideoIntent: Bool
-            if let lastCallEvent = roomSummary.lastCallEvent,
-               !Self.isTerminalCallEvent(lastCallEvent) {
-                isVideoIntent = lastCallEvent.intent == .video
-            } else {
-                isVideoIntent = true
-            }
+            let isVideoIntent = lastCallEvent.intent == .video
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-FALLBACK-CANDIDATE] room_id=\(roomSummary.id) source=app_fallback " +
                 "raw_payload_keys=nil raw_source=room_summary is_direct=\(roomSummary.isDirect) has_ongoing_call=\(roomSummary.hasOngoingCall) " +
                 "active_participants=\(roomSummary.activeRoomCallParticipants) last_call_state=\(String(describing: roomSummary.lastCallEvent?.state)) " +
                 "last_call_intent=\(String(describing: roomSummary.lastCallEvent?.intent)) parsed_intent_result=\(isVideoIntent ? "video" : "audio")")
             await self?.reportIncomingCallFromFallback(roomID: roomSummary.id,
                                                        roomDisplayName: roomSummary.name,
-                                                       isVideo: isVideoIntent)
+                                                       isVideo: isVideoIntent,
+                                                       remoteCallID: remoteCallID)
         }
     }
 
@@ -2149,6 +2184,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return
         }
 
+        guard !isConsumedDirectCallIdentity(roomID: roomID,
+                                            rtcNotificationID: candidate.deduplicationID,
+                                            remoteCallID: candidate.callEvent.callID) else {
+            return
+        }
+
         guard handledForegroundIncomingCallByRoomID[roomID] != candidate.deduplicationID else {
             return
         }
@@ -2163,7 +2204,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         Task { [weak self] in
             await self?.reportIncomingCallFromForegroundRoom(roomID: roomID,
                                                              roomDisplayName: roomDisplayName,
-                                                             isVideo: candidate.callEvent.intent != .audio)
+                                                             isVideo: candidate.callEvent.intent == .video,
+                                                             rtcNotificationID: candidate.deduplicationID,
+                                                             remoteCallID: candidate.callEvent.callID)
         }
     }
 
@@ -2212,17 +2255,21 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         return true
     }
 
-    private func reportIncomingCallFromFallback(roomID: String, roomDisplayName: String?, isVideo: Bool) async {
-        guard incomingCallID == nil, ongoingCallID == nil else {
+    private func reportIncomingCallFromFallback(roomID: String,
+                                                roomDisplayName: String?,
+                                                isVideo: Bool,
+                                                remoteCallID: String) async {
+        guard incomingCallID == nil,
+              ongoingCallID == nil,
+              !isConsumedDirectCallIdentity(roomID: roomID, remoteCallID: remoteCallID) else {
             return
         }
 
         let nowDate = timeProvider.now()
-        cachedRemoteCallIDByRoomID.removeValue(forKey: roomID)
         let callID = CallID(callKitID: UUID(),
                             roomID: roomID,
                             rtcNotificationID: nil,
-                            remoteCallID: nil,
+                            remoteCallID: remoteCallID,
                             startMode: isVideo ? .video : .audio,
                             startedAt: nowDate)
 
@@ -2265,16 +2312,23 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
     }
 
-    private func reportIncomingCallFromForegroundRoom(roomID: String, roomDisplayName: String?, isVideo: Bool) async {
-        guard incomingCallID == nil, ongoingCallID == nil else {
+    private func reportIncomingCallFromForegroundRoom(roomID: String,
+                                                      roomDisplayName: String?,
+                                                      isVideo: Bool,
+                                                      rtcNotificationID: String,
+                                                      remoteCallID: String?) async {
+        guard incomingCallID == nil,
+              ongoingCallID == nil,
+              !isConsumedDirectCallIdentity(roomID: roomID,
+                                            rtcNotificationID: rtcNotificationID,
+                                            remoteCallID: remoteCallID) else {
             return
         }
 
         let nowDate = timeProvider.now()
-        let remoteCallID = cachedRemoteCallIDByRoomID[roomID]
         let callID = CallID(callKitID: UUID(),
                             roomID: roomID,
-                            rtcNotificationID: nil,
+                            rtcNotificationID: rtcNotificationID,
                             remoteCallID: remoteCallID,
                             startMode: isVideo ? .video : .audio,
                             startedAt: nowDate)
@@ -2335,6 +2389,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     func salemXDebugReportStage2FSimulatorIncomingCall(roomID: String,
                                                        roomDisplayName: String?,
                                                        startMode: ElementCallStartMode,
+                                                       rtcNotificationID: String? = nil,
+                                                       remoteCallID: String? = nil,
                                                        storeBootstrap: (UUID) -> Void) async -> SalemXStage2FCallKitReportResult {
         if incomingCallID != nil {
             return .blockedByExistingIncomingCall
@@ -2344,11 +2400,17 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return .blockedByExistingOngoingCall
         }
 
+        guard !isConsumedDirectCallIdentity(roomID: roomID,
+                                            rtcNotificationID: rtcNotificationID,
+                                            remoteCallID: remoteCallID) else {
+            return .blockedByConsumedCallIdentity
+        }
+
         let nowDate = timeProvider.now()
         let callID = CallID(callKitID: UUID(),
                             roomID: roomID,
-                            rtcNotificationID: nil,
-                            remoteCallID: nil,
+                            rtcNotificationID: rtcNotificationID,
+                            remoteCallID: remoteCallID,
                             startMode: startMode,
                             startedAt: nowDate)
 
@@ -2433,6 +2495,56 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
     }
 
+    private func directCallIdentityKeys(roomID: String,
+                                        callKitID: UUID? = nil,
+                                        rtcNotificationID: String? = nil,
+                                        remoteCallID: String? = nil,
+                                        membershipIdentities: Set<MatrixRTCCallMembershipIdentity> = []) -> Set<ConsumedDirectCallIdentityKey> {
+        var components = Set<ConsumedDirectCallIdentityComponent>()
+        if let callKitID {
+            components.insert(.callKit(callKitID))
+        }
+        if let rtcNotificationID, !rtcNotificationID.isEmpty {
+            components.insert(.rtcNotification(rtcNotificationID))
+        }
+        if let remoteCallID, !remoteCallID.isEmpty {
+            components.insert(.remoteCall(remoteCallID))
+        }
+        components.formUnion(membershipIdentities.map(ConsumedDirectCallIdentityComponent.membership))
+
+        return Set(components.map {
+            ConsumedDirectCallIdentityKey(roomID: roomID,
+                                          callScope: .directRoom,
+                                          component: $0)
+        })
+    }
+
+    private func isConsumedDirectCallIdentity(roomID: String,
+                                              rtcNotificationID: String? = nil,
+                                              remoteCallID: String? = nil) -> Bool {
+        let candidateKeys = directCallIdentityKeys(roomID: roomID,
+                                                   rtcNotificationID: rtcNotificationID,
+                                                   remoteCallID: remoteCallID)
+        return !candidateKeys.isEmpty && !consumedDirectCallIdentityKeys.isDisjoint(with: candidateKeys)
+    }
+
+    private func markConsumedDirectCallIdentity(_ callID: CallID) {
+        let membershipIdentities: Set<MatrixRTCCallMembershipIdentity>
+        if let observation = ongoingCallObservation,
+           observation.identity.callKitID == callID.callKitID,
+           observation.identity.roomID == callID.roomID {
+            membershipIdentities = observation.roomInfoStateMachine.exactRemoteMembershipIdentities
+        } else {
+            membershipIdentities = []
+        }
+
+        consumedDirectCallIdentityKeys.formUnion(directCallIdentityKeys(roomID: callID.roomID,
+                                                                        callKitID: callID.callKitID,
+                                                                        rtcNotificationID: callID.rtcNotificationID,
+                                                                        remoteCallID: callID.remoteCallID,
+                                                                        membershipIdentities: membershipIdentities))
+    }
+
     private func suppressIncomingFallback(for roomID: String) {
         incomingFallbackSuppressionByRoomID[roomID] = Date().addingTimeInterval(IncomingFallbackConstants.suppressionDuration)
     }
@@ -2443,21 +2555,22 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             return parsedStartMode
         }
 
-        // Keep the legacy fallback explicit: if the push payload has no
-        // recognised intent, prefer the latest known room call event and
-        // otherwise default to video.
+        // SalemX direct calls fail closed to audio when the intent is absent or unknown.
+        // A current room event can opt into video only when it says so explicitly.
         guard let roomSummary = clientProxy?.roomSummaryProvider.roomListPublisher.value.first(where: { $0.id == roomID }),
               roomSummary.hasOngoingCall,
               let lastCallEvent = roomSummary.lastCallEvent,
               !Self.isTerminalCallEvent(lastCallEvent) else {
-            return .video
+            return .audio
         }
 
         switch lastCallEvent.intent {
         case .audio:
             return .audio
-        case .video, .unknown:
+        case .video:
             return .video
+        case .unknown:
+            return .audio
         }
     }
 
@@ -3662,6 +3775,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-RECIPIENT-CLEAR] room_id=\(incomingCallID.roomID) " +
             "callkit_id=\(incomingCallID.callKitID) reason=\(reason) deduplication_id=\(deduplicationID ?? "nil")")
         suppressIncomingFallback(for: incomingCallID.roomID)
+        markConsumedDirectCallIdentity(incomingCallID)
         applySessionEvent(type: sessionEventType(for: reason),
                           roomID: incomingCallID.roomID,
                           deduplicationID: deduplicationID)

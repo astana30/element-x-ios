@@ -37,7 +37,7 @@ extension RoomProtocol {
     
     var joinCallIntent: Intent {
         get async {
-            await joinCallIntent(for: .video)
+            await joinCallIntent(for: .audio)
         }
     }
 }

@@ -66,7 +66,7 @@ struct ElementCallConfiguration {
          elementCallBaseURL: URL,
          elementCallBaseURLOverride: URL?,
          colorScheme: ColorScheme,
-         startMode: ElementCallStartMode = .video) {
+         startMode: ElementCallStartMode = .audio) {
         kind = .roomCall(roomProxy: roomProxy,
                          clientProxy: clientProxy,
                          clientID: clientID,

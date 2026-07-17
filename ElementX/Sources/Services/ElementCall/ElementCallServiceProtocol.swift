@@ -193,7 +193,7 @@ extension ElementCallServiceProtocol {
     @MainActor func stopObservingForegroundRoom(roomID _: String) { }
 
     func setupCallSession(roomID: String, roomDisplayName: String) async {
-        await setupCallSession(roomID: roomID, roomDisplayName: roomDisplayName, startMode: .video)
+        await setupCallSession(roomID: roomID, roomDisplayName: roomDisplayName, startMode: .audio)
     }
 
     func isPreAnswerOutgoingCall(roomID: String) -> Bool {
