@@ -974,7 +974,7 @@ final class ElementCallServiceTests {
     }
 
     @Test
-    func ongoingDirectCallRoomInfoFirstThenTimelineRemovalEndsExactlyOnce() async {
+    func ongoingDirectCallSameGenerationRoomInfoTerminalIgnoresStaleRawActiveStateAndEndsOnce() async {
         let roomID = "!room-info-first:example.com"
         let ownUserID = "@test:user.net"
         let remoteUserID = "@alice:example.com"
@@ -1007,38 +1007,13 @@ final class ElementCallServiceTests {
                                                            isDirect: true,
                                                            hasRoomCall: false,
                                                            participants: [])))
-        try? await Task.sleep(for: .milliseconds(50))
-        #expect(endCallCount == 0)
-        #expect(service.ongoingCallRoomIDPublisher.value == roomID)
-
-        let remoteRemoval = [
-            makeMatrixRTCMembershipTimelineItem(eventID: "$room-info-first-local-current",
-                                                roomID: roomID,
-                                                userID: ownUserID,
-                                                deviceID: "LOCAL_DEVICE",
-                                                membershipID: "LOCAL_PARTY",
-                                                isActive: true),
-            makeMatrixRTCMembershipTimelineItem(eventID: "$room-info-first-remote-empty",
-                                                roomID: roomID,
-                                                userID: remoteUserID,
-                                                deviceID: "REMOTE_DEVICE",
-                                                membershipID: "REMOTE_PARTY",
-                                                isActive: false)
-        ]
-        #expect(subscription.receiveSDKTimelineUpdate(remoteRemoval))
         for _ in 0..<30 where endCallCount == 0 {
             try? await Task.sleep(for: .milliseconds(20))
         }
 
-        #expect(endCallCount == 1)
+        #expect(endCallCount == 1,
+                "pre_fix_direct_roominfo_state_machine_remote_end_missing=true")
         #expect(service.ongoingCallRoomIDPublisher.value == nil)
-        #expect(subscription.receiveSDKTimelineUpdate(remoteRemoval))
-        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
-                                                           isDirect: true,
-                                                           hasRoomCall: false,
-                                                           participants: [])))
-        try? await Task.sleep(for: .milliseconds(50))
-        #expect(endCallCount == 1)
     }
 
     @Test
@@ -1998,7 +1973,7 @@ final class ElementCallServiceTests {
     }
 
     @Test
-    func differentClientSessionReplacesObservationAndRejectsPreviousProxyCallbacks() async {
+    func differentClientSessionRejectsStaleGenerationAndMismatchedIdentityCallbacks() async {
         let roomID = "!session-replacement-room:example.com"
         let ownUserID = "@test:user.net"
         let remoteUserID = "@alice:example.com"
@@ -2065,6 +2040,10 @@ final class ElementCallServiceTests {
                                                                 isDirect: true,
                                                                 hasRoomCall: true,
                                                                 participants: [ownUserID])))
+        #expect(replacementSubscription.receiveSDKUpdate(makeRoomInfo(id: "!mismatched-room:example.com",
+                                                                      isDirect: true,
+                                                                      hasRoomCall: true,
+                                                                      participants: [ownUserID, remoteUserID])))
         #expect(replacementSubscription.receiveSDKTimelineUpdate([
             makeMatrixRTCMembershipTimelineItem(eventID: "$replacement-local-empty",
                                                 roomID: roomID,

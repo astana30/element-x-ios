@@ -1588,18 +1588,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(roomInfoSubscription.subscriptionStartCount == 1)
         #expect(room.infoPublisher.value.activeRoomCallParticipants.count == 2)
         #expect(await roomInfoSubscription.waitForTimelineSubscription())
-        let remoteExplicitEmpty = [
-            localMembership,
-            makeMatrixRTCMembershipTimelineItem(eventID: "$remote-membership-empty",
-                                                roomID: Self.roomID,
-                                                userID: remoteUserID,
-                                                deviceID: "REMOTE_DEVICE",
-                                                membershipID: "REMOTE_PARTY",
-                                                isActive: false)
-        ]
-        #expect(roomInfoSubscription.receiveSDKRawMembershipUpdate(remoteExplicitEmpty))
-        #expect(roomInfoSubscription.receiveSDKRawMembershipUpdate(remoteExplicitEmpty))
-
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID, remoteUserID])))
         #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID])))
         #expect(await waitUntil {
             self.callProvider.reportCallWithEndedAtReasonCallsCount == 1 &&
