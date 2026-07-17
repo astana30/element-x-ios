@@ -1538,11 +1538,11 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(await waitUntil { answerAction.fulfillCount == 1 })
 
         let remoteUserID = "@alice:example.com"
-        let room = JoinedRoomProxyMock(.init(id: Self.roomID,
-                                             name: "Room",
-                                             isDirect: true,
-                                             hasOngoingCall: true,
-                                             ownUserID: localUserID))
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: Self.roomID,
+                                                              name: "Room",
+                                                              isDirect: true,
+                                                              hasOngoingCall: true,
+                                                              ownUserID: localUserID))
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .failure(.missingTransactionID)
         }
@@ -1588,7 +1588,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(roomInfoSubscription.subscriptionStartCount == 1)
         #expect(room.infoPublisher.value.activeRoomCallParticipants.count == 2)
         #expect(await roomInfoSubscription.waitForTimelineSubscription())
-        #expect(roomInfoSubscription.receiveSDKTimelineUpdate([
+        let remoteExplicitEmpty = [
             localMembership,
             makeMatrixRTCMembershipTimelineItem(eventID: "$remote-membership-empty",
                                                 roomID: Self.roomID,
@@ -1596,7 +1596,9 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
                                                 deviceID: "REMOTE_DEVICE",
                                                 membershipID: "REMOTE_PARTY",
                                                 isActive: false)
-        ]))
+        ]
+        #expect(roomInfoSubscription.receiveSDKRawMembershipUpdate(remoteExplicitEmpty))
+        #expect(roomInfoSubscription.receiveSDKRawMembershipUpdate(remoteExplicitEmpty))
 
         #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID])))
         #expect(await waitUntil {
@@ -1632,11 +1634,11 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(await waitUntil { answerAction.fulfillCount == 1 })
 
         let remoteUserID = "@alice:example.com"
-        let room = JoinedRoomProxyMock(.init(id: Self.roomID,
-                                             name: "Room",
-                                             isDirect: true,
-                                             hasOngoingCall: true,
-                                             ownUserID: localUserID))
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: Self.roomID,
+                                                              name: "Room",
+                                                              isDirect: true,
+                                                              hasOngoingCall: true,
+                                                              ownUserID: localUserID))
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .failure(.missingTransactionID)
         }
@@ -2025,6 +2027,7 @@ private final class EmbeddedRoomInfoSubscriptionHarness {
     private let subject: CurrentValueSubject<RoomInfoProxyProtocol, Never>
     private var timelineSubject: CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>?
     private weak var timelineItemProvider: TimelineItemProviderMock?
+    private weak var rawMembershipRoom: MatrixRTCCallMembershipRoomProxyMock?
     private(set) var subscriptionStartCount = 0
     private(set) var timelineSubscriptionStartCount = 0
 
@@ -2036,6 +2039,10 @@ private final class EmbeddedRoomInfoSubscriptionHarness {
         room.infoPublisher = subject.asCurrentValuePublisher()
         room.subscribeToRoomInfoUpdatesClosure = { [weak self] in
             self?.subscriptionStartCount += 1
+        }
+        if let rawMembershipRoom = room as? MatrixRTCCallMembershipRoomProxyMock {
+            self.rawMembershipRoom = rawMembershipRoom
+            rawMembershipRoom.initialRawMembershipState = initialTimelineItems
         }
         guard let timeline = room.timeline as? TimelineProxyMock,
               let timelineItemProvider = timeline.timelineItemProvider as? TimelineItemProviderMock else { return }
@@ -2053,7 +2060,8 @@ private final class EmbeddedRoomInfoSubscriptionHarness {
 
     func waitForTimelineSubscription() async -> Bool {
         for _ in 0..<30 {
-            if timelineSubscriptionStartCount == 1 {
+            if timelineSubscriptionStartCount == 1,
+               rawMembershipRoom?.rawMembershipObservationStartCount == 1 {
                 return true
             }
 
@@ -2074,10 +2082,17 @@ private final class EmbeddedRoomInfoSubscriptionHarness {
     }
 
     func receiveSDKTimelineUpdate(_ items: [TimelineItemProxy]) -> Bool {
-        guard timelineSubscriptionStartCount > 0, let timelineSubject, let timelineItemProvider else { return false }
+        guard timelineSubscriptionStartCount > 0,
+              let timelineSubject,
+              let timelineItemProvider,
+              rawMembershipRoom?.receiveRawMembershipState(items) == true else { return false }
         timelineItemProvider.itemProxies = items
         timelineSubject.send((items, .initial))
         return true
+    }
+
+    func receiveSDKRawMembershipUpdate(_ items: [TimelineItemProxy]) -> Bool {
+        rawMembershipRoom?.receiveRawMembershipState(items) ?? false
     }
 }
 

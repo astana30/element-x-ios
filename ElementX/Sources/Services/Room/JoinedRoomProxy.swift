@@ -11,6 +11,32 @@ import Foundation
 import MatrixRustSDK
 import UIKit
 
+private final class MatrixRTCCallMembershipItemBatch: @unchecked Sendable {
+    let itemProxies: [TimelineItemProxy]
+
+    init(itemProxies: [TimelineItemProxy]) {
+        self.itemProxies = itemProxies
+    }
+}
+
+private final class MatrixRTCCallMembershipStateObservation: MatrixRTCCallMembershipStateObservationProtocol {
+    private let timeline: Timeline
+    private let observationToken: TaskHandle
+
+    init(timeline: Timeline, observationToken: TaskHandle) {
+        self.timeline = timeline
+        self.observationToken = observationToken
+    }
+
+    deinit {
+        observationToken.cancel()
+    }
+
+    func cancel() {
+        observationToken.cancel()
+    }
+}
+
 class JoinedRoomProxy: JoinedRoomProxyProtocol {
     private let roomListService: RoomListServiceProtocol
     private let room: RoomProtocol
@@ -1326,6 +1352,46 @@ final class JoinedRoomNativeDirectCallCompositionFactory {
                                                                     now: now)
         return compositionFactory.makeComposition(for: metadata)
             .mapError { .composition($0) }
+    }
+}
+
+extension JoinedRoomProxy: MatrixRTCCallMembershipStateObserving {
+    func observeMatrixRTCCallMembershipState(_ listener: @escaping ([TimelineItemProxy]) -> Void) async
+        -> (any MatrixRTCCallMembershipStateObservationProtocol)? {
+        do {
+            let timeline = try await room.timelineWithConfiguration(configuration: .init(focus: .live(hideThreadedEvents: appSettings.threadsEnabled),
+                                                                                         filter: .all,
+                                                                                         internalIdPrefix: UUID().uuidString,
+                                                                                         dateDividerMode: .daily,
+                                                                                         trackReadReceipts: .disabled,
+                                                                                         reportUtds: false))
+            let observationToken = await timeline.addListener(listener: SDKListener { diffs in
+                let itemProxies = diffs.flatMap(\.matrixRTCRawMembershipItemProxies)
+                guard !itemProxies.isEmpty else { return }
+
+                let batch = MatrixRTCCallMembershipItemBatch(itemProxies: itemProxies)
+                DispatchQueue.main.async {
+                    listener(batch.itemProxies)
+                }
+            })
+            return MatrixRTCCallMembershipStateObservation(timeline: timeline, observationToken: observationToken)
+        } catch {
+            MXLog.error("Failed creating MatrixRTC raw membership state observation.")
+            return nil
+        }
+    }
+}
+
+private extension TimelineDiff {
+    var matrixRTCRawMembershipItemProxies: [TimelineItemProxy] {
+        switch self {
+        case .append(let values), .reset(let values):
+            values.map(TimelineItemProxy.init)
+        case .pushFront(let value), .pushBack(let value), .insert(_, let value), .set(_, let value):
+            [TimelineItemProxy(item: value)]
+        case .clear, .popFront, .popBack, .remove, .truncate:
+            []
+        }
     }
 }
 

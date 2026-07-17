@@ -72,6 +72,20 @@ struct RTCDeclinedEvent {
     let notificationEventID: String
 }
 
+/// Retains and cancels an SDK observation of authoritative MatrixRTC membership state.
+protocol MatrixRTCCallMembershipStateObservationProtocol: AnyObject {
+    func cancel()
+}
+
+/// A narrow capability exposed by joined rooms that can observe raw MatrixRTC membership events.
+///
+/// The regular room timeline is a presentation surface and is not guaranteed to deliver every
+/// membership state replacement. Implementations deliver callbacks on the main queue.
+protocol MatrixRTCCallMembershipStateObserving: AnyObject {
+    func observeMatrixRTCCallMembershipState(_ listener: @escaping ([TimelineItemProxy]) -> Void) async
+        -> (any MatrixRTCCallMembershipStateObservationProtocol)?
+}
+
 // sourcery: AutoMockable
 protocol JoinedRoomProxyProtocol: RoomProxyProtocol {
     var infoPublisher: CurrentValuePublisher<RoomInfoProxyProtocol, Never> { get }

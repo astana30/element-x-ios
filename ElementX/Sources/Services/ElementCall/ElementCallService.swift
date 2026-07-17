@@ -289,17 +289,23 @@ private struct MatrixRTCCallMembershipIdentity: Hashable {
     let userID: String
     let deviceID: String
     let partyID: String
+    let stateKey: String
     let membershipID: String?
 }
 
 private struct MatrixRTCCallMembership {
     let identity: MatrixRTCCallMembershipIdentity
-    let expiresAtMilliseconds: UInt64
+    let expiresAtMilliseconds: UInt64?
+}
+
+private struct MatrixRTCCallMembershipStateKey: Hashable {
+    let eventType: String
+    let stateKey: String
 }
 
 private struct MatrixRTCCallMembershipStateUpdate {
     let eventID: String
-    let stateKey: String
+    let stateKey: MatrixRTCCallMembershipStateKey
     let timestampMilliseconds: UInt64
     let memberships: [MatrixRTCCallMembership]
 }
@@ -308,7 +314,19 @@ private struct MatrixRTCCallMembershipStateUpdate {
 ///
 /// This uses the same raw SDK event surface as `RoomCallEventParser`; raw content is never logged or retained.
 private enum MatrixRTCCallMembershipEventParser {
-    private static let eventType = "org.matrix.msc3401.call.member"
+    private enum EventFamily {
+        case session
+        case rtc
+    }
+
+    private static let sessionEventTypes = Set([
+        "org.matrix.msc3401.call.member",
+        "m.call.member"
+    ])
+    private static let rtcEventTypes = Set([
+        "org.matrix.msc4143.rtc.member",
+        "m.rtc.member"
+    ])
     private static let defaultExpiryMilliseconds: UInt64 = 14_400_000
 
     static func parse(_ itemProxy: TimelineItemProxy) -> MatrixRTCCallMembershipStateUpdate? {
@@ -317,82 +335,163 @@ private enum MatrixRTCCallMembershipEventParser {
               let rawJSONString = eventProxy.debugInfo.originalJSON,
               let data = rawJSONString.data(using: .utf8),
               let rawEvent = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              rawEvent["type"] as? String == eventType,
+              let eventType = nonEmptyString(rawEvent["type"]),
+              let eventFamily = eventFamily(for: eventType),
               let sender = nonEmptyString(rawEvent["sender"]),
-              let stateKey = nonEmptyString(rawEvent["state_key"]),
               let timestampMilliseconds = unsignedInteger(rawEvent["origin_server_ts"]),
-              let content = rawEvent["content"] as? [String: Any],
-              timelineContentMatches(eventProxy.content, stateKey: stateKey) else {
+              let content = rawEvent["content"] as? [String: Any] else {
             return nil
         }
 
-        if isRemovalContent(content) {
+        let rawStateKey = nonEmptyString(rawEvent["state_key"])
+        let stickyKey = stickyKey(in: content)
+        guard stickyKey.isValid,
+              rawStateKey == nil || stickyKey.value == nil || rawStateKey == stickyKey.value,
+              let stateKey = rawStateKey ?? stickyKey.value,
+              timelineContentMatches(eventProxy.content,
+                                     eventType: eventType,
+                                     rawStateKey: rawStateKey) else {
+            return nil
+        }
+
+        let membershipStateKey = MatrixRTCCallMembershipStateKey(eventType: eventType, stateKey: stateKey)
+        if isRemovalContent(content, eventFamily: eventFamily) {
             return .init(eventID: eventID,
-                         stateKey: stateKey,
+                         stateKey: membershipStateKey,
+                         timestampMilliseconds: timestampMilliseconds,
+                         memberships: [])
+        }
+        if case .session = eventFamily,
+           let legacyMemberships = content["memberships"] as? [Any],
+           legacyMemberships.isEmpty {
+            return .init(eventID: eventID,
+                         stateKey: membershipStateKey,
                          timestampMilliseconds: timestampMilliseconds,
                          memberships: [])
         }
 
         let memberships: [MatrixRTCCallMembership]
-        if let legacyMemberships = content["memberships"] as? [[String: Any]] {
-            guard !legacyMemberships.isEmpty else {
-                return .init(eventID: eventID,
-                             stateKey: stateKey,
-                             timestampMilliseconds: timestampMilliseconds,
-                             memberships: [])
-            }
-
-            memberships = legacyMemberships.compactMap { membership in
-                parseMembership(membership,
-                                sender: sender,
-                                partyID: nonEmptyString(membership["membershipID"]),
-                                fallbackTimestampMilliseconds: timestampMilliseconds,
-                                requiresMembershipID: true)
-            }
-            guard memberships.count == legacyMemberships.count else {
+        switch eventFamily {
+        case .session:
+            memberships = parseSessionMemberships(content,
+                                                  sender: sender,
+                                                  stateKey: stateKey,
+                                                  fallbackTimestampMilliseconds: timestampMilliseconds) ?? []
+            guard !memberships.isEmpty else {
                 return nil
             }
-        } else {
-            guard let membership = parseMembership(content,
-                                                   sender: sender,
-                                                   partyID: stateKey,
-                                                   fallbackTimestampMilliseconds: timestampMilliseconds,
-                                                   requiresMembershipID: false) else {
+        case .rtc:
+            guard let membership = parseRTCMembership(content,
+                                                      sender: sender,
+                                                      stateKey: stateKey,
+                                                      fallbackTimestampMilliseconds: timestampMilliseconds) else {
                 return nil
             }
             memberships = [membership]
         }
 
         return .init(eventID: eventID,
-                     stateKey: stateKey,
+                     stateKey: membershipStateKey,
                      timestampMilliseconds: timestampMilliseconds,
                      memberships: memberships)
     }
 
-    private static func timelineContentMatches(_ content: TimelineItemContent, stateKey: String) -> Bool {
+    private static func eventFamily(for eventType: String) -> EventFamily? {
+        if sessionEventTypes.contains(eventType) {
+            return .session
+        }
+        if rtcEventTypes.contains(eventType) {
+            return .rtc
+        }
+        return nil
+    }
+
+    private static func parseSessionMemberships(_ content: [String: Any],
+                                                sender: String,
+                                                stateKey: String,
+                                                fallbackTimestampMilliseconds: UInt64) -> [MatrixRTCCallMembership]? {
+        if let legacyMemberships = content["memberships"] as? [[String: Any]] {
+            guard !legacyMemberships.isEmpty else {
+                return nil
+            }
+
+            let memberships = legacyMemberships.compactMap { membership in
+                parseSessionMembership(membership,
+                                       sender: sender,
+                                       stateKey: stateKey,
+                                       partyID: nonEmptyString(membership["membershipID"]),
+                                       fallbackTimestampMilliseconds: fallbackTimestampMilliseconds,
+                                       requiresMembershipID: true)
+            }
+            guard memberships.count == legacyMemberships.count else {
+                return nil
+            }
+            return memberships
+        }
+
+        guard let membership = parseSessionMembership(content,
+                                                      sender: sender,
+                                                      stateKey: stateKey,
+                                                      partyID: stateKey,
+                                                      fallbackTimestampMilliseconds: fallbackTimestampMilliseconds,
+                                                      requiresMembershipID: false) else {
+            return nil
+        }
+        return [membership]
+    }
+
+    private static func timelineContentMatches(_ content: TimelineItemContent,
+                                               eventType: String,
+                                               rawStateKey: String?) -> Bool {
         switch content {
         case .state(let timelineStateKey, let content):
-            guard timelineStateKey == stateKey,
+            guard timelineStateKey == rawStateKey,
                   case .custom(let timelineEventType) = content else {
                 return false
             }
             return timelineEventType == eventType
         case .failedToParseState(let timelineEventType, let timelineStateKey, _):
-            return timelineEventType == eventType && timelineStateKey == stateKey
+            return timelineEventType == eventType && timelineStateKey == rawStateKey
+        case .msgLike(let content):
+            guard rawStateKey == nil,
+                  case .other(let messageLikeEventType) = content.kind,
+                  case .other(let timelineEventType) = messageLikeEventType else {
+                return false
+            }
+            return timelineEventType == eventType
+        case .failedToParseMessageLike(let timelineEventType, _):
+            return rawStateKey == nil && timelineEventType == eventType
         default:
             return false
         }
     }
 
-    private static func isRemovalContent(_ content: [String: Any]) -> Bool {
-        content.isEmpty || Set(content.keys).isSubset(of: ["leave_reason"])
+    private static func stickyKey(in content: [String: Any]) -> (value: String?, isValid: Bool) {
+        let stableKey = nonEmptyString(content["sticky_key"])
+        let unstableKey = nonEmptyString(content["msc4354_sticky_key"])
+        guard stableKey == nil || unstableKey == nil || stableKey == unstableKey else {
+            return (nil, false)
+        }
+        return (stableKey ?? unstableKey, true)
     }
 
-    private static func parseMembership(_ content: [String: Any],
-                                        sender: String,
-                                        partyID: String?,
-                                        fallbackTimestampMilliseconds: UInt64,
-                                        requiresMembershipID: Bool) -> MatrixRTCCallMembership? {
+    private static func isRemovalContent(_ content: [String: Any], eventFamily: EventFamily) -> Bool {
+        guard !content.isEmpty else { return true }
+
+        switch eventFamily {
+        case .session:
+            return Set(content.keys).isSubset(of: ["leave_reason"])
+        case .rtc:
+            return Set(content.keys).isSubset(of: ["leave_reason", "msc4354_sticky_key", "sticky_key"])
+        }
+    }
+
+    private static func parseSessionMembership(_ content: [String: Any],
+                                               sender: String,
+                                               stateKey: String,
+                                               partyID: String?,
+                                               fallbackTimestampMilliseconds: UInt64,
+                                               requiresMembershipID: Bool) -> MatrixRTCCallMembership? {
         guard content["application"] as? String == MatrixRTCCallScope.directRoom.application,
               let rawCallID = content["call_id"] as? String,
               rawCallID.isEmpty || rawCallID == MatrixRTCCallScope.directRoom.callID,
@@ -441,6 +540,52 @@ private enum MatrixRTCCallMembershipEventParser {
                                      userID: sender,
                                      deviceID: deviceID,
                                      partyID: partyID,
+                                     stateKey: stateKey,
+                                     membershipID: membershipID),
+                     expiresAtMilliseconds: expiresAtMilliseconds)
+    }
+
+    private static func parseRTCMembership(_ content: [String: Any],
+                                           sender: String,
+                                           stateKey: String,
+                                           fallbackTimestampMilliseconds: UInt64) -> MatrixRTCCallMembership? {
+        guard let application = content["application"] as? [String: Any],
+              application["type"] as? String == MatrixRTCCallScope.directRoom.application,
+              content["slot_id"] as? String == "\(MatrixRTCCallScope.directRoom.application)#\(MatrixRTCCallScope.directRoom.callID)",
+              let member = content["member"] as? [String: Any],
+              let userID = nonEmptyString(member["user_id"]),
+              userID == sender,
+              let deviceID = nonEmptyString(member["device_id"]),
+              let membershipID = nonEmptyString(member["id"]),
+              let transports = content["rtc_transports"] as? [[String: Any]],
+              transports.allSatisfy({ nonEmptyString($0["type"]) != nil }),
+              let versions = content["versions"] as? [Any],
+              versions.allSatisfy({ nonEmptyString($0) != nil }) else {
+            return nil
+        }
+
+        let rawCreatedTimestamp = content["created_ts"]
+        let rawExpiryDuration = content["expires"]
+        guard rawCreatedTimestamp == nil || unsignedInteger(rawCreatedTimestamp) != nil,
+              rawExpiryDuration == nil || unsignedInteger(rawExpiryDuration) != nil else {
+            return nil
+        }
+
+        let expiresAtMilliseconds: UInt64?
+        if let expiryDuration = unsignedInteger(rawExpiryDuration) {
+            let createdTimestamp = unsignedInteger(rawCreatedTimestamp) ?? fallbackTimestampMilliseconds
+            let (expiry, overflow) = createdTimestamp.addingReportingOverflow(expiryDuration)
+            guard !overflow else { return nil }
+            expiresAtMilliseconds = expiry
+        } else {
+            expiresAtMilliseconds = nil
+        }
+
+        return .init(identity: .init(callScope: .directRoom,
+                                     userID: userID,
+                                     deviceID: deviceID,
+                                     partyID: membershipID,
+                                     stateKey: stateKey,
                                      membershipID: membershipID),
                      expiresAtMilliseconds: expiresAtMilliseconds)
     }
@@ -473,7 +618,7 @@ private final class OngoingCallMembershipTracker {
 
     private let ownUserID: String
     private let ownDeviceID: String?
-    private var membershipStateByStateKey = [String: MembershipState]()
+    private var membershipStateByStateKey = [MatrixRTCCallMembershipStateKey: MembershipState]()
     private var processedEventIDs = Set<String>()
     private var exactLocalMembership: MatrixRTCCallMembershipIdentity?
     private var observedRemoteMemberships = Set<MatrixRTCCallMembershipIdentity>()
@@ -493,7 +638,7 @@ private final class OngoingCallMembershipTracker {
         return evaluate(now: now)
     }
 
-    func updateTimeline(_ itemProxies: [TimelineItemProxy], now: Date) -> Bool {
+    func updateAuthoritativeState(_ itemProxies: [TimelineItemProxy], now: Date) -> Bool {
         for itemProxy in itemProxies {
             guard let update = MatrixRTCCallMembershipEventParser.parse(itemProxy),
                   processedEventIDs.insert(update.eventID).inserted else {
@@ -521,9 +666,13 @@ private final class OngoingCallMembershipTracker {
         let nowMilliseconds = UInt64(max(0, now.timeIntervalSince1970 * 1000))
         let activeMemberships = membershipStateByStateKey.values
             .flatMap(\.memberships)
-            .filter { $0.expiresAtMilliseconds > nowMilliseconds }
+            .filter { membership in
+                membership.expiresAtMilliseconds.map { $0 > nowMilliseconds } ?? true
+            }
 
-        resolveExactLocalMembership(from: activeMemberships)
+        guard !resolveExactLocalMembership(from: activeMemberships) else {
+            return false
+        }
         let activeMembershipIdentities = Set(activeMemberships.map(\.identity))
         let activeRemoteMemberships = activeMemberships.filter { isRemote($0.identity) }
         let remoteMemberships = Set(activeRemoteMemberships.map(\.identity))
@@ -553,7 +702,7 @@ private final class OngoingCallMembershipTracker {
 
         guard remoteMemberships.isEmpty else {
             nextEvaluationTimestampMilliseconds = activeRemoteMemberships
-                .map(\.expiresAtMilliseconds)
+                .compactMap(\.expiresAtMilliseconds)
                 .min()
             return false
         }
@@ -564,19 +713,29 @@ private final class OngoingCallMembershipTracker {
         return true
     }
 
-    private func resolveExactLocalMembership(from memberships: [MatrixRTCCallMembership]) {
-        guard exactLocalMembership == nil, let ownDeviceID else {
-            return
+    /// Returns `true` when the local identity is ambiguous and terminal evaluation must fail closed.
+    private func resolveExactLocalMembership(from memberships: [MatrixRTCCallMembership]) -> Bool {
+        guard let ownDeviceID else {
+            return true
         }
 
-        let candidates = memberships.filter { membership in
+        let candidates = Set(memberships.filter { membership in
             membership.identity.userID == ownUserID && membership.identity.deviceID == ownDeviceID
-        }
-        guard candidates.count == 1 else {
-            return
+        }.map(\.identity))
+        guard candidates.count <= 1 else {
+            return true
         }
 
-        exactLocalMembership = candidates[0].identity
+        guard let candidate = candidates.first else {
+            return false
+        }
+
+        if let exactLocalMembership {
+            return exactLocalMembership != candidate
+        }
+
+        exactLocalMembership = candidate
+        return false
     }
 
     private func isRemote(_ membership: MatrixRTCCallMembershipIdentity) -> Bool {
@@ -743,6 +902,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     
     private var ongoingCallTimelineCancellable: AnyCancellable?
     private var ongoingCallRoomInfoCancellable: AnyCancellable?
+    private var ongoingCallRawMembershipObservation: (any MatrixRTCCallMembershipStateObservationProtocol)?
     private var ongoingCallMembershipExpiryTask: Task<Void, Never>?
     private var ongoingCallObservation: OngoingCallObservation?
     private var ongoingCallObservationRequestIdentity: OngoingCallObservationIdentity?
@@ -2823,6 +2983,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         roomProxy.subscribeToRoomInfoUpdates()
         observeOngoingCallRoomInfo(ongoingCallID: expectedCallID,
                                    observation: observation)
+        await observeOngoingCallRawMembershipState(roomProxy: roomProxy,
+                                                   ongoingCallID: expectedCallID,
+                                                   observation: observation)
+
+        guard isCurrentOngoingCallObservation(identity) else {
+            return
+        }
+
         await observeOngoingCallTimeline(roomProxy: roomProxy,
                                          ongoingCallID: expectedCallID,
                                          observation: observation)
@@ -2855,6 +3023,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
 
         ongoingCallTimelineCancellable = nil
         ongoingCallRoomInfoCancellable = nil
+        ongoingCallRawMembershipObservation?.cancel()
+        ongoingCallRawMembershipObservation = nil
         ongoingCallMembershipExpiryTask?.cancel()
         ongoingCallMembershipExpiryTask = nil
         ongoingCallObservation = nil
@@ -2925,16 +3095,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                     self.refreshOngoingDeclineListeners(roomProxy: roomProxy,
                                                         ongoingCallID: ongoingCallID,
                                                         itemProxies: itemProxies)
-                    if observation.membershipTracker.updateTimeline(itemProxies, now: self.timeProvider.now()) {
-                        self.ongoingCallMembershipExpiryTask?.cancel()
-                        self.ongoingCallMembershipExpiryTask = nil
-                        self.endOngoingCall(ongoingCallID,
-                                            reason: .remoteEnded,
-                                            deduplicationID: "ongoing-membership:\(ongoingCallID.callKitID.uuidString)")
-                        return
-                    }
-                    self.scheduleOngoingCallMembershipReevaluation(ongoingCallID: ongoingCallID,
-                                                                   observation: observation)
                     guard let terminationEvent = self.latestRemoteTerminationEvent(in: itemProxies, roomID: ongoingCallID.roomID) else { return }
                     guard terminationEvent.eventID != tracker.eventID else { return }
 
@@ -2944,6 +3104,56 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                                         deduplicationID: terminationEvent.eventID)
                 }
         }
+    }
+
+    private func observeOngoingCallRawMembershipState(roomProxy: JoinedRoomProxyProtocol,
+                                                      ongoingCallID: CallID,
+                                                      observation: OngoingCallObservation) async {
+        guard let stateObserver = roomProxy as? MatrixRTCCallMembershipStateObserving else {
+            MXLog.error("MatrixRTC raw membership state observation is unavailable.")
+            return
+        }
+
+        let identity = observation.identity
+        let stateObservation = await stateObserver.observeMatrixRTCCallMembershipState { [weak self, weak observation] itemProxies in
+            guard let self, let observation else { return }
+            guard self.isCurrentOngoingCallObservation(identity),
+                  self.ongoingCallObservation === observation else { return }
+
+            self.reconcileOngoingCallRawMembershipState(itemProxies,
+                                                        ongoingCallID: ongoingCallID,
+                                                        observation: observation)
+        }
+
+        guard isCurrentOngoingCallObservation(identity),
+              ongoingCallObservation === observation else {
+            stateObservation?.cancel()
+            return
+        }
+
+        guard let stateObservation else {
+            MXLog.error("Failed observing MatrixRTC raw membership state.")
+            return
+        }
+
+        ongoingCallRawMembershipObservation?.cancel()
+        ongoingCallRawMembershipObservation = stateObservation
+    }
+
+    private func reconcileOngoingCallRawMembershipState(_ itemProxies: [TimelineItemProxy],
+                                                        ongoingCallID: CallID,
+                                                        observation: OngoingCallObservation) {
+        if observation.membershipTracker.updateAuthoritativeState(itemProxies, now: timeProvider.now()) {
+            ongoingCallMembershipExpiryTask?.cancel()
+            ongoingCallMembershipExpiryTask = nil
+            endOngoingCall(ongoingCallID,
+                           reason: .remoteEnded,
+                           deduplicationID: "ongoing-membership:\(ongoingCallID.callKitID.uuidString)")
+            return
+        }
+
+        scheduleOngoingCallMembershipReevaluation(ongoingCallID: ongoingCallID,
+                                                  observation: observation)
     }
 
     private func observeIncomingCallRoomInfo(roomProxy: JoinedRoomProxyProtocol, incomingCallID: CallID) async {
