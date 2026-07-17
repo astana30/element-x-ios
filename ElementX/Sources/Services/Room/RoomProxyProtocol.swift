@@ -82,6 +82,8 @@ protocol MatrixRTCCallMembershipStateObservationProtocol: AnyObject {
 /// The regular room timeline is a presentation surface and is not guaranteed to deliver every
 /// membership state replacement. Implementations deliver callbacks on the main queue.
 protocol MatrixRTCCallMembershipStateObserving: AnyObject {
+    /// Observes the SDK's complete current local timeline projection after every vector diff,
+    /// including projections that become empty after a removal-only update.
     func observeMatrixRTCCallMembershipState(_ listener: @escaping ([TimelineItemProxy]) -> Void) async
         -> (any MatrixRTCCallMembershipStateObservationProtocol)?
 }

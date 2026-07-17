@@ -19,13 +19,74 @@ private final class MatrixRTCCallMembershipItemBatch: @unchecked Sendable {
     }
 }
 
+private final class MatrixRTCCallMembershipTimelineProjection: @unchecked Sendable {
+    private let lock = NSLock()
+    private var itemProxies = [TimelineItemProxy]()
+
+    func apply(_ diffs: [TimelineDiff]) -> [TimelineItemProxy]? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        var updatedItemProxies = itemProxies
+        for diff in diffs {
+            guard apply(diff, to: &updatedItemProxies) else { return nil }
+        }
+
+        itemProxies = updatedItemProxies
+        return itemProxies
+    }
+
+    private func apply(_ diff: TimelineDiff, to itemProxies: inout [TimelineItemProxy]) -> Bool {
+        switch diff {
+        case .append(let values):
+            itemProxies.append(contentsOf: values.map(TimelineItemProxy.init))
+        case .clear:
+            itemProxies.removeAll()
+        case .pushFront(let value):
+            itemProxies.insert(TimelineItemProxy(item: value), at: 0)
+        case .pushBack(let value):
+            itemProxies.append(TimelineItemProxy(item: value))
+        case .popFront:
+            guard !itemProxies.isEmpty else { return false }
+            itemProxies.removeFirst()
+        case .popBack:
+            guard !itemProxies.isEmpty else { return false }
+            itemProxies.removeLast()
+        case .insert(let index, let value):
+            let index = Int(index)
+            guard index <= itemProxies.count else { return false }
+            itemProxies.insert(TimelineItemProxy(item: value), at: index)
+        case .set(let index, let value):
+            let index = Int(index)
+            guard itemProxies.indices.contains(index) else { return false }
+            itemProxies[index] = TimelineItemProxy(item: value)
+        case .remove(let index):
+            let index = Int(index)
+            guard itemProxies.indices.contains(index) else { return false }
+            itemProxies.remove(at: index)
+        case .truncate(let length):
+            let length = Int(length)
+            guard length <= itemProxies.count else { return false }
+            itemProxies.removeSubrange(length...)
+        case .reset(let values):
+            itemProxies = values.map(TimelineItemProxy.init)
+        }
+
+        return true
+    }
+}
+
 private final class MatrixRTCCallMembershipStateObservation: MatrixRTCCallMembershipStateObservationProtocol {
     private let timeline: Timeline
     private let observationToken: TaskHandle
+    private let projection: MatrixRTCCallMembershipTimelineProjection
 
-    init(timeline: Timeline, observationToken: TaskHandle) {
+    init(timeline: Timeline,
+         observationToken: TaskHandle,
+         projection: MatrixRTCCallMembershipTimelineProjection) {
         self.timeline = timeline
         self.observationToken = observationToken
+        self.projection = projection
     }
 
     deinit {
@@ -1365,32 +1426,24 @@ extension JoinedRoomProxy: MatrixRTCCallMembershipStateObserving {
                                                                                          dateDividerMode: .daily,
                                                                                          trackReadReceipts: .disabled,
                                                                                          reportUtds: false))
+            let projection = MatrixRTCCallMembershipTimelineProjection()
             let observationToken = await timeline.addListener(listener: SDKListener { diffs in
-                let itemProxies = diffs.flatMap(\.matrixRTCRawMembershipItemProxies)
-                guard !itemProxies.isEmpty else { return }
+                guard let itemProxies = projection.apply(diffs) else {
+                    MXLog.error("Failed applying MatrixRTC raw membership timeline diff.")
+                    return
+                }
 
                 let batch = MatrixRTCCallMembershipItemBatch(itemProxies: itemProxies)
                 DispatchQueue.main.async {
                     listener(batch.itemProxies)
                 }
             })
-            return MatrixRTCCallMembershipStateObservation(timeline: timeline, observationToken: observationToken)
+            return MatrixRTCCallMembershipStateObservation(timeline: timeline,
+                                                           observationToken: observationToken,
+                                                           projection: projection)
         } catch {
             MXLog.error("Failed creating MatrixRTC raw membership state observation.")
             return nil
-        }
-    }
-}
-
-private extension TimelineDiff {
-    var matrixRTCRawMembershipItemProxies: [TimelineItemProxy] {
-        switch self {
-        case .append(let values), .reset(let values):
-            values.map(TimelineItemProxy.init)
-        case .pushFront(let value), .pushBack(let value), .insert(_, let value), .set(_, let value):
-            [TimelineItemProxy(item: value)]
-        case .clear, .popFront, .popBack, .remove, .truncate:
-            []
         }
     }
 }

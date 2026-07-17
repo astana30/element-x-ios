@@ -814,6 +814,96 @@ final class ElementCallServiceTests {
                 "raw_state_empty_present=true ui_timeline_removal_missing=true roominfo_terminal_received=true pre_fix_remote_end_missing=true")
     }
 
+    @Test
+    func ongoingDirectCallReconcilesRawSDKRemovalOmissionWithoutExplicitEmpty() async throws {
+        let roomID = "!raw-state-removal-reconciliation:example.com"
+        let ownUserID = "@test:user.net"
+        let remoteUserID = "@alice:example.com"
+        let uiTimeline = TimelineSDKMock()
+        uiTimeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        uiTimeline.subscribeToBackPaginationStatusListenerReturnValue = TaskHandleSDKMock()
+        let rawTimeline = TimelineSDKMock()
+        rawTimeline.addListenerListenerReturnValue = TaskHandleSDKMock()
+        let room = RoomSDKMock()
+        room.idReturnValue = roomID
+        room.ownUserIdReturnValue = ownUserID
+        room.encryptionStateReturnValue = .encrypted
+        room.roomInfoReturnValue = makeMatrixRTCRoomInfo(roomID: roomID,
+                                                         participants: [ownUserID, remoteUserID])
+        room.subscribeToRoomInfoUpdatesListenerReturnValue = TaskHandleSDKMock()
+        let membersIterator = RoomMembersIteratorSDKMock()
+        membersIterator.lenReturnValue = 0
+        membersIterator.nextChunkChunkSizeReturnValue = []
+        room.membersReturnValue = membersIterator
+        room.membersNoSyncReturnValue = membersIterator
+        room.timelineWithConfigurationConfigurationClosure = { configuration in
+            switch configuration.filter {
+            case .all:
+                rawTimeline
+            default:
+                uiTimeline
+            }
+        }
+
+        let roomProxy = try await JoinedRoomProxy(roomListService: RoomListServiceSDKMock(),
+                                                  room: room,
+                                                  appSettings: appSettings,
+                                                  analyticsService: AnalyticsService(client: AnalyticsClientMock(),
+                                                                                     appSettings: appSettings))
+        clientProxy.roomForIdentifierClosure = { _ in .joined(roomProxy) }
+
+        var endCallCount = 0
+        service.actions
+            .sink { action in
+                if case .endCall = action {
+                    endCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        service.setClientProxy(clientProxy)
+        let setupTask = Task {
+            await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
+        }
+        for _ in 0..<30 where uiTimeline.addListenerListenerReceivedListener == nil {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        let uiListener = try #require(uiTimeline.addListenerListenerReceivedListener)
+        let localMembership = makeMatrixRTCMembershipSDKTimelineItem(eventID: "$raw-removal-local-active",
+                                                                     roomID: roomID,
+                                                                     userID: ownUserID,
+                                                                     deviceID: "LOCAL_DEVICE",
+                                                                     membershipID: "LOCAL_PARTY")
+        let remoteMembership = makeMatrixRTCMembershipSDKTimelineItem(eventID: "$raw-removal-remote-active",
+                                                                      roomID: roomID,
+                                                                      userID: remoteUserID,
+                                                                      deviceID: "REMOTE_DEVICE",
+                                                                      membershipID: "REMOTE_PARTY")
+        uiListener.onUpdate(diff: [.reset(values: [localMembership, remoteMembership])])
+        await setupTask.value
+        #expect(room.subscribeToRoomInfoUpdatesListenerCallsCount == 1)
+
+        for _ in 0..<30 where rawTimeline.addListenerListenerReceivedListener == nil {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        let rawListener = try #require(rawTimeline.addListenerListenerReceivedListener)
+        rawListener.onUpdate(diff: [.reset(values: [localMembership, remoteMembership])])
+        try? await Task.sleep(for: .milliseconds(50))
+
+        rawListener.onUpdate(diff: [.remove(index: 1)])
+        let roomInfoTerminalReceived = room.subscribeToRoomInfoUpdatesListenerReceivedListener != nil
+        room.subscribeToRoomInfoUpdatesListenerReceivedListener?.call(roomInfo: makeMatrixRTCRoomInfo(roomID: roomID,
+                                                                                                      participants: []))
+        for _ in 0..<20 where endCallCount == 0 {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(roomInfoTerminalReceived)
+        #expect(uiTimeline.addListenerListenerCallsCount == 1)
+        #expect(endCallCount == 1,
+                "pre_fix_real_sdk_removal_semantics_remote_end_missing=true")
+    }
+
     @Test(arguments: [
         "org.matrix.msc3401.call.member",
         "m.call.member",
@@ -999,7 +1089,7 @@ final class ElementCallServiceTests {
                                                                      membershipID: "REMOTE_PARTY",
                                                                      createdAt: initialTimestamp.addingTimeInterval(3),
                                                                      callID: "OTHER")
-        #expect(subscription.receiveSDKRawMembershipUpdate([mismatchedMutation]))
+        #expect(subscription.receiveSDKRawMembershipUpdate([localMembership, remoteMembership, mismatchedMutation]))
         try? await Task.sleep(for: .milliseconds(50))
         #expect(endCallCount == 0)
 
@@ -1016,7 +1106,7 @@ final class ElementCallServiceTests {
                                                               deviceID: "REMOTE_DEVICE",
                                                               membershipID: "REMOTE_PARTY",
                                                               createdAt: initialTimestamp.addingTimeInterval(1))
-        #expect(subscription.receiveSDKRawMembershipUpdate([authoritativeEmpty, staleActive]))
+        #expect(subscription.receiveSDKRawMembershipUpdate([localMembership, authoritativeEmpty, staleActive, mismatchedMutation]))
         for _ in 0..<30 where endCallCount == 0 {
             try? await Task.sleep(for: .milliseconds(20))
         }

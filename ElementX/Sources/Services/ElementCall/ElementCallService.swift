@@ -619,7 +619,6 @@ private final class OngoingCallMembershipTracker {
     private let ownUserID: String
     private let ownDeviceID: String?
     private var membershipStateByStateKey = [MatrixRTCCallMembershipStateKey: MembershipState]()
-    private var processedEventIDs = Set<String>()
     private var exactLocalMembership: MatrixRTCCallMembershipIdentity?
     private var observedRemoteMemberships = Set<MatrixRTCCallMembershipIdentity>()
     private var latestRoomInfo: RoomInfoProxyProtocol?
@@ -639,20 +638,25 @@ private final class OngoingCallMembershipTracker {
     }
 
     func updateAuthoritativeState(_ itemProxies: [TimelineItemProxy], now: Date) -> Bool {
+        var projectedStateByStateKey = [MatrixRTCCallMembershipStateKey: MembershipState]()
+        var projectedEventIDs = Set<String>()
+
         for itemProxy in itemProxies {
             guard let update = MatrixRTCCallMembershipEventParser.parse(itemProxy),
-                  processedEventIDs.insert(update.eventID).inserted else {
+                  projectedEventIDs.insert(update.eventID).inserted else {
                 continue
             }
 
-            if let currentState = membershipStateByStateKey[update.stateKey],
+            if let currentState = projectedStateByStateKey[update.stateKey],
                currentState.timestampMilliseconds > update.timestampMilliseconds {
                 continue
             }
 
-            membershipStateByStateKey[update.stateKey] = .init(timestampMilliseconds: update.timestampMilliseconds,
-                                                               memberships: update.memberships)
+            projectedStateByStateKey[update.stateKey] = .init(timestampMilliseconds: update.timestampMilliseconds,
+                                                              memberships: update.memberships)
         }
+
+        membershipStateByStateKey = projectedStateByStateKey
 
         return evaluate(now: now)
     }
