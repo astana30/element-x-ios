@@ -1037,6 +1037,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private var declineListenerHandle: TaskHandle?
     private var sessionGlobalIncomingCallCancellable: AnyCancellable?
     private var sessionGlobalIncomingCallObservationStartedAt: Date?
+    private var sessionGlobalIncomingCallSubscriptionGeneration: UInt64 = 0
     private var observedSessionGlobalIncomingCallIdentityKeys = Set<ConsumedDirectCallIdentityKey>()
     private var incomingFallbackSuppressionByRoomID: [String: Date] = [:]
     private var consumedDirectCallIdentityKeys = Set<ConsumedDirectCallIdentityKey>()
@@ -2050,73 +2051,76 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     private func observeSessionGlobalIncomingCalls() {
         sessionGlobalIncomingCallCancellable = nil
         sessionGlobalIncomingCallObservationStartedAt = nil
+        sessionGlobalIncomingCallSubscriptionGeneration &+= 1
         observedSessionGlobalIncomingCallIdentityKeys.removeAll()
 
         guard let clientProxy else {
             return
         }
 
+        let subscriptionGeneration = sessionGlobalIncomingCallSubscriptionGeneration
+        let clientIdentity = ObjectIdentifier(clientProxy as AnyObject)
         sessionGlobalIncomingCallObservationStartedAt = timeProvider.now()
-        sessionGlobalIncomingCallCancellable = clientProxy.staticRoomSummaryProvider.roomListPublisher
+        recordSessionGlobalIncomingCallSnapshotHistory(clientProxy.staticRoomSummaryProvider.roomListPublisher.value)
+        sessionGlobalIncomingCallCancellable = clientProxy.actionsPublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] roomSummaries in
-                self?.handleSessionGlobalIncomingCallSummaries(roomSummaries)
+            .sink { [weak self] action in
+                guard case let .receivedSyncNotification(notification, roomID) = action else {
+                    return
+                }
+
+                self?.handleSessionGlobalSyncNotification(notification,
+                                                          roomID: roomID,
+                                                          clientIdentity: clientIdentity,
+                                                          subscriptionGeneration: subscriptionGeneration)
             }
     }
 
-    private func handleSessionGlobalIncomingCallSummaries(_ roomSummaries: [RoomSummary]) {
-        guard isUnauthenticatedIncomingFallbackEnabled,
-              let clientProxy,
-              let observationStartedAt = sessionGlobalIncomingCallObservationStartedAt else {
-            return
-        }
-
-        pruneIncomingFallbackSuppression(using: roomSummaries)
-
+    private func recordSessionGlobalIncomingCallSnapshotHistory(_ roomSummaries: [RoomSummary]) {
         for candidate in sessionGlobalRoomSummaryCandidates(from: roomSummaries) {
-            let roomSummary = candidate.roomSummary
-            let identityKeys = candidate.identityKeys
-            if Self.isTerminalCallEvent(roomSummary.lastCallEvent) {
-                observedSessionGlobalIncomingCallIdentityKeys.formUnion(identityKeys)
-                consumedDirectCallIdentityKeys.formUnion(identityKeys)
-                continue
+            observedSessionGlobalIncomingCallIdentityKeys.formUnion(candidate.identityKeys)
+            if Self.isTerminalCallEvent(candidate.roomSummary.lastCallEvent) {
+                consumedDirectCallIdentityKeys.formUnion(candidate.identityKeys)
             }
+        }
+    }
 
-            guard observedSessionGlobalIncomingCallIdentityKeys.isDisjoint(with: identityKeys) else {
-                continue
-            }
-
-            guard let eventDate = roomSummary.lastMessageDate,
-                  eventDate >= observationStartedAt else {
-                observedSessionGlobalIncomingCallIdentityKeys.formUnion(identityKeys)
-                continue
-            }
-
-            if roomSummary.lastCallEvent?.state == .outgoing {
-                observedSessionGlobalIncomingCallIdentityKeys.formUnion(identityKeys)
-                continue
-            }
-
-            guard isIncomingFallbackCandidate(roomSummary: roomSummary, ownUserID: clientProxy.userID) else {
-                continue
-            }
-
-            observedSessionGlobalIncomingCallIdentityKeys.formUnion(identityKeys)
-            guard incomingCallID == nil,
-                  ongoingCallID == nil,
-                  consumedDirectCallIdentityKeys.isDisjoint(with: identityKeys) else {
-                continue
-            }
-
-            suppressIncomingFallback(for: roomSummary.id)
-            Task { [weak self] in
-                await self?.reportIncomingCallFromSessionGlobal(roomID: roomSummary.id,
-                                                                roomDisplayName: roomSummary.name,
-                                                                rtcNotificationID: nil,
-                                                                remoteCallID: candidate.remoteCallID)
-            }
+    private func handleSessionGlobalSyncNotification(_ notification: NotificationItem,
+                                                     roomID: String,
+                                                     clientIdentity: ObjectIdentifier,
+                                                     subscriptionGeneration: UInt64) {
+        guard sessionGlobalIncomingCallSubscriptionGeneration == subscriptionGeneration,
+              let clientProxy,
+              ObjectIdentifier(clientProxy as AnyObject) == clientIdentity,
+              let observationStartedAt = sessionGlobalIncomingCallObservationStartedAt,
+              case .timeline(let event) = notification.event,
+              let eventContent = try? event.content(),
+              case .messageLike(let content) = eventContent,
+              case let .rtcNotification(notificationType, expirationTimestamp, callIntent) = content else {
             return
         }
+
+        let eventID = event.eventId()
+        let eventDate = Date(timeIntervalSince1970: TimeInterval(event.timestamp()) / 1000)
+        let expirationDate = Date(timeIntervalSince1970: TimeInterval(expirationTimestamp) / 1000)
+        guard !eventID.isEmpty,
+              eventDate >= observationStartedAt,
+              expirationDate > timeProvider.now() else {
+            return
+        }
+
+        let intent: RoomCallEvent.Intent = switch callIntent {
+        case .some(.audio): .audio
+        case .some(.video): .video
+        case .none: .unknown
+        }
+        let state: RoomCallEvent.State = notificationType == .ring ? .incoming : .started
+        handleSessionGlobalIncomingCallEvent(.init(roomID: roomID,
+                                                   roomDisplayName: notification.roomInfo.displayName,
+                                                   isDirect: notification.roomInfo.isDirect,
+                                                   isOwnEvent: event.senderId() == clientProxy.userID,
+                                                   callEvent: .init(state: state, intent: intent),
+                                                   deduplicationID: eventID))
     }
 
     private func sessionGlobalRoomSummaryCandidates(from roomSummaries: [RoomSummary]) -> [SessionGlobalRoomSummaryCandidate] {
@@ -2136,8 +2140,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                                                           roomDisplayName: String?,
                                                           isDirect: Bool,
                                                           candidate: SessionGlobalIncomingCallCandidate) {
-        guard isUnauthenticatedIncomingFallbackEnabled,
-              isDirect,
+        guard isDirect,
               incomingCallID == nil,
               ongoingCallID == nil,
               !candidate.isOwnEvent,
@@ -2167,36 +2170,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                                                             rtcNotificationID: candidate.deduplicationID,
                                                             remoteCallID: candidate.callEvent.callID)
         }
-    }
-
-    private var isUnauthenticatedIncomingFallbackEnabled: Bool {
-        !salemXAnswerBridgeConfiguration.embeddedMatrixRTCAnswerBridgeEnabled
-    }
-
-    private func isIncomingFallbackCandidate(roomSummary: RoomSummary, ownUserID: String) -> Bool {
-        guard roomSummary.isDirect, roomSummary.hasOngoingCall else {
-            return false
-        }
-
-        guard !roomSummary.activeRoomCallParticipants.contains(ownUserID) else {
-            return false
-        }
-
-        guard !isIncomingFallbackSuppressed(roomSummary: roomSummary, ownUserID: ownUserID) else {
-            return false
-        }
-
-        guard !Self.isTerminalCallEvent(roomSummary.lastCallEvent) else {
-            return false
-        }
-
-        // Avoid showing a new incoming call from fallback right after we just placed/cancelled
-        // an outgoing call in the same room.
-        if roomSummary.lastCallEvent?.state == .outgoing {
-            return false
-        }
-
-        return true
     }
 
     private func reportIncomingCallFromSessionGlobal(roomID: String,
@@ -2538,60 +2511,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         return String(describing: startMode)
     }
 
-    private func isIncomingFallbackSuppressed(roomSummary: RoomSummary, ownUserID: String) -> Bool {
-        let roomID = roomSummary.id
-        guard let expirationDate = incomingFallbackSuppressionByRoomID[roomID] else {
-            return false
-        }
-
-        guard expirationDate > Date() else {
-            incomingFallbackSuppressionByRoomID.removeValue(forKey: roomID)
-            return false
-        }
-
-        guard !shouldBypassIncomingFallbackSuppression(roomSummary: roomSummary, ownUserID: ownUserID) else {
-            incomingFallbackSuppressionByRoomID.removeValue(forKey: roomID)
-            MXLog.info("Element Call lifecycle diagnostics: incoming_fallback_suppression_cleared=true reason=fresh_foreground_call")
-            return false
-        }
-
-        return true
-    }
-
-    private func shouldBypassIncomingFallbackSuppression(roomSummary: RoomSummary, ownUserID: String) -> Bool {
-        guard roomSummary.isDirect, roomSummary.hasOngoingCall else {
-            return false
-        }
-
-        guard !roomSummary.activeRoomCallParticipants.contains(ownUserID) else {
-            return false
-        }
-
-        guard !Self.isTerminalCallEvent(roomSummary.lastCallEvent) else {
-            return false
-        }
-
-        if roomSummary.lastCallEvent?.state == .outgoing {
-            return false
-        }
-
-        let hasRemoteParticipant = roomSummary.activeRoomCallParticipants.contains { $0 != ownUserID }
-        let hasIncomingCallEvent = roomSummary.lastCallEvent.map(Self.isIncomingFallbackStartEvent) ?? false
-        return hasRemoteParticipant || hasIncomingCallEvent
-    }
-
     private static func isIncomingFallbackStartEvent(_ event: RoomCallEvent) -> Bool {
         switch event.state {
         case .incoming, .started, .answered, .legacyInvite:
             return true
         case .outgoing, .ended, .missed, .declined:
             return false
-        }
-    }
-
-    private func pruneIncomingFallbackSuppression(using _: [RoomSummary]) {
-        incomingFallbackSuppressionByRoomID = incomingFallbackSuppressionByRoomID.filter { _, expirationDate in
-            expirationDate > Date()
         }
     }
 

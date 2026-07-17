@@ -46,6 +46,9 @@ class ClientProxy: ClientProxyProtocol {
     
     // periphery:ignore - required for instance retention in the rust codebase
     private var mediaPreviewConfigListenerTaskHandle: TaskHandle?
+
+    /// Retained for the lifetime of this client so the SDK can deliver live sync notifications.
+    private var syncNotificationListener: ClientSyncNotificationListener?
     
     private var delegateHandle: TaskHandle?
     
@@ -220,6 +223,8 @@ class ClientProxy: ClientProxyProtocol {
         roomSummaryProvider = configuredAppService.roomSummaryProvider
         alternateRoomSummaryProvider = configuredAppService.alternateRoomSummaryProvider
         staticRoomSummaryProvider = configuredAppService.staticRoomSummaryProvider
+
+        syncNotificationListener = await Self.registerSyncNotificationListener(on: client, actionsSubject: actionsSubject)
         
         syncServiceStateUpdateTaskHandle = createSyncServiceStateObserver(syncService)
         roomListStateUpdateTaskHandle = createRoomListServiceObserver(roomListService)
@@ -448,6 +453,13 @@ class ClientProxy: ClientProxyProtocol {
             // To avoid the cache being invalidated while the app is backgrounded, we cache at every sync start.
             await cacheAccountURL()
         }
+    }
+
+    private static func registerSyncNotificationListener(on client: ClientProtocol,
+                                                         actionsSubject: PassthroughSubject<ClientProxyAction, Never>) async -> ClientSyncNotificationListener {
+        let listener = ClientSyncNotificationListener(actionsSubject: actionsSubject)
+        await client.registerNotificationHandler(listener: listener)
+        return listener
     }
     
     /// A stored task for restarting the sync after a failure. This is stored so that we can cancel
@@ -1317,6 +1329,18 @@ private final class ClientDelegateWrapper: ClientDelegate {
     
     func onBackgroundTaskErrorReport(taskName: String, error: MatrixRustSDK.BackgroundTaskFailureReason) {
         backgroundTaskErrorCallback(error)
+    }
+}
+
+final class ClientSyncNotificationListener: SyncNotificationListener, @unchecked Sendable {
+    private let actionsSubject: PassthroughSubject<ClientProxyAction, Never>
+
+    init(actionsSubject: PassthroughSubject<ClientProxyAction, Never>) {
+        self.actionsSubject = actionsSubject
+    }
+
+    func onNotification(notification: NotificationItem, roomId: String) {
+        actionsSubject.send(.receivedSyncNotification(notification: notification, roomID: roomId))
     }
 }
 

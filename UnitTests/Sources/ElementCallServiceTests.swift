@@ -3067,51 +3067,6 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @Test
-    func secureAnswerBridgeSuppressesForegroundIncomingFallback() async {
-        service = ElementCallService(appSettings: appSettings,
-                                     callProvider: callProvider,
-                                     timeProvider: TimeProvider(clock: testClock) { self.currentDate },
-                                     salemXAnswerBridgeConfiguration: .init(embeddedMatrixRTCAnswerBridgeEnabled: true))
-        let roomID = "redacted-room"
-        configureRoomSummaryProvider()
-        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: ["redacted-remote"])
-        service.setClientProxy(clientProxy)
-        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
-
-        handleSessionGlobalCall(roomID: roomID, deduplicationID: "redacted-current-call")
-
-        #expect(await waitForIncomingCallReports(count: 1) == false)
-    }
-
-    @Test
-    func liveInviteFromChatListReportsCallKitOnce() async {
-        let roomID = "redacted-room"
-        let remoteUserID = "redacted-remote"
-        let roomSummaries = configureRoomSummaryProvider()
-        configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
-        service.setClientProxy(clientProxy)
-
-        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
-            completion(nil)
-        }
-
-        let incomingSummary = makeRoomSummary(id: roomID,
-                                              isDirect: true,
-                                              hasOngoingCall: true,
-                                              participants: [remoteUserID],
-                                              lastCallEvent: .init(state: .incoming,
-                                                                   intent: .audio,
-                                                                   callID: "redacted-session-a"),
-                                              lastMessageDate: currentDate.addingTimeInterval(1))
-        roomSummaries.send([incomingSummary])
-        #expect(await waitForIncomingCallReports(count: 1))
-        roomSummaries.send([incomingSummary])
-        #expect(await waitForIncomingCallReports(count: 2) == false)
-        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
-        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionReceivedArguments?.update.hasVideo == false)
-    }
-
-    @Test
     func terminatedCallSuppressionStillBlocksStaleIncomingFallback() async {
         let roomID = "redacted-room"
         let roomSummaryProvider = RoomSummaryProviderMock()
@@ -3136,63 +3091,25 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @Test
-    func activeCallGuardStillBlocksConcurrentIncomingFallback() async {
-        let roomID = "redacted-room"
-        let nextRoomID = "redacted-next-room"
-        let remoteUserID = "redacted-remote"
-        let roomSummaryProvider = RoomSummaryProviderMock()
-        let roomSummaries = CurrentValueSubject<[RoomSummary], Never>([])
-        roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
-        roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
-        clientProxy.roomSummaryProvider = roomSummaryProvider
-        clientProxy.staticRoomSummaryProvider = roomSummaryProvider
-        configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
-        service.setClientProxy(clientProxy)
-
-        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
-            completion(nil)
-        }
-
-        roomSummaries.send([
-            makeRoomSummary(id: roomID,
-                            isDirect: true,
-                            hasOngoingCall: true,
-                            participants: [remoteUserID],
-                            lastCallEvent: .init(state: .incoming, intent: .audio))
-        ])
-        #expect(await waitForIncomingCallReports(count: 1))
-
-        roomSummaries.send([
-            makeRoomSummary(id: nextRoomID,
-                            isDirect: true,
-                            hasOngoingCall: true,
-                            participants: [remoteUserID],
-                            lastCallEvent: .init(state: .incoming, intent: .audio))
-        ])
-
-        #expect(await waitForIncomingCallReports(count: 2) == false)
-    }
-
-    @Test
-    func liveInviteWithoutOpenRoomReportsCallKitOnce() async {
+    func productionLivePublisherEventWithClosedRoomReportsCallKitOnce() async {
         let roomID = "redacted-room"
         let remoteUserID = "redacted-remote"
         configureRoomSummaryProvider()
-        configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        let listener = configureLiveNotificationListener()
         service.setClientProxy(clientProxy)
 
         callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
             completion(nil)
         }
 
-        handleSessionGlobalCall(roomID: roomID,
-                                callID: "redacted-session-a",
-                                deduplicationID: "redacted-delivery-a")
+        let notification = makeLiveRTCNotification(eventID: "redacted-delivery-a",
+                                                   senderID: remoteUserID,
+                                                   timestamp: currentDate.addingTimeInterval(1),
+                                                   expirationDate: currentDate.addingTimeInterval(60))
+        listener.onNotification(notification: notification, roomId: roomID)
 
         #expect(await waitForIncomingCallReports(count: 1))
-        handleSessionGlobalCall(roomID: roomID,
-                                callID: "redacted-session-a",
-                                deduplicationID: "redacted-delivery-a")
+        listener.onNotification(notification: notification, roomId: roomID)
         #expect(await waitForIncomingCallReports(count: 2) == false)
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionReceivedArguments?.update.hasVideo == false)
@@ -3323,10 +3240,11 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @Test
-    func roomReopenDoesNotReplayTerminatedHistoricalCall() async {
+    func roomReopenDoesNotDuplicateProductionLiveNotification() async {
         let roomID = "redacted-room"
         let remoteUserID = "redacted-remote"
         configureRoomSummaryProvider()
+        let listener = configureLiveNotificationListener()
         let room = configureJoinedRoomMock(roomID: roomID,
                                            activeParticipants: [remoteUserID],
                                            timelineItems: [makeHistoricalCallTimelineItem(eventID: "redacted-stable-event",
@@ -3338,9 +3256,11 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
             completion(nil)
         }
 
-        handleSessionGlobalCall(roomID: roomID,
-                                callID: "redacted-session-a",
-                                deduplicationID: "redacted-delivery-a")
+        let notification = makeLiveRTCNotification(eventID: "redacted-delivery-a",
+                                                   senderID: remoteUserID,
+                                                   timestamp: currentDate.addingTimeInterval(1),
+                                                   expirationDate: currentDate.addingTimeInterval(60))
+        listener.onNotification(notification: notification, roomId: roomID)
         #expect(await waitForIncomingCallReports(count: 1))
 
         await service.declineIncomingCall()
@@ -3355,9 +3275,7 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
                                                                                                   uniqueID: "redacted-reopened-timeline",
                                                                                                   callID: "redacted-session-a")])
         service.observeForegroundRoom(roomProxy: reopenedRoom, roomDisplayName: "Room")
-        handleSessionGlobalCall(roomID: roomID,
-                                callID: "redacted-session-a",
-                                deduplicationID: "redacted-delivery-a")
+        listener.onNotification(notification: notification, roomId: roomID)
 
         #expect(await waitForIncomingCallReports(count: 2) == false)
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
@@ -3365,25 +3283,74 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @Test
-    func historicalTimelineCallStartDoesNotReportCallKit() async {
+    func staticAndHistoricalEventsDoNotReportCallKit() async {
         let roomID = "redacted-room"
-        configureRoomSummaryProvider()
-        let room = configureJoinedRoomMock(roomID: roomID,
-                                           activeParticipants: ["redacted-remote"],
-                                           timelineItems: [makeHistoricalCallTimelineItem(eventID: "redacted-historical-event",
-                                                                                          uniqueID: "redacted-historical-timeline",
-                                                                                          callID: "redacted-historical-session")])
-        guard let timeline = room.timeline as? TimelineProxyMock else {
-            Issue.record("Expected timeline mock")
-            return
-        }
+        let remoteUserID = "redacted-remote"
+        let roomSummaries = configureRoomSummaryProvider()
+        roomSummaries.send([
+            makeRoomSummary(id: roomID,
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: [remoteUserID],
+                            lastCallEvent: .init(state: .incoming,
+                                                 intent: .audio,
+                                                 callID: "redacted-historical-session"),
+                            lastMessageDate: currentDate.addingTimeInterval(-60))
+        ])
+        let listener = configureLiveNotificationListener()
 
         service.setClientProxy(clientProxy)
-        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+        roomSummaries.send([
+            makeRoomSummary(id: roomID,
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: [remoteUserID],
+                            lastCallEvent: .init(state: .incoming,
+                                                 intent: .audio,
+                                                 callID: "redacted-static-replay"),
+                            lastMessageDate: currentDate.addingTimeInterval(1))
+        ])
+        listener.onNotification(notification: makeLiveRTCNotification(eventID: "redacted-historical-event",
+                                                                      senderID: remoteUserID,
+                                                                      timestamp: currentDate.addingTimeInterval(-1),
+                                                                      expirationDate: currentDate.addingTimeInterval(60)),
+                                roomId: roomID)
 
         #expect(await waitForIncomingCallReports(count: 1) == false)
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 0)
-        #expect(timeline.subscribeForUpdatesCallsCount == 0)
+    }
+
+    @Test
+    func clientSessionReplacementRejectsStaleLiveCallback() async {
+        let roomID = "redacted-room"
+        let remoteUserID = "redacted-remote"
+        let staleClient = ClientProxyMock(.init(userID: "redacted-old-user"))
+        let currentClient = ClientProxyMock(.init(userID: "redacted-current-user"))
+        configureRoomSummaryProvider(for: staleClient)
+        configureRoomSummaryProvider(for: currentClient)
+        let staleListener = configureLiveNotificationListener(for: staleClient)
+        let currentListener = configureLiveNotificationListener(for: currentClient)
+        service.setClientProxy(staleClient)
+        service.setClientProxy(currentClient)
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        staleListener.onNotification(notification: makeLiveRTCNotification(eventID: "redacted-stale-delivery",
+                                                                           senderID: remoteUserID,
+                                                                           timestamp: currentDate.addingTimeInterval(1),
+                                                                           expirationDate: currentDate.addingTimeInterval(60)),
+                                     roomId: roomID)
+        #expect(await waitForIncomingCallReports(count: 1) == false)
+
+        currentListener.onNotification(notification: makeLiveRTCNotification(eventID: "redacted-current-delivery",
+                                                                             senderID: remoteUserID,
+                                                                             timestamp: currentDate.addingTimeInterval(1),
+                                                                             expirationDate: currentDate.addingTimeInterval(60)),
+                                       roomId: roomID)
+        #expect(await waitForIncomingCallReports(count: 1))
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
     }
 
     private func waitForIncomingCallReports(count: Int) async -> Bool {
@@ -3413,14 +3380,56 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @discardableResult
-    private func configureRoomSummaryProvider() -> CurrentValueSubject<[RoomSummary], Never> {
+    private func configureRoomSummaryProvider(for client: ClientProxyMock? = nil) -> CurrentValueSubject<[RoomSummary], Never> {
+        let client = client ?? clientProxy
         let roomSummaryProvider = RoomSummaryProviderMock()
         let roomSummaries = CurrentValueSubject<[RoomSummary], Never>([])
         roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
         roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
-        clientProxy.roomSummaryProvider = roomSummaryProvider
-        clientProxy.staticRoomSummaryProvider = roomSummaryProvider
+        client.roomSummaryProvider = roomSummaryProvider
+        client.staticRoomSummaryProvider = roomSummaryProvider
         return roomSummaries
+    }
+
+    private func configureLiveNotificationListener(for client: ClientProxyMock? = nil) -> ClientSyncNotificationListener {
+        let client = client ?? clientProxy
+        let actionsSubject = PassthroughSubject<ClientProxyAction, Never>()
+        client.actionsPublisher = actionsSubject.eraseToAnyPublisher()
+        return ClientSyncNotificationListener(actionsSubject: actionsSubject)
+    }
+
+    private func makeLiveRTCNotification(eventID: String,
+                                         senderID: String,
+                                         timestamp: Date,
+                                         expirationDate: Date) -> NotificationItem {
+        let event = TimelineEventSDKMock()
+        event.contentReturnValue = .messageLike(content: .rtcNotification(notificationType: .ring,
+                                                                          expirationTs: timestampInMilliseconds(expirationDate),
+                                                                          callIntent: .audio))
+        event.eventIdReturnValue = eventID
+        event.senderIdReturnValue = senderID
+        event.timestampReturnValue = timestampInMilliseconds(timestamp)
+
+        return .init(event: .timeline(event: event),
+                     rawEvent: "{}",
+                     senderInfo: .init(displayName: nil, avatarUrl: nil, isNameAmbiguous: false),
+                     roomInfo: .init(displayName: "Room",
+                                     avatarUrl: nil,
+                                     canonicalAlias: nil,
+                                     topic: nil,
+                                     joinRule: nil,
+                                     joinedMembersCount: 2,
+                                     isEncrypted: true,
+                                     isDirect: true,
+                                     isSpace: false),
+                     isNoisy: true,
+                     hasMention: false,
+                     threadId: nil,
+                     actions: nil)
+    }
+
+    private func timestampInMilliseconds(_ date: Date) -> UInt64 {
+        UInt64(date.timeIntervalSince1970 * 1000)
     }
 
     @discardableResult
