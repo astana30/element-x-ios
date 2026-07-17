@@ -272,7 +272,7 @@ struct TimeProvider {
     var now: () -> Date
 }
 
-struct ForegroundCurrentRoomCallEvent {
+struct SessionGlobalIncomingCallEvent {
     let roomID: String
     let roomDisplayName: String?
     let isDirect: Bool
@@ -919,10 +919,16 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         var hasSeenRemoteParticipant = false
     }
 
-    private struct ForegroundRoomIncomingCallCandidate {
+    private struct SessionGlobalIncomingCallCandidate {
         let callEvent: RoomCallEvent
         let deduplicationID: String
         let isOwnEvent: Bool
+    }
+
+    private struct SessionGlobalRoomSummaryCandidate {
+        let roomSummary: RoomSummary
+        let remoteCallID: String
+        let identityKeys: Set<ConsumedDirectCallIdentityKey>
     }
 
     private enum DeclineAttemptResult {
@@ -976,7 +982,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
             clearOngoingCallObservationRequest(matching: nil)
             let expectedCallID = ongoingCallID
             Task { await observeOngoingCall(expectedCallID: expectedCallID) }
-            observeIncomingCallFallback()
+            observeSessionGlobalIncomingCalls()
         }
     }
     
@@ -1029,11 +1035,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
     
     private var declineListenerHandle: TaskHandle?
-    private var incomingCallFallbackCancellable: AnyCancellable?
+    private var sessionGlobalIncomingCallCancellable: AnyCancellable?
+    private var sessionGlobalIncomingCallObservationStartedAt: Date?
+    private var observedSessionGlobalIncomingCallIdentityKeys = Set<ConsumedDirectCallIdentityKey>()
     private var incomingFallbackSuppressionByRoomID: [String: Date] = [:]
-    private var foregroundRoomID: String?
-    private var foregroundRoomTimelineCancellable: AnyCancellable?
-    private var handledForegroundIncomingCallByRoomID: [String: String] = [:]
     private var consumedDirectCallIdentityKeys = Set<ConsumedDirectCallIdentityKey>()
     private var ongoingDeclineListenerHandles: [String: TaskHandle] = [:]
     private var isResolvingOngoingDeclines = false
@@ -1115,55 +1120,13 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     }
     #endif
 
-    @MainActor func observeForegroundRoom(roomProxy: JoinedRoomProxyProtocol, roomDisplayName: String?) {
-        foregroundRoomTimelineCancellable = nil
-
-        guard roomProxy.infoPublisher.value.isDirect else {
-            clearForegroundRoomObservation()
-            return
-        }
-
-        foregroundRoomID = roomProxy.id
-        let timelineItemProvider = roomProxy.timeline.timelineItemProvider
-        handleForegroundRoomTimelineUpdate(itemProxies: timelineItemProvider.itemProxies,
-                                           roomProxy: roomProxy,
-                                           roomDisplayName: roomDisplayName)
-
-        foregroundRoomTimelineCancellable = timelineItemProvider.updatePublisher
-            .map(\.0)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self, roomProxy] itemProxies in
-                guard let self else { return }
-                self.handleForegroundRoomTimelineUpdate(itemProxies: itemProxies,
-                                                        roomProxy: roomProxy,
-                                                        roomDisplayName: roomDisplayName)
-            }
-    }
-
-    @MainActor func stopObservingForegroundRoom(roomID: String) {
-        guard foregroundRoomID == roomID else {
-            return
-        }
-
-        clearForegroundRoomObservation()
-    }
-
-    func handleForegroundCurrentRoomCallEvent(_ event: ForegroundCurrentRoomCallEvent) {
-        handleForegroundRoomIncomingCallCandidate(roomID: event.roomID,
-                                                  roomDisplayName: event.roomDisplayName,
-                                                  isDirect: event.isDirect,
-                                                  candidate: .init(callEvent: event.callEvent,
-                                                                   deduplicationID: event.deduplicationID,
-                                                                   isOwnEvent: event.isOwnEvent))
-    }
-
-    private func clearForegroundRoomObservation() {
-        if let foregroundRoomID {
-            handledForegroundIncomingCallByRoomID.removeValue(forKey: foregroundRoomID)
-        }
-
-        foregroundRoomID = nil
-        foregroundRoomTimelineCancellable = nil
+    func handleSessionGlobalIncomingCallEvent(_ event: SessionGlobalIncomingCallEvent) {
+        handleSessionGlobalIncomingCallCandidate(roomID: event.roomID,
+                                                 roomDisplayName: event.roomDisplayName,
+                                                 isDirect: event.isDirect,
+                                                 candidate: .init(callEvent: event.callEvent,
+                                                                  deduplicationID: event.deduplicationID,
+                                                                  isOwnEvent: event.isOwnEvent))
     }
     
     func setupCallSession(roomID: String, roomDisplayName: String) async {
@@ -2084,145 +2047,126 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         }
     }
 
-    private func observeIncomingCallFallback() {
-        incomingCallFallbackCancellable = nil
+    private func observeSessionGlobalIncomingCalls() {
+        sessionGlobalIncomingCallCancellable = nil
+        sessionGlobalIncomingCallObservationStartedAt = nil
+        observedSessionGlobalIncomingCallIdentityKeys.removeAll()
 
         guard let clientProxy else {
             return
         }
 
-        incomingCallFallbackCancellable = clientProxy.roomSummaryProvider.roomListPublisher
+        sessionGlobalIncomingCallObservationStartedAt = timeProvider.now()
+        sessionGlobalIncomingCallCancellable = clientProxy.staticRoomSummaryProvider.roomListPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] roomSummaries in
-                self?.handleIncomingCallFallback(roomSummaries: roomSummaries)
+                self?.handleSessionGlobalIncomingCallSummaries(roomSummaries)
             }
     }
 
-    private func handleIncomingCallFallback(roomSummaries: [RoomSummary]) {
-        guard isUnauthenticatedIncomingFallbackEnabled else {
-            return
-        }
-
-        guard let clientProxy else {
+    private func handleSessionGlobalIncomingCallSummaries(_ roomSummaries: [RoomSummary]) {
+        guard isUnauthenticatedIncomingFallbackEnabled,
+              let clientProxy,
+              let observationStartedAt = sessionGlobalIncomingCallObservationStartedAt else {
             return
         }
 
         pruneIncomingFallbackSuppression(using: roomSummaries)
 
-        guard incomingCallID == nil, ongoingCallID == nil else {
-            return
-        }
+        for candidate in sessionGlobalRoomSummaryCandidates(from: roomSummaries) {
+            let roomSummary = candidate.roomSummary
+            let identityKeys = candidate.identityKeys
+            if Self.isTerminalCallEvent(roomSummary.lastCallEvent) {
+                observedSessionGlobalIncomingCallIdentityKeys.formUnion(identityKeys)
+                consumedDirectCallIdentityKeys.formUnion(identityKeys)
+                continue
+            }
 
-        let ownUserID = clientProxy.userID
-        guard let roomSummary = roomSummaries.first(where: { isIncomingFallbackCandidate(roomSummary: $0, ownUserID: ownUserID) }) else {
-            return
-        }
+            guard observedSessionGlobalIncomingCallIdentityKeys.isDisjoint(with: identityKeys) else {
+                continue
+            }
 
-        guard let lastCallEvent = roomSummary.lastCallEvent,
-              !Self.isTerminalCallEvent(lastCallEvent),
-              let remoteCallID = lastCallEvent.callID,
-              !remoteCallID.isEmpty,
-              !isConsumedDirectCallIdentity(roomID: roomSummary.id, remoteCallID: remoteCallID) else {
-            return
-        }
+            guard let eventDate = roomSummary.lastMessageDate,
+                  eventDate >= observationStartedAt else {
+                observedSessionGlobalIncomingCallIdentityKeys.formUnion(identityKeys)
+                continue
+            }
 
-        suppressIncomingFallback(for: roomSummary.id)
-        Task { [weak self] in
-            let isVideoIntent = lastCallEvent.intent == .video
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-FALLBACK-CANDIDATE] room_id=\(roomSummary.id) source=app_fallback " +
-                "raw_payload_keys=nil raw_source=room_summary is_direct=\(roomSummary.isDirect) has_ongoing_call=\(roomSummary.hasOngoingCall) " +
-                "active_participants=\(roomSummary.activeRoomCallParticipants) last_call_state=\(String(describing: roomSummary.lastCallEvent?.state)) " +
-                "last_call_intent=\(String(describing: roomSummary.lastCallEvent?.intent)) parsed_intent_result=\(isVideoIntent ? "video" : "audio")")
-            await self?.reportIncomingCallFromFallback(roomID: roomSummary.id,
-                                                       roomDisplayName: roomSummary.name,
-                                                       isVideo: isVideoIntent,
-                                                       remoteCallID: remoteCallID)
+            if roomSummary.lastCallEvent?.state == .outgoing {
+                observedSessionGlobalIncomingCallIdentityKeys.formUnion(identityKeys)
+                continue
+            }
+
+            guard isIncomingFallbackCandidate(roomSummary: roomSummary, ownUserID: clientProxy.userID) else {
+                continue
+            }
+
+            observedSessionGlobalIncomingCallIdentityKeys.formUnion(identityKeys)
+            guard incomingCallID == nil,
+                  ongoingCallID == nil,
+                  consumedDirectCallIdentityKeys.isDisjoint(with: identityKeys) else {
+                continue
+            }
+
+            suppressIncomingFallback(for: roomSummary.id)
+            Task { [weak self] in
+                await self?.reportIncomingCallFromSessionGlobal(roomID: roomSummary.id,
+                                                                roomDisplayName: roomSummary.name,
+                                                                rtcNotificationID: nil,
+                                                                remoteCallID: candidate.remoteCallID)
+            }
+            return
         }
     }
 
-    private func handleForegroundRoomTimelineUpdate(itemProxies: [TimelineItemProxy],
-                                                    roomProxy: JoinedRoomProxyProtocol,
-                                                    roomDisplayName: String?) {
-        let roomID = roomProxy.id
-        guard foregroundRoomID == roomID,
-              roomProxy.infoPublisher.value.isDirect else {
-            return
-        }
+    private func sessionGlobalRoomSummaryCandidates(from roomSummaries: [RoomSummary]) -> [SessionGlobalRoomSummaryCandidate] {
+        roomSummaries.compactMap { roomSummary in
+            guard let remoteCallID = roomSummary.lastCallEvent?.callID,
+                  !remoteCallID.isEmpty else {
+                return nil
+            }
 
-        guard incomingCallID == nil, ongoingCallID == nil else {
-            return
+            return .init(roomSummary: roomSummary,
+                         remoteCallID: remoteCallID,
+                         identityKeys: directCallIdentityKeys(roomID: roomSummary.id, remoteCallID: remoteCallID))
         }
-
-        guard let candidate = latestForegroundRoomIncomingCallCandidate(in: itemProxies) else {
-            return
-        }
-
-        handleForegroundRoomIncomingCallCandidate(roomID: roomID,
-                                                  roomDisplayName: roomDisplayName ?? roomProxy.infoPublisher.value.displayName,
-                                                  isDirect: roomProxy.infoPublisher.value.isDirect,
-                                                  candidate: candidate)
     }
 
-    private func handleForegroundRoomIncomingCallCandidate(roomID: String,
-                                                           roomDisplayName: String?,
-                                                           isDirect: Bool,
-                                                           candidate: ForegroundRoomIncomingCallCandidate) {
-        guard isUnauthenticatedIncomingFallbackEnabled else {
-            return
-        }
-
-        guard foregroundRoomID == roomID,
+    private func handleSessionGlobalIncomingCallCandidate(roomID: String,
+                                                          roomDisplayName: String?,
+                                                          isDirect: Bool,
+                                                          candidate: SessionGlobalIncomingCallCandidate) {
+        guard isUnauthenticatedIncomingFallbackEnabled,
               isDirect,
               incomingCallID == nil,
-              ongoingCallID == nil else {
-            return
-        }
-
-        guard !candidate.isOwnEvent,
+              ongoingCallID == nil,
+              !candidate.isOwnEvent,
               !Self.isTerminalCallEvent(candidate.callEvent),
               Self.isIncomingFallbackStartEvent(candidate.callEvent) else {
             return
         }
 
-        guard !isConsumedDirectCallIdentity(roomID: roomID,
-                                            rtcNotificationID: candidate.deduplicationID,
-                                            remoteCallID: candidate.callEvent.callID) else {
+        let identityKeys = directCallIdentityKeys(roomID: roomID,
+                                                  rtcNotificationID: candidate.deduplicationID,
+                                                  remoteCallID: candidate.callEvent.callID)
+        guard !identityKeys.isEmpty,
+              consumedDirectCallIdentityKeys.isDisjoint(with: identityKeys),
+              observedSessionGlobalIncomingCallIdentityKeys.isDisjoint(with: identityKeys) else {
             return
         }
 
-        guard handledForegroundIncomingCallByRoomID[roomID] != candidate.deduplicationID else {
-            return
-        }
-
-        handledForegroundIncomingCallByRoomID[roomID] = candidate.deduplicationID
+        observedSessionGlobalIncomingCallIdentityKeys.formUnion(identityKeys)
         incomingFallbackSuppressionByRoomID.removeValue(forKey: roomID)
-
         if let remoteCallID = candidate.callEvent.callID {
             cacheRemoteCallID(remoteCallID, for: roomID)
         }
 
         Task { [weak self] in
-            await self?.reportIncomingCallFromForegroundRoom(roomID: roomID,
-                                                             roomDisplayName: roomDisplayName,
-                                                             isVideo: candidate.callEvent.intent == .video,
-                                                             rtcNotificationID: candidate.deduplicationID,
-                                                             remoteCallID: candidate.callEvent.callID)
+            await self?.reportIncomingCallFromSessionGlobal(roomID: roomID,
+                                                            roomDisplayName: roomDisplayName,
+                                                            rtcNotificationID: candidate.deduplicationID,
+                                                            remoteCallID: candidate.callEvent.callID)
         }
-    }
-
-    private func latestForegroundRoomIncomingCallCandidate(in itemProxies: [TimelineItemProxy]) -> ForegroundRoomIncomingCallCandidate? {
-        for itemProxy in itemProxies.reversed() {
-            guard case let .event(eventProxy) = itemProxy,
-                  let callEvent = RoomCallEventParser.parse(from: eventProxy) else {
-                continue
-            }
-
-            return .init(callEvent: callEvent,
-                         deduplicationID: eventProxy.id.uniqueID.value,
-                         isOwnEvent: eventProxy.isOwn)
-        }
-
-        return nil
     }
 
     private var isUnauthenticatedIncomingFallbackEnabled: Bool {
@@ -2255,68 +2199,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         return true
     }
 
-    private func reportIncomingCallFromFallback(roomID: String,
-                                                roomDisplayName: String?,
-                                                isVideo: Bool,
-                                                remoteCallID: String) async {
-        guard incomingCallID == nil,
-              ongoingCallID == nil,
-              !isConsumedDirectCallIdentity(roomID: roomID, remoteCallID: remoteCallID) else {
-            return
-        }
-
-        let nowDate = timeProvider.now()
-        let callID = CallID(callKitID: UUID(),
-                            roomID: roomID,
-                            rtcNotificationID: nil,
-                            remoteCallID: remoteCallID,
-                            startMode: isVideo ? .video : .audio,
-                            startedAt: nowDate)
-
-        incomingCallID = callID
-        openCallSession(roomID: roomID,
-                        callKitID: callID.callKitID,
-                        direction: .incoming,
-                        remoteCallID: callID.remoteCallID)
-
-        let update = CXCallUpdate()
-        update.hasVideo = isVideo
-        update.localizedCallerName = roomDisplayName
-        update.remoteHandle = .init(type: .generic, value: roomID)
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-FALLBACK-CALLKIT] room_id=\(roomID) source=app_fallback " +
-            "start_mode=\(callID.startMode) has_video=\(update.hasVideo) caller_name_source=roomSummary")
-
-        callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
-            if let error {
-                MXLog.error("Fallback incoming call reporting failed: \(error)")
-                self?.clearIncomingCallState()
-                return
-            }
-
-            self?.actionsSubject.send(.receivedIncomingCallRequest)
-        }
-
-        endUnansweredCallTask?.cancel()
-        endUnansweredCallTask = Task { [weak self] in
-            try? await self?.timeProvider.clock.sleep(for: IncomingFallbackConstants.unansweredTimeout)
-
-            guard let self, !Task.isCancelled else {
-                return
-            }
-
-            guard let incomingCallID = self.incomingCallID, incomingCallID.callKitID == callID.callKitID else {
-                return
-            }
-
-            reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
-        }
-    }
-
-    private func reportIncomingCallFromForegroundRoom(roomID: String,
-                                                      roomDisplayName: String?,
-                                                      isVideo: Bool,
-                                                      rtcNotificationID: String,
-                                                      remoteCallID: String?) async {
+    private func reportIncomingCallFromSessionGlobal(roomID: String,
+                                                     roomDisplayName: String?,
+                                                     rtcNotificationID: String?,
+                                                     remoteCallID: String?) async {
         guard incomingCallID == nil,
               ongoingCallID == nil,
               !isConsumedDirectCallIdentity(roomID: roomID,
@@ -2330,7 +2216,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                             roomID: roomID,
                             rtcNotificationID: rtcNotificationID,
                             remoteCallID: remoteCallID,
-                            startMode: isVideo ? .video : .audio,
+                            startMode: .audio,
                             startedAt: nowDate)
 
         incomingCallID = callID
@@ -2340,15 +2226,15 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                         remoteCallID: callID.remoteCallID)
 
         let update = CXCallUpdate()
-        update.hasVideo = isVideo
+        update.hasVideo = false
         update.localizedCallerName = roomDisplayName
         update.remoteHandle = .init(type: .generic, value: "salemx-call")
 
-        MXLog.info("Element Call lifecycle diagnostics: foreground_current_room_incoming=true start_mode=\(callID.startMode)")
+        MXLog.info("Element Call lifecycle diagnostics: session_global_incoming=true start_mode=\(callID.startMode)")
 
         callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
             if let error {
-                MXLog.error("Foreground current-room incoming call reporting failed: \(error)")
+                MXLog.error("Session-global incoming call reporting failed: \(error)")
                 self?.clearIncomingCallState()
                 return
             }

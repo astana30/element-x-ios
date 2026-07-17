@@ -619,6 +619,7 @@ final class ElementCallServiceTests {
         roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
         roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
         clientProxy.roomSummaryProvider = roomSummaryProvider
+        clientProxy.staticRoomSummaryProvider = roomSummaryProvider
         service.setClientProxy(clientProxy)
 
         let room = JoinedRoomProxyMock(.init(id: roomID,
@@ -3051,6 +3052,7 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
         roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
         clientProxy.roomSummaryProvider = roomSummaryProvider
+        clientProxy.staticRoomSummaryProvider = roomSummaryProvider
         service.setClientProxy(clientProxy)
 
         roomSummaries.send([
@@ -3076,39 +3078,36 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         service.setClientProxy(clientProxy)
         service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
 
-        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call")
+        handleSessionGlobalCall(roomID: roomID, deduplicationID: "redacted-current-call")
 
         #expect(await waitForIncomingCallReports(count: 1) == false)
     }
 
     @Test
-    func terminatedCallSuppressionDoesNotBlockFreshIncomingFallback() async {
+    func liveInviteFromChatListReportsCallKitOnce() async {
         let roomID = "redacted-room"
         let remoteUserID = "redacted-remote"
-        let roomSummaryProvider = RoomSummaryProviderMock()
-        let roomSummaries = CurrentValueSubject<[RoomSummary], Never>([])
-        roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
-        roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
-        clientProxy.roomSummaryProvider = roomSummaryProvider
+        let roomSummaries = configureRoomSummaryProvider()
         configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
         service.setClientProxy(clientProxy)
-
-        await service.requestCallTermination(roomID: roomID)
 
         callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
             completion(nil)
         }
 
-        roomSummaries.send([
-            makeRoomSummary(id: roomID,
-                            isDirect: true,
-                            hasOngoingCall: true,
-                            participants: [remoteUserID],
-                            lastCallEvent: .init(state: .incoming,
-                                                 intent: .audio,
-                                                 callID: "redacted-fresh-session"))
-        ])
+        let incomingSummary = makeRoomSummary(id: roomID,
+                                              isDirect: true,
+                                              hasOngoingCall: true,
+                                              participants: [remoteUserID],
+                                              lastCallEvent: .init(state: .incoming,
+                                                                   intent: .audio,
+                                                                   callID: "redacted-session-a"),
+                                              lastMessageDate: currentDate.addingTimeInterval(1))
+        roomSummaries.send([incomingSummary])
         #expect(await waitForIncomingCallReports(count: 1))
+        roomSummaries.send([incomingSummary])
+        #expect(await waitForIncomingCallReports(count: 2) == false)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionReceivedArguments?.update.hasVideo == false)
     }
 
@@ -3120,6 +3119,7 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
         roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
         clientProxy.roomSummaryProvider = roomSummaryProvider
+        clientProxy.staticRoomSummaryProvider = roomSummaryProvider
         service.setClientProxy(clientProxy)
 
         await service.requestCallTermination(roomID: roomID)
@@ -3145,6 +3145,7 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
         roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
         clientProxy.roomSummaryProvider = roomSummaryProvider
+        clientProxy.staticRoomSummaryProvider = roomSummaryProvider
         configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
         service.setClientProxy(clientProxy)
 
@@ -3173,52 +3174,60 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @Test
-    func foregroundCurrentRoomCallEventReportsIncomingPromptly() async {
+    func liveInviteWithoutOpenRoomReportsCallKitOnce() async {
         let roomID = "redacted-room"
         let remoteUserID = "redacted-remote"
         configureRoomSummaryProvider()
-        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
         service.setClientProxy(clientProxy)
-        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
 
         callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
             completion(nil)
         }
 
-        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-a",
+                                deduplicationID: "redacted-delivery-a")
 
         #expect(await waitForIncomingCallReports(count: 1))
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-a",
+                                deduplicationID: "redacted-delivery-a")
+        #expect(await waitForIncomingCallReports(count: 2) == false)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionReceivedArguments?.update.hasVideo == false)
     }
 
     @Test
-    func foregroundCurrentRoomNewIdentityAfterTerminalReportsAgain() async {
+    func newIdentityInSameRoomReportsNewCallKit() async {
         let roomID = "redacted-room"
         let remoteUserID = "redacted-remote"
         configureRoomSummaryProvider()
-        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
         service.setClientProxy(clientProxy)
-        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
 
         callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
             completion(nil)
         }
 
-        handleForegroundCall(roomID: roomID,
-                             callID: "redacted-session-a",
-                             deduplicationID: "redacted-current-call-a")
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-a",
+                                deduplicationID: "redacted-current-call-a")
         #expect(await waitForIncomingCallReports(count: 1))
 
         await service.declineIncomingCall()
 
-        service.stopObservingForegroundRoom(roomID: roomID)
-        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
-
-        handleForegroundCall(roomID: roomID,
-                             callID: "redacted-session-b",
-                             deduplicationID: "redacted-current-call-b")
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-b",
+                                deduplicationID: "redacted-delivery-b")
 
         #expect(await waitForIncomingCallReports(count: 2))
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-b",
+                                deduplicationID: "redacted-delivery-b")
+        #expect(await waitForIncomingCallReports(count: 3) == false)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 2)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionReceivedArguments?.update.hasVideo == false)
     }
 
     @Test
@@ -3229,32 +3238,38 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         service.setClientProxy(clientProxy)
         service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
 
-        handleForegroundCall(roomID: roomID,
-                             state: .ended,
-                             deduplicationID: "redacted-terminal-call")
+        handleSessionGlobalCall(roomID: roomID,
+                                state: .ended,
+                                deduplicationID: "redacted-terminal-call")
 
         #expect(await waitForIncomingCallReports(count: 1) == false)
     }
 
     @Test
-    func foregroundCurrentRoomActiveCallGuardBlocksConcurrentIncoming() async {
+    func openingRoomAfterReportedCallDoesNotDuplicateCallKit() async {
         let roomID = "redacted-room"
         let remoteUserID = "redacted-remote"
         configureRoomSummaryProvider()
-        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [remoteUserID])
+        let room = configureJoinedRoomMock(roomID: roomID,
+                                           activeParticipants: [remoteUserID],
+                                           timelineItems: [makeHistoricalCallTimelineItem(eventID: "redacted-stable-event",
+                                                                                          uniqueID: "redacted-room-timeline",
+                                                                                          callID: "redacted-session-a")])
         service.setClientProxy(clientProxy)
-        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
 
         callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
             completion(nil)
         }
 
-        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-a",
+                                deduplicationID: "redacted-delivery-a")
         #expect(await waitForIncomingCallReports(count: 1))
 
-        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-b")
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
 
         #expect(await waitForIncomingCallReports(count: 2) == false)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
     }
 
     @Test
@@ -3272,7 +3287,7 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
             completion(nil)
         }
 
-        handleForegroundCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
+        handleSessionGlobalCall(roomID: roomID, deduplicationID: "redacted-current-call-a")
 
         #expect(await waitForIncomingCallReports(count: 1))
     }
@@ -3290,9 +3305,9 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
             completion(nil)
         }
 
-        handleForegroundCall(roomID: roomID,
-                             callID: "redacted-session-a",
-                             deduplicationID: "redacted-current-call-a")
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-a",
+                                deduplicationID: "redacted-current-call-a")
         #expect(await waitForIncomingCallReports(count: 1))
 
         await service.declineIncomingCall()
@@ -3300,24 +3315,74 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         service.stopObservingForegroundRoom(roomID: roomID)
         service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
 
-        handleForegroundCall(roomID: roomID,
-                             callID: "redacted-session-a",
-                             deduplicationID: "redacted-current-call-a")
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-a",
+                                deduplicationID: "redacted-current-call-a")
 
         #expect(await waitForIncomingCallReports(count: 2) == false)
     }
 
     @Test
-    func foregroundCurrentRoomObservationDoesNotSubscribeTimelineAgain() {
+    func roomReopenDoesNotReplayTerminatedHistoricalCall() async {
         let roomID = "redacted-room"
-        let room = configureJoinedRoomMock(roomID: roomID, activeParticipants: [])
+        let remoteUserID = "redacted-remote"
+        configureRoomSummaryProvider()
+        let room = configureJoinedRoomMock(roomID: roomID,
+                                           activeParticipants: [remoteUserID],
+                                           timelineItems: [makeHistoricalCallTimelineItem(eventID: "redacted-stable-event",
+                                                                                          uniqueID: "redacted-first-timeline",
+                                                                                          callID: "redacted-session-a")])
+        service.setClientProxy(clientProxy)
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-a",
+                                deduplicationID: "redacted-delivery-a")
+        #expect(await waitForIncomingCallReports(count: 1))
+
+        await service.declineIncomingCall()
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+
+        service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
+        service.stopObservingForegroundRoom(roomID: roomID)
+
+        let reopenedRoom = configureJoinedRoomMock(roomID: roomID,
+                                                   activeParticipants: [remoteUserID],
+                                                   timelineItems: [makeHistoricalCallTimelineItem(eventID: "redacted-stable-event",
+                                                                                                  uniqueID: "redacted-reopened-timeline",
+                                                                                                  callID: "redacted-session-a")])
+        service.observeForegroundRoom(roomProxy: reopenedRoom, roomDisplayName: "Room")
+        handleSessionGlobalCall(roomID: roomID,
+                                callID: "redacted-session-a",
+                                deduplicationID: "redacted-delivery-a")
+
+        #expect(await waitForIncomingCallReports(count: 2) == false)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+    }
+
+    @Test
+    func historicalTimelineCallStartDoesNotReportCallKit() async {
+        let roomID = "redacted-room"
+        configureRoomSummaryProvider()
+        let room = configureJoinedRoomMock(roomID: roomID,
+                                           activeParticipants: ["redacted-remote"],
+                                           timelineItems: [makeHistoricalCallTimelineItem(eventID: "redacted-historical-event",
+                                                                                          uniqueID: "redacted-historical-timeline",
+                                                                                          callID: "redacted-historical-session")])
         guard let timeline = room.timeline as? TimelineProxyMock else {
             Issue.record("Expected timeline mock")
             return
         }
 
+        service.setClientProxy(clientProxy)
         service.observeForegroundRoom(roomProxy: room, roomDisplayName: "Room")
 
+        #expect(await waitForIncomingCallReports(count: 1) == false)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 0)
         #expect(timeline.subscribeForUpdatesCallsCount == 0)
     }
 
@@ -3333,11 +3398,11 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         return false
     }
 
-    private func handleForegroundCall(roomID: String,
-                                      state: RoomCallEvent.State = .incoming,
-                                      callID: String? = nil,
-                                      deduplicationID: String) {
-        service.handleForegroundCurrentRoomCallEvent(.init(roomID: roomID,
+    private func handleSessionGlobalCall(roomID: String,
+                                         state: RoomCallEvent.State = .incoming,
+                                         callID: String? = nil,
+                                         deduplicationID: String) {
+        service.handleSessionGlobalIncomingCallEvent(.init(roomID: roomID,
                                                            roomDisplayName: "Room",
                                                            isDirect: true,
                                                            isOwnEvent: false,
@@ -3347,15 +3412,21 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
                                                            deduplicationID: deduplicationID))
     }
 
-    private func configureRoomSummaryProvider() {
+    @discardableResult
+    private func configureRoomSummaryProvider() -> CurrentValueSubject<[RoomSummary], Never> {
         let roomSummaryProvider = RoomSummaryProviderMock()
+        let roomSummaries = CurrentValueSubject<[RoomSummary], Never>([])
         roomSummaryProvider.statePublisher = CurrentValueSubject<RoomSummaryProviderState, Never>(.loaded(totalNumberOfRooms: 1)).asCurrentValuePublisher()
-        roomSummaryProvider.roomListPublisher = CurrentValueSubject<[RoomSummary], Never>([]).asCurrentValuePublisher()
+        roomSummaryProvider.roomListPublisher = roomSummaries.asCurrentValuePublisher()
         clientProxy.roomSummaryProvider = roomSummaryProvider
+        clientProxy.staticRoomSummaryProvider = roomSummaryProvider
+        return roomSummaries
     }
 
     @discardableResult
-    private func configureJoinedRoomMock(roomID: String, activeParticipants: [String]) -> JoinedRoomProxyMock {
+    private func configureJoinedRoomMock(roomID: String,
+                                         activeParticipants: [String],
+                                         timelineItems: [TimelineItemProxy] = []) -> JoinedRoomProxyMock {
         let room = JoinedRoomProxyMock(.init(id: roomID,
                                              name: "Room",
                                              isDirect: true,
@@ -3370,8 +3441,8 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
 
         if let timelineProxy = room.timeline as? TimelineProxyMock,
            let timelineItemProvider = timelineProxy.timelineItemProvider as? TimelineItemProviderMock {
-            timelineItemProvider.itemProxies = []
-            timelineItemProvider.updatePublisher = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>(([], .initial)).eraseToAnyPublisher()
+            timelineItemProvider.itemProxies = timelineItems
+            timelineItemProvider.updatePublisher = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>((timelineItems, .initial)).eraseToAnyPublisher()
             timelineItemProvider.paginationState = .initial
             timelineItemProvider.kind = .live
         }
@@ -3381,6 +3452,22 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         }
 
         return room
+    }
+
+    private func makeHistoricalCallTimelineItem(eventID: String,
+                                                uniqueID: String,
+                                                callID: String? = nil) -> TimelineItemProxy {
+        let lazyProvider = LazyTimelineItemProviderSDKMock()
+        let originalJSON = callID.map { #"{"content":{"call_id":"\#($0)"}}"# }
+        lazyProvider.debugInfoReturnValue = .init(model: "call event",
+                                                  originalJson: originalJSON,
+                                                  latestEditJson: nil)
+        let item = EventTimelineItem(configuration: .init(eventID: eventID,
+                                                          sender: "redacted-remote",
+                                                          isOwn: false,
+                                                          content: .callInvite,
+                                                          lazyProvider: lazyProvider))
+        return .event(.init(item: item, uniqueID: .init(uniqueID)))
     }
 
     private func makeRoomInfo(id: String, activeParticipants: [String]) -> RoomInfoProxyProtocol {
@@ -3411,7 +3498,8 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
                                  isDirect: Bool,
                                  hasOngoingCall: Bool,
                                  participants: [String],
-                                 lastCallEvent: RoomCallEvent? = nil) -> RoomSummary {
+                                 lastCallEvent: RoomCallEvent? = nil,
+                                 lastMessageDate: Date = .mock) -> RoomSummary {
         RoomSummary(room: RoomSDKMock(),
                     id: id,
                     joinRequestType: nil,
@@ -3423,7 +3511,7 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
                     activeMembersCount: 2,
                     lastCallEvent: lastCallEvent,
                     lastMessage: nil,
-                    lastMessageDate: .mock,
+                    lastMessageDate: lastMessageDate,
                     lastMessageState: nil,
                     unreadMessagesCount: 0,
                     unreadMentionsCount: 0,
