@@ -4158,6 +4158,23 @@ enum DirectCallDiagnosticTokenReason: String, Codable, Equatable, CustomStringCo
     }
 }
 
+enum DirectCallDiagnosticRedactor {
+    static func roomFingerprint(_ roomID: String) -> String? {
+        guard !roomID.isEmpty else {
+            return nil
+        }
+
+        // Stable FNV-1a fingerprint, short enough for diagnostics and never reversible in logs.
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for byte in roomID.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01B3
+        }
+
+        return String(format: "%016llx", hash)
+    }
+}
+
 #if DEBUG
 enum DirectCallDiagnosticSignalEvent: String, Codable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     case invite
@@ -4482,23 +4499,6 @@ enum DirectCallDiagnosticTimelineDiffKind: String, Codable, Equatable, CustomStr
 
     var debugDescription: String {
         description
-    }
-}
-
-enum DirectCallDiagnosticRedactor {
-    static func roomFingerprint(_ roomID: String) -> String? {
-        guard !roomID.isEmpty else {
-            return nil
-        }
-
-        // Stable FNV-1a fingerprint, short enough for diagnostics and never reversible in logs.
-        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
-        for byte in roomID.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 0x0000_0100_0000_01B3
-        }
-
-        return String(format: "%016llx", hash)
     }
 }
 
