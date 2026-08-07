@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from base64 import b64decode
+from binascii import Error as BinasciiError
 from dataclasses import dataclass
 from enum import Enum
 from os import environ
@@ -25,6 +27,9 @@ LEGACY_NATIVE_AUDIO_ELIGIBILITY_ENABLED_ENV = "SALEMXNATIVE_AUDIO_ELIGIBILITY_EN
 NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV = "SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS"
 NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV = "SALEMX_NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS"
 FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV = "SALEMX_FOREGROUND_SIGNALING_DEV_INVITE_ENABLED"
+DIRECT_CALL_PENDING_STORE_ENABLED_ENV = "SALEMX_DIRECT_CALL_PENDING_STORE_ENABLED"
+DIRECT_CALL_DATABASE_DSN_ENV = "SALEMX_DIRECT_CALL_DATABASE_DSN"
+DIRECT_CALL_STORE_MASTER_KEY_B64_ENV = "SALEMX_DIRECT_CALL_STORE_MASTER_KEY_B64"
 
 DEFAULT_SERVICE_MODE = "staging"
 DEFAULT_ALLOCATION_STORE = "memory"
@@ -126,6 +131,17 @@ class ServicePreflightError(RuntimeError):
         super().__init__(f"Call service preflight failed: {readiness.reason}")
 
 
+class DirectCallStoreConfigurationError(RuntimeError):
+    """Raised without including database or key material in the error."""
+
+
+@dataclass(frozen=True)
+class DirectCallStoreSettings:
+    enabled: bool = False
+    database_dsn: str | None = None
+    master_key: bytes | None = None
+
+
 @dataclass(frozen=True)
 class ServiceConfig:
     synapse_base_url: str
@@ -145,10 +161,21 @@ class ServiceConfig:
     native_audio_eligibility_enabled: bool = False
     native_audio_eligibility_allowed_users: tuple[str, ...] = ()
     native_audio_eligibility_allowed_homeservers: tuple[str, ...] = ()
+    direct_call_pending_store_enabled: bool = False
+    direct_call_database_dsn: str | None = None
+    direct_call_store_master_key: bytes | None = None
+
+    def __post_init__(self) -> None:
+        _validate_direct_call_store_values(
+            self.direct_call_pending_store_enabled,
+            self.direct_call_database_dsn,
+            self.direct_call_store_master_key,
+        )
 
     @classmethod
     def from_env(cls) -> "ServiceConfig":
         validate_service_preflight(environ)
+        direct_call_store_settings = direct_call_store_settings_from_env(environ)
         return cls(
             synapse_base_url=_required_env("SYNAPSE_BASE_URL"),
             synapse_admin_token=_required_env("SYNAPSE_ADMIN_TOKEN"),
@@ -167,7 +194,24 @@ class ServiceConfig:
             native_audio_eligibility_enabled=_native_audio_eligibility_enabled(environ),
             native_audio_eligibility_allowed_users=_csv_env(NATIVE_AUDIO_ELIGIBILITY_ALLOWED_USERS_ENV),
             native_audio_eligibility_allowed_homeservers=_csv_env(NATIVE_AUDIO_ELIGIBILITY_ALLOWED_HOMESERVERS_ENV),
+            direct_call_pending_store_enabled=direct_call_store_settings.enabled,
+            direct_call_database_dsn=direct_call_store_settings.database_dsn,
+            direct_call_store_master_key=direct_call_store_settings.master_key,
         )
+
+
+def direct_call_store_settings_from_env(env: Mapping[str, str] = environ) -> DirectCallStoreSettings:
+    enabled_value = _env_value(env, DIRECT_CALL_PENDING_STORE_ENABLED_ENV)
+    if enabled_value not in {None, "0", "1"}:
+        raise DirectCallStoreConfigurationError("Invalid direct-call pending store feature value.")
+    if enabled_value != "1":
+        return DirectCallStoreSettings()
+
+    database_dsn = _env_value(env, DIRECT_CALL_DATABASE_DSN_ENV)
+    master_key_b64 = _env_value(env, DIRECT_CALL_STORE_MASTER_KEY_B64_ENV)
+    master_key = _decode_direct_call_store_master_key(master_key_b64)
+    _validate_direct_call_store_values(True, database_dsn, master_key)
+    return DirectCallStoreSettings(enabled=True, database_dsn=database_dsn, master_key=master_key)
 
 
 def service_mode_from_env(env: Mapping[str, str] = environ) -> str:
@@ -265,7 +309,29 @@ def validate_service_preflight(env: Mapping[str, str] = environ) -> ServiceReadi
     readiness = service_readiness_from_env(env)
     if not readiness.ready:
         raise ServicePreflightError(readiness)
+    direct_call_store_settings_from_env(env)
     return readiness
+
+
+def _decode_direct_call_store_master_key(value: str | None) -> bytes | None:
+    if value is None:
+        return None
+    try:
+        return b64decode(value, validate=True)
+    except (BinasciiError, ValueError) as error:
+        raise DirectCallStoreConfigurationError("Invalid direct-call store master key.") from error
+
+
+def _validate_direct_call_store_values(enabled: bool,
+                                       database_dsn: str | None,
+                                       master_key: bytes | None) -> None:
+    if not enabled:
+        return
+    parsed_dsn = urlparse(database_dsn or "")
+    if parsed_dsn.scheme not in {"postgres", "postgresql"} or not parsed_dsn.hostname or parsed_dsn.path in {"", "/"}:
+        raise DirectCallStoreConfigurationError("Invalid direct-call database configuration.")
+    if master_key is None or len(master_key) != 32:
+        raise DirectCallStoreConfigurationError("Invalid direct-call store master key.")
 
 
 def _staging_readiness(mode: str,
