@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime, timezone
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -54,10 +55,48 @@ class PushKitTokenRegistrationRequest:
 
 
 @dataclass(frozen=True)
+class PushKitTokenBinding:
+    environment_class: str
+    user_binding: str = field(repr=False)
+    device_binding: str = field(repr=False)
+    token_record_binding: str = field(repr=False)
+
+    def matches_user(self, user_id: str) -> bool:
+        return hmac.compare_digest(self.user_binding, _record_key(user_id, None, self.environment_class))
+
+    def matches_identity(self, user_id: str, device_id: str | None) -> bool:
+        if device_id is None or not self.matches_user(user_id):
+            return False
+        return hmac.compare_digest(self.device_binding, _record_key(user_id, device_id, self.environment_class))
+
+
+@dataclass(frozen=True)
 class PushKitTokenRecord:
     token: str = field(repr=False)
     environment_class: str
     updated_at: datetime
+    user_binding: str | None = field(default=None, repr=False)
+    device_binding: str | None = field(default=None, repr=False)
+    token_record_binding: str | None = field(default=None, repr=False)
+
+    @property
+    def authoritative_binding(self) -> PushKitTokenBinding | None:
+        if self.user_binding is None or self.device_binding is None or self.token_record_binding is None:
+            return None
+        expected_binding = _token_record_binding(
+            token=self.token,
+            environment_class=self.environment_class,
+            user_binding=self.user_binding,
+            device_binding=self.device_binding,
+        )
+        if not hmac.compare_digest(self.token_record_binding, expected_binding):
+            return None
+        return PushKitTokenBinding(
+            environment_class=self.environment_class,
+            user_binding=self.user_binding,
+            device_binding=self.device_binding,
+            token_record_binding=self.token_record_binding,
+        )
 
 
 class PushKitTokenStoreProtocol(Protocol):
@@ -87,10 +126,20 @@ class InMemoryPushKitTokenStore:
         self._records: dict[str, PushKitTokenRecord] = {}
 
     def store(self, user_id: str, device_id: str | None, request: PushKitTokenRegistrationRequest) -> str:
+        user_binding = _record_key(user_id, None, request.environment_class)
+        device_binding = _record_key(user_id, device_id, request.environment_class) if device_id is not None else None
         record = PushKitTokenRecord(
             token=request.token,
             environment_class=request.environment_class,
             updated_at=datetime.now(timezone.utc),
+            user_binding=user_binding,
+            device_binding=device_binding,
+            token_record_binding=_token_record_binding(
+                token=request.token,
+                environment_class=request.environment_class,
+                user_binding=user_binding,
+                device_binding=device_binding,
+            ) if device_binding is not None else None,
         )
         self._records[_record_key(user_id, device_id, request.environment_class)] = record
         self._records[_record_key(user_id, None, request.environment_class)] = record
@@ -115,10 +164,20 @@ class FilePushKitTokenStore:
 
     def store(self, user_id: str, device_id: str | None, request: PushKitTokenRegistrationRequest) -> str:
         records = self._read_records()
+        user_binding = _record_key(user_id, None, request.environment_class)
+        device_binding = _record_key(user_id, device_id, request.environment_class) if device_id is not None else None
         record = {
             "token": request.token,
             "environment": request.environment_class,
             "updated_at": datetime.now(timezone.utc).isoformat(),
+            "user_binding": user_binding,
+            "device_binding": device_binding,
+            "token_record_binding": _token_record_binding(
+                token=request.token,
+                environment_class=request.environment_class,
+                user_binding=user_binding,
+                device_binding=device_binding,
+            ) if device_binding is not None else None,
         }
         records[_record_key(user_id, device_id, request.environment_class)] = record
         records[_record_key(user_id, None, request.environment_class)] = record
@@ -133,6 +192,9 @@ class FilePushKitTokenStore:
         token = record.get("token")
         stored_environment = record.get("environment")
         updated_at = record.get("updated_at")
+        user_binding = record.get("user_binding")
+        device_binding = record.get("device_binding")
+        token_record_binding = record.get("token_record_binding")
         if not isinstance(token, str) or not isinstance(stored_environment, str) or not isinstance(updated_at, str):
             return None
 
@@ -145,12 +207,15 @@ class FilePushKitTokenStore:
             token=token,
             environment_class=stored_environment,
             updated_at=parsed_updated_at,
+            user_binding=user_binding if isinstance(user_binding, str) else None,
+            device_binding=device_binding if isinstance(device_binding, str) else None,
+            token_record_binding=token_record_binding if isinstance(token_record_binding, str) else None,
         )
 
     def retrieve_latest_for_user(self, user_id: str, environment_class: str) -> PushKitTokenRecord | None:
         return self.retrieve(user_id, None, environment_class)
 
-    def _read_records(self) -> dict[str, dict[str, str]]:
+    def _read_records(self) -> dict[str, dict[str, Any]]:
         if not self._path.exists():
             return {}
         with self._path.open("r", encoding="utf-8") as file:
@@ -239,6 +304,15 @@ class PushKitTokenRegistrationDiagnostics:
 def _record_key(user_id: str, device_id: str | None, environment_class: str) -> str:
     device_component = device_id or "unbound"
     return hashlib.sha256(f"{user_id}\n{device_component}\n{environment_class}".encode("utf-8")).hexdigest()
+
+
+def _token_record_binding(token: str,
+                          environment_class: str,
+                          user_binding: str,
+                          device_binding: str) -> str:
+    return hashlib.sha256(
+        f"{token}\n{environment_class}\n{user_binding}\n{device_binding}".encode("utf-8"),
+    ).hexdigest()
 
 
 def redacted_latest_user_record_key(user_id: str, environment_class: str) -> str:
