@@ -11,6 +11,7 @@ import time
 from dataclasses import replace
 from os import environ
 from typing import Any, Optional
+from uuid import UUID
 
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -67,6 +68,18 @@ from .pushkit_tokens import (
     redacted_latest_user_record_key,
     PushKitTokenStoreProtocol,
 )
+from .production_dispatch_store import (
+    APNsOutcome,
+    DispatchExpiredError,
+    DispatchIdentity,
+    DispatchNotFoundError,
+    DispatchOwnershipError,
+    DispatchState,
+    DispatchTransitionError,
+    MetadataAuthenticationError,
+    PostgresProductionDispatchStore,
+    ProductionDispatchStoreError,
+)
 from .rate_limiting import InMemoryRateLimiter, SharedRateLimiterSkeleton
 from .rate_limiting import RedisRateLimitClient, RedisRateLimiter
 from .room_validation import SynapseRoomValidator
@@ -79,9 +92,11 @@ FOREGROUND_SIGNALING_STREAM_PATH = "/_matrix/client/unstable/kz.salemx.direct_ca
 FOREGROUND_SIGNALING_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite"
 FOREGROUND_SIGNALING_INVITE_PREPARE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite/prepare"
 FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite/send-prepared"
+FOREGROUND_SIGNALING_INVITE_CANCEL_PREPARED_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite/cancel-prepared"
 FOREGROUND_SIGNALING_PENDING_METADATA_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}"
 FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}/sender"
 FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/sender/claim"
+FOREGROUND_SIGNALING_PENDING_METADATA_RECEIVER_CONSUME_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/receiver/consume"
 FOREGROUND_SIGNALING_LIVEKIT_TOKEN_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/livekit/token"
 FOREGROUND_SIGNALING_DEV_INVITE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/invite"
 FOREGROUND_SIGNALING_DEV_INJECT_ACTIVE_PATH = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/dev/inject-active"
@@ -107,6 +122,10 @@ def create_app(config: ServiceConfig | None = None,
                pushkit_token_store: PushKitTokenStoreProtocol | None = None,
                apns_voip_send_service: APNsVoIPSandboxSendService | None = None,
                pending_metadata_store: PendingCallMetadataStoreProtocol | None = None,
+               production_dispatch_store: PostgresProductionDispatchStore | None = None,
+               direct_call_capability_v1_enabled: bool | None = None,
+               direct_call_dispatch_v1_admission_enabled: bool | None = None,
+               direct_call_dispatch_v1_completion_enabled: bool | None = None,
                pending_store_audit_credential: str | None = None,
                strict_startup: bool = True) -> FastAPI:
     service: DirectCallTokenService | None
@@ -179,10 +198,36 @@ def create_app(config: ServiceConfig | None = None,
                 raise RuntimeError(str(error)) from error
 
     app = FastAPI(title="SalemX Direct Call Service", version="0.1.0")
+
+    @app.exception_handler(CallServiceError)
+    async def call_service_error_handler(_: Request, error: CallServiceError) -> JSONResponse:
+        status_code, body = error_response(error)
+        return JSONResponse(status_code=status_code, content=body)
+
+    @app.exception_handler(ProductionDispatchStoreError)
+    async def production_dispatch_store_error_handler(_: Request, error: ProductionDispatchStoreError) -> JSONResponse:
+        status_code, body = error_response(_call_service_error_for_dispatch_store(error))
+        return JSONResponse(status_code=status_code, content=body)
     signaling_service = foreground_signaling_service or ForegroundCallSignalingService()
     token_store = pushkit_token_store or _pushkit_token_store_for_runtime(runtime_config)
     voip_send_service = apns_voip_send_service or APNsVoIPSandboxSendService(APNsVoIPSandboxConfig.from_env())
     pending_store = pending_metadata_store or InMemoryPendingCallMetadataStore()
+    dispatch_store = production_dispatch_store or _production_dispatch_store_for_runtime(runtime_config)
+    capability_v1_enabled = (
+        direct_call_capability_v1_enabled
+        if direct_call_capability_v1_enabled is not None
+        else runtime_config is not None and runtime_config.direct_call_capability_v1_enabled
+    )
+    dispatch_v1_admission_enabled = (
+        direct_call_dispatch_v1_admission_enabled
+        if direct_call_dispatch_v1_admission_enabled is not None
+        else runtime_config is not None and runtime_config.direct_call_dispatch_v1_admission_enabled
+    )
+    dispatch_v1_completion_enabled = (
+        direct_call_dispatch_v1_completion_enabled
+        if direct_call_dispatch_v1_completion_enabled is not None
+        else runtime_config is not None and runtime_config.direct_call_dispatch_v1_completion_enabled
+    )
     root_audit_credential = _pending_store_root_audit_credential(
         pending_store_audit_credential,
         runtime_config,
@@ -271,6 +316,18 @@ def create_app(config: ServiceConfig | None = None,
             registration_request = PushKitTokenRegistrationRequest.from_mapping(payload)
             store_result = token_store.store(authenticated_user.user_id, authenticated_user.device_id, registration_request)
             stored_record = token_store.retrieve(authenticated_user.user_id, authenticated_user.device_id, registration_request.environment_class)
+            if registration_request.protocol_version == 1 and capability_v1_enabled:
+                active_dispatch_store = _require_dispatch_store(dispatch_store)
+                identity = _dispatch_identity_for_record(authenticated_user.user_id, stored_record)
+                active_dispatch_store.register_capability(
+                    identity=identity,
+                    environment=registration_request.environment_class,
+                    protocol_version=1,
+                    supported_intent="audio",
+                    handoff_classification="matrixrtc_element_call",
+                    token_binding_revision=_token_binding_revision(stored_record),
+                    expires_in_seconds=registration_request.capability_expires_in_seconds,
+                )
             retrieval_internal_check = "redacted_match" if stored_record is not None and stored_record.token == registration_request.token else "not_persisted"
             diagnostics = PushKitTokenRegistrationDiagnostics.accepted(
                 registration_request,
@@ -406,6 +463,45 @@ def create_app(config: ServiceConfig | None = None,
             payload: Any = await request.json()
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
+            if payload.get("dispatch_protocol_version") == 1:
+                if not capability_v1_enabled or not dispatch_v1_admission_enabled:
+                    raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+                active_dispatch_store = _require_dispatch_store(dispatch_store)
+                invite_request = ForegroundCallInviteRequest.from_mapping(payload)
+                pending_metadata = pending_metadata_from_invite_payload(payload, authenticated_user)
+                if pending_metadata is None:
+                    raise bad_request(error="Pending metadata is required.")
+                generation = _required_opaque_generation(payload)
+                now_ms = int(time.time() * 1000)
+                expires_in_seconds = _bounded_dispatch_expiry(invite_request.invite.expires_at_ms, now_ms)
+                await service.room_validator.validate_direct_call_room(
+                    authenticated_user,
+                    pending_metadata.sender_view_payload(invite_request.recipient).as_token_request(),
+                )
+                sender_record = _capable_record_for_identity(
+                    authenticated_user.user_id, authenticated_user.device_id, generation, token_store,
+                )
+                receiver_record = _capable_latest_record(invite_request.recipient, token_store)
+                sender_identity = _dispatch_identity_for_record(authenticated_user.user_id, sender_record)
+                receiver_identity = _dispatch_identity_for_record(invite_request.recipient, receiver_record)
+                references = active_dispatch_store.create_dispatch(
+                    sender=sender_identity,
+                    receiver=receiver_identity,
+                    receiver_token_binding_revision=_token_binding_revision(receiver_record),
+                    metadata={
+                        **pending_metadata.token_request_payload(),
+                        "recipient": invite_request.recipient,
+                        "expires_at_ms": invite_request.invite.expires_at_ms,
+                    },
+                    expires_in_seconds=expires_in_seconds,
+                )
+                return JSONResponse(status_code=200, content={
+                    "dispatch_protocol_version": 1,
+                    "dispatch_id": str(references.dispatch_id),
+                    "sender_reference": references.sender_reference,
+                    "receiver_reference": references.receiver_reference,
+                    "state": DispatchState.PREPARED.value,
+                })
             invite_request = ForegroundCallInviteRequest.from_mapping(payload)
             pending_metadata = pending_metadata_from_invite_payload(payload, authenticated_user)
             if pending_metadata is None:
@@ -474,6 +570,84 @@ def create_app(config: ServiceConfig | None = None,
             payload: Any = await request.json()
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
+            if payload.get("dispatch_protocol_version") == 1:
+                if not dispatch_v1_completion_enabled:
+                    raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+                active_dispatch_store = _require_dispatch_store(dispatch_store)
+                dispatch_id, sender_reference, receiver_reference = _exact_dispatch_request(payload, require_receiver_reference=True)
+                generation = _required_opaque_generation(payload)
+                sender_record = _capable_record_for_identity(
+                    authenticated_user.user_id, authenticated_user.device_id, generation, token_store,
+                )
+                sender_identity = _dispatch_identity_for_record(authenticated_user.user_id, sender_record)
+                inspected = active_dispatch_store.inspect_exact(
+                    dispatch_id, sender_reference, receiver_reference, sender_identity, None,
+                )
+                if inspected.snapshot.state == DispatchState.SENT:
+                    return JSONResponse(status_code=200, content=_stored_dispatch_success())
+                recipient = inspected.metadata.get("recipient")
+                if not isinstance(recipient, str) or not recipient:
+                    raise CallServiceError(status_code=409, errcode="M_DIRECT_CALL_METADATA_INVALID", error="Prepared metadata is invalid.")
+                receiver_record = _capable_latest_record(recipient, token_store)
+                receiver_revision = _token_binding_revision(receiver_record)
+                admission = active_dispatch_store.admit_send_exact(
+                    dispatch_id,
+                    sender_reference,
+                    receiver_reference,
+                    sender_identity,
+                    receiver_revision,
+                )
+                if admission.already_sent:
+                    return JSONResponse(status_code=200, content=_stored_dispatch_success())
+                try:
+                    current_receiver_record = _capable_latest_record(recipient, token_store)
+                    if _token_binding_revision(current_receiver_record) != receiver_revision:
+                        active_dispatch_store.complete_send_exact(
+                            dispatch_id, sender_reference, sender_identity, APNsOutcome.REJECTED,
+                        )
+                        raise CallServiceError(status_code=409,
+                                               errcode="M_DIRECT_CALL_RECEIVER_BINDING_UNAVAILABLE",
+                                               error="Registered receiver binding changed.")
+                    metadata = PendingCallMetadataRequest.from_mapping(dict(admission.metadata), authenticated_user)
+                    expires_at_ms = admission.metadata.get("expires_at_ms")
+                    if not isinstance(expires_at_ms, int) or isinstance(expires_at_ms, bool):
+                        raise ValueError("Invalid encrypted metadata expiry.")
+                    body = _prepared_invite_apns_diagnostics(
+                        recipient=recipient,
+                        token_record=current_receiver_record,
+                        voip_send_service=voip_send_service,
+                        pending_metadata_reference=receiver_reference,
+                        metadata=metadata,
+                        expires_at_ms=expires_at_ms,
+                    )
+                except CallServiceError as error:
+                    if error.errcode == "M_DIRECT_CALL_RECEIVER_BINDING_UNAVAILABLE":
+                        raise
+                    active_dispatch_store.complete_send_exact(
+                        dispatch_id, sender_reference, sender_identity, APNsOutcome.UNKNOWN,
+                    )
+                    raise CallServiceError(status_code=502,
+                                           errcode="M_DIRECT_CALL_APNS_DELIVERY_UNKNOWN",
+                                           error="APNs delivery outcome is unknown.") from error
+                except Exception as error:
+                    active_dispatch_store.complete_send_exact(
+                        dispatch_id, sender_reference, sender_identity, APNsOutcome.UNKNOWN,
+                    )
+                    raise CallServiceError(status_code=502,
+                                           errcode="M_DIRECT_CALL_APNS_DELIVERY_UNKNOWN",
+                                           error="APNs delivery outcome is unknown.") from error
+                apns_accepted = body.get("APNs_sent") is True
+                active_dispatch_store.complete_send_exact(
+                    dispatch_id,
+                    sender_reference,
+                    sender_identity,
+                    APNsOutcome.ACCEPTED if apns_accepted else APNsOutcome.REJECTED,
+                )
+                if not apns_accepted:
+                    raise CallServiceError(status_code=502,
+                                           errcode="M_DIRECT_CALL_APNS_DELIVERY_FAILED",
+                                           error="APNs delivery failed.")
+                return JSONResponse(status_code=200, content=_stored_dispatch_success())
             version = payload.get("version")
             if version != 1:
                 raise bad_request(errcode="M_UNRECOGNIZED", error="Unsupported prepared invite send version.")
@@ -738,6 +912,108 @@ def create_app(config: ServiceConfig | None = None,
         except CallServiceError as error:
             status_code, body = error_response(error)
             return JSONResponse(status_code=status_code, content=body)
+
+    @app.post(FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH)
+    async def foreground_signaling_pending_metadata_sender_claim_v1(
+        request: Request,
+        authorization: Optional[str] = Header(default=None),
+    ) -> JSONResponse:
+        if service is None:
+            raise CallServiceError(status_code=503,
+                                   errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                   error="Direct-call service is not ready.")
+        if not dispatch_v1_admission_enabled:
+            raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+        authenticated_user = await service.auth_validator.validate_bearer_token(
+            bearer_token_from_authorization(authorization),
+        )
+        payload: Any = await request.json()
+        if not isinstance(payload, dict) or payload.get("dispatch_protocol_version") != 1:
+            raise bad_request(error="Invalid direct-call dispatch claim.")
+        dispatch_id, sender_reference, _ = _exact_dispatch_request(payload, require_receiver_reference=False)
+        generation = _required_opaque_generation(payload)
+        sender_record = _capable_record_for_identity(
+            authenticated_user.user_id, authenticated_user.device_id, generation, token_store,
+        )
+        snapshot = _require_dispatch_store(dispatch_store).claim_exact(
+            dispatch_id,
+            sender_reference,
+            _dispatch_identity_for_record(authenticated_user.user_id, sender_record),
+        )
+        return JSONResponse(status_code=200, content={
+            "dispatch_protocol_version": 1,
+            "state": snapshot.state.value,
+            "claimed": True,
+        })
+
+    @app.post(FOREGROUND_SIGNALING_INVITE_CANCEL_PREPARED_PATH)
+    async def foreground_signaling_invite_cancel_prepared_v1(
+        request: Request,
+        authorization: Optional[str] = Header(default=None),
+    ) -> JSONResponse:
+        if service is None:
+            raise CallServiceError(status_code=503,
+                                   errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                   error="Direct-call service is not ready.")
+        if not dispatch_v1_admission_enabled:
+            raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+        authenticated_user = await service.auth_validator.validate_bearer_token(
+            bearer_token_from_authorization(authorization),
+        )
+        payload: Any = await request.json()
+        if not isinstance(payload, dict) or payload.get("dispatch_protocol_version") != 1:
+            raise bad_request(error="Invalid direct-call dispatch cancellation.")
+        dispatch_id, sender_reference, _ = _exact_dispatch_request(payload, require_receiver_reference=False)
+        generation = _required_opaque_generation(payload)
+        sender_record = _capable_record_for_identity(
+            authenticated_user.user_id, authenticated_user.device_id, generation, token_store,
+        )
+        snapshot = _require_dispatch_store(dispatch_store).cancel_exact(
+            dispatch_id,
+            sender_reference,
+            _dispatch_identity_for_record(authenticated_user.user_id, sender_record),
+        )
+        return JSONResponse(status_code=200, content={
+            "dispatch_protocol_version": 1,
+            "state": snapshot.state.value,
+            "cancelled": True,
+        })
+
+    @app.post(FOREGROUND_SIGNALING_PENDING_METADATA_RECEIVER_CONSUME_PATH)
+    async def foreground_signaling_pending_metadata_receiver_consume_v1(
+        request: Request,
+        authorization: Optional[str] = Header(default=None),
+    ) -> JSONResponse:
+        if service is None:
+            raise CallServiceError(status_code=503,
+                                   errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
+                                   error="Direct-call service is not ready.")
+        if not dispatch_v1_completion_enabled:
+            raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+        authenticated_user = await service.auth_validator.validate_bearer_token(
+            bearer_token_from_authorization(authorization),
+        )
+        payload: Any = await request.json()
+        if not isinstance(payload, dict) or payload.get("dispatch_protocol_version") != 1:
+            raise bad_request(error="Invalid direct-call metadata consumption.")
+        dispatch_id = _required_dispatch_id(payload)
+        receiver_reference = _required_opaque_reference(payload, "receiver_reference")
+        generation = _required_opaque_generation(payload)
+        receiver_record = _capable_record_for_identity(
+            authenticated_user.user_id, authenticated_user.device_id, generation, token_store,
+        )
+        consumed = _require_dispatch_store(dispatch_store).consume_exact(
+            dispatch_id,
+            receiver_reference,
+            _dispatch_identity_for_record(authenticated_user.user_id, receiver_record),
+        )
+        metadata = consumed.metadata
+        response_keys = ("version", "call_id", "room_id", "peer_user_id", "direction", "intent", "expires_at_ms")
+        return JSONResponse(status_code=200, content={
+            "dispatch_protocol_version": 1,
+            "state": consumed.snapshot.state.value,
+            **{key: metadata[key] for key in response_keys if key in metadata},
+        })
 
     @app.get(FOREGROUND_SIGNALING_PENDING_METADATA_PATH)
     async def foreground_signaling_pending_metadata(metadata_reference: str,
@@ -1510,6 +1786,129 @@ def _pending_store_root_audit_credential(
         PENDING_STORE_AUDIT_CREDENTIAL_CONTEXT,
         hashlib.sha256,
     ).hexdigest()
+
+
+def _production_dispatch_store_for_runtime(config: ServiceConfig | None) -> PostgresProductionDispatchStore | None:
+    if config is None or not config.direct_call_pending_store_enabled:
+        return None
+    if config.direct_call_database_dsn is None or config.direct_call_store_master_key is None:
+        return None
+    return PostgresProductionDispatchStore(config.direct_call_database_dsn, config.direct_call_store_master_key)
+
+
+def _require_dispatch_store(store: PostgresProductionDispatchStore | None) -> PostgresProductionDispatchStore:
+    if store is None:
+        raise CallServiceError(status_code=503,
+                               errcode="M_DIRECT_CALL_DISPATCH_STORE_UNAVAILABLE",
+                               error="Direct-call dispatch storage is unavailable.")
+    return store
+
+
+def _token_binding_revision(record: PushKitTokenRecord | None) -> int:
+    binding = record.authoritative_binding if record is not None else None
+    if binding is None:
+        raise CallServiceError(status_code=409,
+                               errcode="M_DIRECT_CALL_RECEIVER_BINDING_UNAVAILABLE",
+                               error="Registered device binding is unavailable.")
+    return binding.token_binding_revision
+
+
+def _dispatch_identity_for_record(user_id: str, record: PushKitTokenRecord | None) -> DispatchIdentity:
+    binding = record.authoritative_binding if record is not None else None
+    generation = record.app_session_generation if record is not None else None
+    if binding is None or generation is None:
+        raise CallServiceError(status_code=409,
+                               errcode="M_DIRECT_CALL_CAPABILITY_UNAVAILABLE",
+                               error="Direct-call capability is unavailable.")
+    return DispatchIdentity(user_id=user_id, device_id=binding.device_binding, session_generation=generation)
+
+
+def _capable_record_for_identity(user_id: str,
+                                 device_id: str | None,
+                                 generation: str,
+                                 token_store: PushKitTokenStoreProtocol) -> PushKitTokenRecord:
+    if device_id is None:
+        raise CallServiceError(status_code=403, errcode="M_FORBIDDEN", error="A device-bound session is required.")
+    for environment in ("production", "development"):
+        record = token_store.retrieve(user_id, device_id, environment)
+        if record is not None and record.supports_direct_audio_v1() and record.app_session_generation == generation:
+            return record
+    raise CallServiceError(status_code=403,
+                           errcode="M_DIRECT_CALL_CAPABILITY_MISMATCH",
+                           error="Direct-call capability does not match the authenticated session.")
+
+
+def _capable_latest_record(user_id: str, token_store: PushKitTokenStoreProtocol) -> PushKitTokenRecord:
+    record = _preferred_receiver_token_record(user_id, token_store)
+    if record is None or not record.supports_direct_audio_v1():
+        raise CallServiceError(status_code=409,
+                               errcode="M_DIRECT_CALL_CAPABILITY_UNAVAILABLE",
+                               error="The receiver does not support direct-call protocol v1.")
+    return record
+
+
+def _required_opaque_generation(payload: dict[str, Any]) -> str:
+    value = payload.get("app_session_generation")
+    if not isinstance(value, str) or not value or len(value) > 256:
+        raise bad_request(error="Invalid app session generation.")
+    return value
+
+
+def _required_opaque_reference(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value or len(value) > 512:
+        raise bad_request(error="Invalid direct-call dispatch reference.")
+    return value
+
+
+def _required_dispatch_id(payload: dict[str, Any]) -> UUID:
+    value = payload.get("dispatch_id")
+    if not isinstance(value, str):
+        raise bad_request(error="Invalid direct-call dispatch identifier.")
+    try:
+        return UUID(value)
+    except ValueError as error:
+        raise bad_request(error="Invalid direct-call dispatch identifier.") from error
+
+
+def _exact_dispatch_request(payload: dict[str, Any], require_receiver_reference: bool) -> tuple[UUID, str, str]:
+    receiver_reference = _required_opaque_reference(payload, "receiver_reference") if require_receiver_reference else ""
+    return (
+        _required_dispatch_id(payload),
+        _required_opaque_reference(payload, "sender_reference"),
+        receiver_reference,
+    )
+
+
+def _bounded_dispatch_expiry(expires_at_ms: int, now_ms: int) -> int:
+    remaining_ms = expires_at_ms - now_ms
+    if remaining_ms <= 0 or remaining_ms > 120_000:
+        raise bad_request(error="Direct-call dispatch expiry must be between 1 and 120 seconds.")
+    return max(1, (remaining_ms + 999) // 1000)
+
+
+def _stored_dispatch_success() -> dict[str, object]:
+    return {
+        "dispatch_protocol_version": 1,
+        "state": DispatchState.SENT.value,
+        "APNs_sent": True,
+        "APNs_send_count": 1,
+        "raw_identifiers_logged": False,
+    }
+
+
+def _call_service_error_for_dispatch_store(error: ProductionDispatchStoreError) -> CallServiceError:
+    if isinstance(error, DispatchOwnershipError):
+        return CallServiceError(status_code=403, errcode="M_FORBIDDEN", error="Direct-call dispatch ownership mismatch.")
+    if isinstance(error, DispatchNotFoundError):
+        return CallServiceError(status_code=404, errcode="M_NOT_FOUND", error="Direct-call dispatch was not found.")
+    if isinstance(error, DispatchExpiredError):
+        return CallServiceError(status_code=410, errcode="M_DIRECT_CALL_DISPATCH_EXPIRED", error="Direct-call dispatch expired.")
+    if isinstance(error, (DispatchTransitionError, MetadataAuthenticationError)):
+        return CallServiceError(status_code=409, errcode="M_DIRECT_CALL_DISPATCH_CONFLICT", error="Direct-call dispatch state conflict.")
+    return CallServiceError(status_code=503,
+                            errcode="M_DIRECT_CALL_DISPATCH_STORE_UNAVAILABLE",
+                            error="Direct-call dispatch storage is unavailable.")
 
 
 def _redis_client_from_url(redis_url: str) -> object:

@@ -30,6 +30,9 @@ FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV = "SALEMX_FOREGROUND_SIGNALING_DEV_I
 DIRECT_CALL_PENDING_STORE_ENABLED_ENV = "SALEMX_DIRECT_CALL_PENDING_STORE_ENABLED"
 DIRECT_CALL_DATABASE_DSN_ENV = "SALEMX_DIRECT_CALL_DATABASE_DSN"
 DIRECT_CALL_STORE_MASTER_KEY_B64_ENV = "SALEMX_DIRECT_CALL_STORE_MASTER_KEY_B64"
+DIRECT_CALL_CAPABILITY_V1_ENABLED_ENV = "SALEMX_DIRECT_CALL_CAPABILITY_V1_ENABLED"
+DIRECT_CALL_DISPATCH_V1_ADMISSION_ENABLED_ENV = "SALEMX_DIRECT_CALL_DISPATCH_V1_ADMISSION_ENABLED"
+DIRECT_CALL_DISPATCH_V1_COMPLETION_ENABLED_ENV = "SALEMX_DIRECT_CALL_DISPATCH_V1_COMPLETION_ENABLED"
 
 DEFAULT_SERVICE_MODE = "staging"
 DEFAULT_ALLOCATION_STORE = "memory"
@@ -164,6 +167,9 @@ class ServiceConfig:
     direct_call_pending_store_enabled: bool = False
     direct_call_database_dsn: str | None = None
     direct_call_store_master_key: bytes | None = None
+    direct_call_capability_v1_enabled: bool = False
+    direct_call_dispatch_v1_admission_enabled: bool = False
+    direct_call_dispatch_v1_completion_enabled: bool = False
 
     def __post_init__(self) -> None:
         _validate_direct_call_store_values(
@@ -171,6 +177,10 @@ class ServiceConfig:
             self.direct_call_database_dsn,
             self.direct_call_store_master_key,
         )
+        if (self.direct_call_capability_v1_enabled
+                or self.direct_call_dispatch_v1_admission_enabled
+                or self.direct_call_dispatch_v1_completion_enabled) and not self.direct_call_pending_store_enabled:
+            raise DirectCallStoreConfigurationError("Direct-call protocol v1 requires the durable pending store.")
 
     @classmethod
     def from_env(cls) -> "ServiceConfig":
@@ -197,7 +207,21 @@ class ServiceConfig:
             direct_call_pending_store_enabled=direct_call_store_settings.enabled,
             direct_call_database_dsn=direct_call_store_settings.database_dsn,
             direct_call_store_master_key=direct_call_store_settings.master_key,
+            direct_call_capability_v1_enabled=_disabled_by_default_flag(environ, DIRECT_CALL_CAPABILITY_V1_ENABLED_ENV),
+            direct_call_dispatch_v1_admission_enabled=_disabled_by_default_flag(
+                environ, DIRECT_CALL_DISPATCH_V1_ADMISSION_ENABLED_ENV,
+            ),
+            direct_call_dispatch_v1_completion_enabled=_disabled_by_default_flag(
+                environ, DIRECT_CALL_DISPATCH_V1_COMPLETION_ENABLED_ENV,
+            ),
         )
+
+
+def _disabled_by_default_flag(env: Mapping[str, str], name: str) -> bool:
+    value = _env_value(env, name)
+    if value not in {None, "0", "1"}:
+        raise DirectCallStoreConfigurationError("Invalid direct-call protocol feature value.")
+    return value == "1"
 
 
 def direct_call_store_settings_from_env(env: Mapping[str, str] = environ) -> DirectCallStoreSettings:

@@ -91,6 +91,13 @@ class ConsumedDispatch:
 
 
 @dataclass(frozen=True)
+class SendAdmission:
+    snapshot: DispatchSnapshot
+    metadata: Mapping[str, object]
+    already_sent: bool
+
+
+@dataclass(frozen=True)
 class CapabilitySnapshot:
     capability_id: UUID
     protocol_version: int
@@ -238,6 +245,10 @@ class PostgresProductionDispatchStore:
                 return _dispatch_snapshot(row)
             raise DispatchTransitionError("The dispatch cannot be claimed from its current state.")
 
+    def claim_exact(self, dispatch_id: UUID, sender_reference: str, sender: DispatchIdentity) -> DispatchSnapshot:
+        self._validate_exact_sender(dispatch_id, sender_reference, sender)
+        return self.claim(sender_reference, sender)
+
     def admit_send(self, sender_reference: str, sender: DispatchIdentity) -> DispatchSnapshot:
         reference_digest = self._crypto.digest("sender-reference", sender_reference)
         owner_digests = self._identity_digests("sender", sender)
@@ -251,6 +262,46 @@ class PostgresProductionDispatchStore:
                 self._expire_locked(cursor, row)
                 raise DispatchExpiredError("The dispatch has expired.")
             raise DispatchTransitionError("A send attempt has already been admitted or is not claimable.")
+
+    def inspect_exact(self,
+                      dispatch_id: UUID,
+                      sender_reference: str,
+                      receiver_reference: str,
+                      sender: DispatchIdentity,
+                      receiver_token_binding_revision: int | None) -> ConsumedDispatch:
+        reference_digest = self._crypto.digest("sender-reference", sender_reference)
+        receiver_reference_digest = self._crypto.digest("receiver-reference", receiver_reference)
+        owner_digests = self._identity_digests("sender", sender)
+        with self._transaction() as cursor:
+            row = self._load_sender(cursor, reference_digest)
+            self._validate_sender(row, owner_digests)
+            self._validate_exact_row(row, dispatch_id, receiver_reference_digest, receiver_token_binding_revision)
+            if _row_bool(row, "is_expired"):
+                self._expire_locked(cursor, row)
+                raise DispatchExpiredError("The dispatch has expired.")
+            return ConsumedDispatch(_dispatch_snapshot(row), self._decrypt_row(row))
+
+    def admit_send_exact(self,
+                         dispatch_id: UUID,
+                         sender_reference: str,
+                         receiver_reference: str,
+                         sender: DispatchIdentity,
+                         receiver_token_binding_revision: int) -> SendAdmission:
+        inspected = self.inspect_exact(
+            dispatch_id, sender_reference, receiver_reference, sender, receiver_token_binding_revision,
+        )
+        if inspected.snapshot.state == DispatchState.SENT:
+            return SendAdmission(inspected.snapshot, {}, True)
+        try:
+            snapshot = self.admit_send(sender_reference, sender)
+        except DispatchTransitionError:
+            current = self.inspect_exact(
+                dispatch_id, sender_reference, receiver_reference, sender, receiver_token_binding_revision,
+            )
+            if current.snapshot.state == DispatchState.SENT:
+                return SendAdmission(current.snapshot, {}, True)
+            raise
+        return SendAdmission(snapshot, inspected.metadata, False)
 
     def complete_send(self,
                       sender_reference: str,
@@ -277,6 +328,14 @@ class PostgresProductionDispatchStore:
                 return _dispatch_snapshot(row)
             raise DispatchTransitionError("The APNs result cannot be applied to this dispatch.")
 
+    def complete_send_exact(self,
+                            dispatch_id: UUID,
+                            sender_reference: str,
+                            sender: DispatchIdentity,
+                            outcome: APNsOutcome) -> DispatchSnapshot:
+        self._validate_exact_sender(dispatch_id, sender_reference, sender)
+        return self.complete_send(sender_reference, sender, outcome)
+
     def cancel(self, sender_reference: str, sender: DispatchIdentity) -> DispatchSnapshot:
         reference_digest = self._crypto.digest("sender-reference", sender_reference)
         owner_digests = self._identity_digests("sender", sender)
@@ -292,6 +351,10 @@ class PostgresProductionDispatchStore:
             if _row_state(row) == DispatchState.CANCELLED:
                 return _dispatch_snapshot(row)
             raise DispatchTransitionError("The dispatch cannot be cancelled from its current state.")
+
+    def cancel_exact(self, dispatch_id: UUID, sender_reference: str, sender: DispatchIdentity) -> DispatchSnapshot:
+        self._validate_exact_sender(dispatch_id, sender_reference, sender)
+        return self.cancel(sender_reference, sender)
 
     def consume(self, receiver_reference: str, receiver: DispatchIdentity) -> ConsumedDispatch:
         reference_digest = self._crypto.digest("receiver-reference", receiver_reference)
@@ -317,6 +380,19 @@ class PostgresProductionDispatchStore:
                     raise DispatchTransitionError("The dispatch could not be consumed atomically.")
                 row = updated
             return ConsumedDispatch(_dispatch_snapshot(row), metadata)
+
+    def consume_exact(self,
+                      dispatch_id: UUID,
+                      receiver_reference: str,
+                      receiver: DispatchIdentity) -> ConsumedDispatch:
+        reference_digest = self._crypto.digest("receiver-reference", receiver_reference)
+        with self._transaction() as cursor:
+            row = _execute_fetchone(cursor, _LOAD_RECEIVER_SQL, (reference_digest,))
+            if row is None:
+                raise DispatchNotFoundError("The dispatch was not found.")
+            if UUID(str(_row_value(row, "dispatch_id"))) != dispatch_id:
+                raise DispatchNotFoundError("The dispatch was not found.")
+        return self.consume(receiver_reference, receiver)
 
     def expire_due(self) -> int:
         with self._transaction() as cursor:
@@ -346,6 +422,31 @@ class PostgresProductionDispatchStore:
         if row is None:
             raise DispatchNotFoundError("The dispatch was not found.")
         return row
+
+    def _validate_exact_sender(self,
+                               dispatch_id: UUID,
+                               sender_reference: str,
+                               sender: DispatchIdentity) -> None:
+        reference_digest = self._crypto.digest("sender-reference", sender_reference)
+        owner_digests = self._identity_digests("sender", sender)
+        with self._transaction() as cursor:
+            row = self._load_sender(cursor, reference_digest)
+            self._validate_sender(row, owner_digests)
+            if UUID(str(_row_value(row, "dispatch_id"))) != dispatch_id:
+                raise DispatchNotFoundError("The dispatch was not found.")
+
+    @staticmethod
+    def _validate_exact_row(row: Mapping[str, object],
+                            dispatch_id: UUID,
+                            receiver_reference_digest: bytes,
+                            receiver_token_binding_revision: int | None) -> None:
+        if UUID(str(_row_value(row, "dispatch_id"))) != dispatch_id:
+            raise DispatchNotFoundError("The dispatch was not found.")
+        if not hmac.compare_digest(bytes(_row_value(row, "receiver_reference_digest")), receiver_reference_digest):
+            raise DispatchNotFoundError("The dispatch was not found.")
+        if (receiver_token_binding_revision is not None
+                and int(_row_value(row, "receiver_token_binding_revision")) != receiver_token_binding_revision):
+            raise DispatchTransitionError("The receiver token binding changed.")
 
     @staticmethod
     def _validate_sender(row: Mapping[str, object], expected: tuple[bytes, bytes, bytes]) -> None:

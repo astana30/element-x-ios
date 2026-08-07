@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import json
@@ -31,6 +31,11 @@ class PushKitTokenRegistrationRequest:
     token: str = field(repr=False)
     token_present: bool
     environment_class: str
+    protocol_version: int | None = None
+    intents: tuple[str, ...] = ()
+    receiver_handoff: str | None = None
+    app_session_generation: str | None = field(default=None, repr=False)
+    capability_expires_in_seconds: int = 3600
 
     @classmethod
     def from_mapping(cls, payload: dict[str, Any]) -> "PushKitTokenRegistrationRequest":
@@ -46,11 +51,40 @@ class PushKitTokenRegistrationRequest:
         if environment_class not in {"development", "production"}:
             raise bad_request(error="Invalid environment.")
 
+        protocol_version = payload.get("protocol_version")
+        intents_value = payload.get("intents")
+        receiver_handoff = payload.get("receiver_handoff")
+        app_session_generation = payload.get("app_session_generation")
+        capability_fields_present = any(value is not None for value in (
+            protocol_version, intents_value, receiver_handoff, app_session_generation,
+        ))
+        intents: tuple[str, ...] = ()
+        capability_expires_in_seconds = 3600
+        if capability_fields_present:
+            if protocol_version != 1:
+                raise bad_request(error="Unsupported direct-call capability version.")
+            if not isinstance(intents_value, list) or intents_value != ["audio"]:
+                raise bad_request(error="Unsupported direct-call capability intent.")
+            if receiver_handoff != "matrixrtc_element_call":
+                raise bad_request(error="Unsupported direct-call receiver handoff.")
+            if not isinstance(app_session_generation, str) or not app_session_generation or len(app_session_generation) > 256:
+                raise bad_request(error="Invalid app session generation.")
+            expires_value = payload.get("capability_expires_in_seconds", 3600)
+            if not isinstance(expires_value, int) or isinstance(expires_value, bool) or not 1 <= expires_value <= 86400:
+                raise bad_request(error="Invalid capability expiry.")
+            intents = ("audio",)
+            capability_expires_in_seconds = expires_value
+
         return cls(
             version=version,
             token=token,
             token_present=True,
             environment_class=environment_class,
+            protocol_version=protocol_version if capability_fields_present else None,
+            intents=intents,
+            receiver_handoff=receiver_handoff if capability_fields_present else None,
+            app_session_generation=app_session_generation if capability_fields_present else None,
+            capability_expires_in_seconds=capability_expires_in_seconds,
         )
 
 
@@ -60,6 +94,10 @@ class PushKitTokenBinding:
     user_binding: str = field(repr=False)
     device_binding: str = field(repr=False)
     token_record_binding: str = field(repr=False)
+
+    @property
+    def token_binding_revision(self) -> int:
+        return int.from_bytes(bytes.fromhex(self.token_record_binding)[:8], "big") & ((1 << 63) - 1)
 
     def matches_user(self, user_id: str) -> bool:
         return hmac.compare_digest(self.user_binding, _record_key(user_id, None, self.environment_class))
@@ -78,6 +116,23 @@ class PushKitTokenRecord:
     user_binding: str | None = field(default=None, repr=False)
     device_binding: str | None = field(default=None, repr=False)
     token_record_binding: str | None = field(default=None, repr=False)
+    protocol_version: int | None = None
+    intents: tuple[str, ...] = ()
+    receiver_handoff: str | None = None
+    app_session_generation: str | None = field(default=None, repr=False)
+    capability_expires_at: datetime | None = None
+
+    def supports_direct_audio_v1(self, now: datetime | None = None) -> bool:
+        current_time = now or datetime.now(timezone.utc)
+        return (
+            self.protocol_version == 1
+            and self.intents == ("audio",)
+            and self.receiver_handoff == "matrixrtc_element_call"
+            and self.app_session_generation is not None
+            and self.capability_expires_at is not None
+            and self.capability_expires_at > current_time
+            and self.authoritative_binding is not None
+        )
 
     @property
     def authoritative_binding(self) -> PushKitTokenBinding | None:
@@ -140,6 +195,12 @@ class InMemoryPushKitTokenStore:
                 user_binding=user_binding,
                 device_binding=device_binding,
             ) if device_binding is not None else None,
+            protocol_version=request.protocol_version,
+            intents=request.intents,
+            receiver_handoff=request.receiver_handoff,
+            app_session_generation=request.app_session_generation,
+            capability_expires_at=datetime.now(timezone.utc) + timedelta(seconds=request.capability_expires_in_seconds)
+            if request.protocol_version is not None else None,
         )
         self._records[_record_key(user_id, device_id, request.environment_class)] = record
         self._records[_record_key(user_id, None, request.environment_class)] = record
@@ -178,6 +239,13 @@ class FilePushKitTokenStore:
                 user_binding=user_binding,
                 device_binding=device_binding,
             ) if device_binding is not None else None,
+            "protocol_version": request.protocol_version,
+            "intents": list(request.intents),
+            "receiver_handoff": request.receiver_handoff,
+            "app_session_generation": request.app_session_generation,
+            "capability_expires_at": (
+                datetime.now(timezone.utc) + timedelta(seconds=request.capability_expires_in_seconds)
+            ).isoformat() if request.protocol_version is not None else None,
         }
         records[_record_key(user_id, device_id, request.environment_class)] = record
         records[_record_key(user_id, None, request.environment_class)] = record
@@ -195,6 +263,11 @@ class FilePushKitTokenStore:
         user_binding = record.get("user_binding")
         device_binding = record.get("device_binding")
         token_record_binding = record.get("token_record_binding")
+        protocol_version = record.get("protocol_version")
+        intents = record.get("intents")
+        receiver_handoff = record.get("receiver_handoff")
+        app_session_generation = record.get("app_session_generation")
+        capability_expires_at = record.get("capability_expires_at")
         if not isinstance(token, str) or not isinstance(stored_environment, str) or not isinstance(updated_at, str):
             return None
 
@@ -202,6 +275,10 @@ class FilePushKitTokenStore:
             parsed_updated_at = datetime.fromisoformat(updated_at)
         except ValueError:
             parsed_updated_at = datetime.fromtimestamp(0, timezone.utc)
+        try:
+            parsed_capability_expiry = datetime.fromisoformat(capability_expires_at) if isinstance(capability_expires_at, str) else None
+        except ValueError:
+            parsed_capability_expiry = None
 
         return PushKitTokenRecord(
             token=token,
@@ -210,6 +287,11 @@ class FilePushKitTokenStore:
             user_binding=user_binding if isinstance(user_binding, str) else None,
             device_binding=device_binding if isinstance(device_binding, str) else None,
             token_record_binding=token_record_binding if isinstance(token_record_binding, str) else None,
+            protocol_version=protocol_version if isinstance(protocol_version, int) and not isinstance(protocol_version, bool) else None,
+            intents=tuple(intent for intent in intents if isinstance(intent, str)) if isinstance(intents, list) else (),
+            receiver_handoff=receiver_handoff if isinstance(receiver_handoff, str) else None,
+            app_session_generation=app_session_generation if isinstance(app_session_generation, str) else None,
+            capability_expires_at=parsed_capability_expiry,
         )
 
     def retrieve_latest_for_user(self, user_id: str, environment_class: str) -> PushKitTokenRecord | None:
