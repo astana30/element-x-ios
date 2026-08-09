@@ -367,18 +367,17 @@ class PostgresProductionDispatchStore:
             if _row_bool(row, "is_expired") and _row_state(row) != DispatchState.CONSUMED:
                 self._expire_locked(cursor, row)
                 raise DispatchExpiredError("The dispatch has expired.")
-            if _row_state(row) not in {DispatchState.SENT, DispatchState.CONSUMED}:
+            if _row_state(row) != DispatchState.SENT:
                 raise DispatchTransitionError("The dispatch is not consumable.")
             metadata = self._decrypt_row(row)
-            if _row_state(row) == DispatchState.SENT:
-                updated = _execute_fetchone(
-                    cursor,
-                    _CONSUME_SQL,
-                    (reference_digest, *owner_digests),
-                )
-                if updated is None:
-                    raise DispatchTransitionError("The dispatch could not be consumed atomically.")
-                row = updated
+            updated = _execute_fetchone(
+                cursor,
+                _CONSUME_SQL,
+                (reference_digest, *owner_digests),
+            )
+            if updated is None:
+                raise DispatchTransitionError("The dispatch could not be consumed atomically.")
+            row = updated
             return ConsumedDispatch(_dispatch_snapshot(row), metadata)
 
     def consume_exact(self,
