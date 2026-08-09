@@ -667,7 +667,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     // MARK: - Calls
     
     private func presentCallScreen(genericCallLink url: URL) {
-        presentCallScreen(configuration: .init(genericCallLink: url))
+        presentStockCallScreen(configuration: .init(genericCallLink: url))
     }
     
     private func presentCallScreen(roomID: String, startMode: ElementCallStartMode = .video) async {
@@ -682,22 +682,31 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private func presentCallScreen(roomProxy: JoinedRoomProxyProtocol, startMode: ElementCallStartMode = .video) {
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=\(roomProxy.id) start_mode=\(startMode)")
         let colorScheme: ColorScheme = flowParameters.windowManager.mainWindow.traitCollection.userInterfaceStyle == .light ? .light : .dark
-        presentCallScreen(configuration: .init(roomProxy: roomProxy,
-                                               clientProxy: userSession.clientProxy,
-                                               clientID: InfoPlistReader.main.bundleIdentifier,
-                                               elementCallBaseURL: flowParameters.appSettings.elementCallBaseURL,
-                                               elementCallBaseURLOverride: flowParameters.appSettings.elementCallBaseURLOverride,
-                                               colorScheme: colorScheme,
-                                               startMode: startMode))
+        let configuration = ElementCallConfiguration(roomProxy: roomProxy,
+                                                     clientProxy: userSession.clientProxy,
+                                                     clientID: InfoPlistReader.main.bundleIdentifier,
+                                                     elementCallBaseURL: flowParameters.appSettings.elementCallBaseURL,
+                                                     elementCallBaseURLOverride: flowParameters.appSettings.elementCallBaseURLOverride,
+                                                     colorScheme: colorScheme,
+                                                     startMode: startMode)
+        guard flowParameters.appSettings.salemxProductionDispatchV1Enabled,
+              startMode == .audio,
+              flowParameters.productionDispatchSession != nil else {
+            presentStockCallScreen(configuration: configuration)
+            return
+        }
+
+        Task { await presentEligibleProductionDispatchCall(roomProxy: roomProxy, configuration: configuration) }
     }
     
     private var callScreenPictureInPictureController: AVPictureInPictureController?
-    private func presentCallScreen(configuration: ElementCallConfiguration) {
+    @discardableResult
+    private func presentStockCallScreen(configuration: ElementCallConfiguration) -> CallScreenCoordinator? {
         guard flowParameters.ongoingCallRoomIDPublisher.value != configuration.callRoomID else {
             MXLog.info("Returning to existing call.")
             callScreenPictureInPictureController?.stopPictureInPicture()
             navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
-            return
+            return nil
         }
 
         activeCallStartMode = configuration.startMode
@@ -721,6 +730,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                 case .pictureInPictureStopped:
                     navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
                 case .dismiss:
+                    flowParameters.productionDispatchSession?.stockCallDidEnd()
                     activeCallStartMode = nil
                     callScreenPictureInPictureController = nil
                     navigationTabCoordinator.setOverlayCoordinator(nil)
@@ -731,6 +741,48 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         navigationTabCoordinator.setOverlayCoordinator(callScreenCoordinator, animated: true)
         
         flowParameters.analytics.track(screen: .RoomCall)
+        return callScreenCoordinator
+    }
+
+    private func presentEligibleProductionDispatchCall(roomProxy: JoinedRoomProxyProtocol,
+                                                       configuration: ElementCallConfiguration) async {
+        let roomInfo = roomProxy.infoPublisher.value
+        guard roomInfo.isEncrypted,
+              roomInfo.isDirect,
+              roomInfo.joinedMembersCount == 2,
+              let members = await roomProxy.members() else {
+            presentStockCallScreen(configuration: configuration)
+            return
+        }
+
+        let joinedUserIDs = members.filter { $0.membership == .join }.map(\.userID)
+        guard let recipient = SalemXProductionDispatchEligibility.recipient(featureEnabled: true,
+                                                                            startMode: configuration.startMode,
+                                                                            isJoinedRoom: true,
+                                                                            isEncrypted: roomInfo.isEncrypted,
+                                                                            isDirect: roomInfo.isDirect,
+                                                                            joinedMembersCount: roomInfo.joinedMembersCount,
+                                                                            joinedUserIDs: joinedUserIDs,
+                                                                            ownUserID: userSession.clientProxy.userID),
+            let session = flowParameters.productionDispatchSession else {
+            presentStockCallScreen(configuration: configuration)
+            return
+        }
+
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let input = SalemXProductionDispatchAttemptInput(appSessionGeneration: session.appSessionGeneration,
+                                                         admission: .init(recipient: recipient,
+                                                                          recipientDevice: nil,
+                                                                          displayLabel: roomInfo.displayName ?? "SalemX"),
+                                                         createdAtMS: now,
+                                                         expiresAtMS: now + 120_000)
+        let outcome = await session.startEligibleAudio(input: input, roomID: roomProxy.id) { [weak self] in
+            guard let coordinator = self?.presentStockCallScreen(configuration: configuration) else { return nil }
+            return .init { await coordinator.requestProductionDispatchTermination() }
+        }
+
+        guard case .failed = outcome else { return }
+        flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
     }
     
     private func hideCallScreenOverlay() {

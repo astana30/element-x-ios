@@ -266,6 +266,83 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(String(describing: SalemXProductionDispatchCoordinatorError.deliveryUnknown).contains("call-id") == false)
     }
 
+    @Test
+    func productionSessionArmsStockObservationBeforeDispatch() async {
+        let recorder = Stage5EventRecorder()
+        let lifecycleProvider = StockLifecycleProviderSpy(recorder: recorder)
+        let client = DispatchClientSpy(recorder: recorder)
+        let elementCallService = ElementCallServiceMock()
+        let session = SalemXProductionDispatchSession(dispatchClient: client,
+                                                      appSessionGeneration: "session-generation",
+                                                      elementCallService: elementCallService,
+                                                      lifecycleProvider: lifecycleProvider)
+
+        let outcome = await session.startEligibleAudio(input: input(), roomID: "room") {
+            recorder.events.append("stock")
+            return .init { true }
+        }
+
+        #expect(outcome == .sent(client.dispatchID))
+        #expect(recorder.events == ["arm", "stock", "membership", "prepare", "claim", "send"])
+        #expect(lifecycleProvider.armCount == 1)
+    }
+
+    @Test
+    func sentStockCallRemovalReleasesLifecycleForNextAttempt() async {
+        let lifecycleProvider = StockLifecycleProviderSpy(recorder: .init())
+        let client = DispatchClientSpy(dispatchIDs: [UUID(), UUID()])
+        let session = SalemXProductionDispatchSession(dispatchClient: client,
+                                                      appSessionGeneration: "session-generation",
+                                                      elementCallService: ElementCallServiceMock(),
+                                                      lifecycleProvider: lifecycleProvider)
+
+        #expect(await session.startEligibleAudio(input: input(), roomID: "room") { .init { true } }.isSent)
+        session.stockCallDidEnd()
+        while lifecycleProvider.removalCount == 0 {
+            await Task.yield()
+        }
+        #expect(await session.startEligibleAudio(input: input(), roomID: "room") { .init { true } }.isSent)
+        #expect(lifecycleProvider.armCount == 2)
+    }
+
+    @Test(arguments: [
+        (false, ElementCallStartMode.audio, true, true, true, 2, ["self", "other"]),
+        (true, .video, true, true, true, 2, ["self", "other"]),
+        (true, .audio, false, true, true, 2, ["self", "other"]),
+        (true, .audio, true, false, true, 2, ["self", "other"]),
+        (true, .audio, true, true, false, 2, ["self", "other"]),
+        (true, .audio, true, true, true, 3, ["self", "other", "third"]),
+        (true, .audio, true, true, true, 2, ["self", "other", "other-two"])
+    ])
+    func noneligibleAudioRemainsStockOnly(featureEnabled: Bool,
+                                          startMode: ElementCallStartMode,
+                                          isJoinedRoom: Bool,
+                                          isEncrypted: Bool,
+                                          isDirect: Bool,
+                                          joinedMembersCount: Int,
+                                          joinedUserIDs: [String]) {
+        #expect(SalemXProductionDispatchEligibility.recipient(featureEnabled: featureEnabled,
+                                                              startMode: startMode,
+                                                              isJoinedRoom: isJoinedRoom,
+                                                              isEncrypted: isEncrypted,
+                                                              isDirect: isDirect,
+                                                              joinedMembersCount: joinedMembersCount,
+                                                              joinedUserIDs: joinedUserIDs,
+                                                              ownUserID: "self") == nil)
+    }
+
+    @Test
+    func encryptedJoinedOneToOneAudioResolvesOneRecipient() {
+        #expect(SalemXProductionDispatchEligibility.recipient(featureEnabled: true,
+                                                              startMode: .audio,
+                                                              isJoinedRoom: true,
+                                                              isEncrypted: true,
+                                                              isDirect: true,
+                                                              joinedMembersCount: 2,
+                                                              joinedUserIDs: ["self", "other"],
+                                                              ownUserID: "self") == "other")
+    }
+
     private func input() -> SalemXProductionDispatchAttemptInput {
         .init(appSessionGeneration: "session-generation",
               admission: .init(recipient: "@receiver:example.test",
@@ -277,6 +354,50 @@ struct SalemXProductionDispatchCoordinatorTests {
 
     private let firstDispatchID = UUID(uuid: (0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x41, 0x11, 0x81, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11))
     private let secondDispatchID = UUID(uuid: (0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x42, 0x22, 0x82, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22))
+}
+
+@MainActor
+private final class StockLifecycleProviderSpy: SalemXStockElementCallLifecycleProviding {
+    private let recorder: Stage5EventRecorder
+    private(set) var armCount = 0
+    private(set) var removalCount = 0
+    private let handle = SalemXStockElementCallObservationHandle(observationID: UUID(),
+                                                                 appSessionGeneration: "session-generation",
+                                                                 attemptGeneration: 1)
+
+    init(recorder: Stage5EventRecorder) {
+        self.recorder = recorder
+    }
+
+    func beginOutgoingObservation(roomID: String,
+                                  appSessionGeneration: String,
+                                  attemptGeneration: UInt64) async
+        -> Result<SalemXStockElementCallObservationHandle, SalemXStockElementCallLifecycleError> {
+        armCount += 1
+        recorder.events.append("arm")
+        return .success(handle)
+    }
+
+    func awaitMembershipConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
+        -> Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError> {
+        recorder.events.append("membership")
+        return .success(.init(callID: "call", roomID: "room", callHandle: "handle"))
+    }
+
+    func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
+        -> Result<Void, SalemXStockElementCallLifecycleError> {
+        removalCount += 1
+        return .success(())
+    }
+
+    func cancelObservation(_ handle: SalemXStockElementCallObservationHandle) { }
+}
+
+private extension SalemXProductionDispatchCoordinatorOutcome {
+    var isSent: Bool {
+        if case .sent = self { return true }
+        return false
+    }
 }
 
 @MainActor

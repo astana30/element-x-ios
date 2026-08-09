@@ -14,13 +14,18 @@ final class SalemXProductionDispatchSession {
     let appSessionGeneration: String
 
     private let elementCallService: ElementCallServiceProtocol
+    private let lifecycleProvider: SalemXStockElementCallLifecycleProviding?
     private var invalidated = false
+    private var observationGeneration: UInt64 = 0
+    private var activeStockCallLifecycle: SalemXProductionDispatchElementCallLifecycle?
 
     init(dispatchClient: SalemXProductionDispatchClientProtocol,
          appSessionGeneration: String,
-         elementCallService: ElementCallServiceProtocol) {
+         elementCallService: ElementCallServiceProtocol,
+         lifecycleProvider: SalemXStockElementCallLifecycleProviding? = nil) {
         self.appSessionGeneration = appSessionGeneration
         self.elementCallService = elementCallService
+        self.lifecycleProvider = lifecycleProvider ?? elementCallService as? SalemXStockElementCallLifecycleProviding
         stockCallLifecycle = .init()
         coordinator = .init(dispatchClient: dispatchClient, stockCallLifecycle: stockCallLifecycle)
     }
@@ -51,6 +56,74 @@ final class SalemXProductionDispatchSession {
         invalidated = true
         elementCallService.configureProductionDispatchCapability(nil)
         Task { await coordinator.invalidateSession(appSessionGeneration) }
+    }
+
+    func startEligibleAudio(input: SalemXProductionDispatchAttemptInput,
+                            roomID: String,
+                            presentStockCall: @escaping @MainActor () -> SalemXProductionDispatchStockCallPresentation?) async
+        -> SalemXProductionDispatchCoordinatorOutcome {
+        if activeStockCallLifecycle == nil {
+            guard let lifecycleProvider else {
+                return .failed(.lifecycle)
+            }
+
+            observationGeneration &+= 1
+            let lifecycle = SalemXProductionDispatchElementCallLifecycle(roomID: roomID,
+                                                                         appSessionGeneration: appSessionGeneration,
+                                                                         attemptGeneration: observationGeneration,
+                                                                         lifecycleProvider: lifecycleProvider,
+                                                                         presentStockCall: presentStockCall) { [weak self] lifecycle in
+                guard let self, activeStockCallLifecycle === lifecycle else { return }
+                stockCallLifecycle.remove(lifecycle)
+                activeStockCallLifecycle = nil
+            }
+            guard stockCallLifecycle.install(lifecycle) else {
+                return .failed(.lifecycle)
+            }
+            activeStockCallLifecycle = lifecycle
+        }
+
+        return await coordinator.start(input)
+    }
+
+    func stockCallDidEnd() {
+        guard let activeStockCallLifecycle else { return }
+        activeStockCallLifecycle.markExternalTermination()
+        Task { [weak self, weak activeStockCallLifecycle] in
+            guard let self, let activeStockCallLifecycle else { return }
+            await coordinator.cancelActiveAttempt()
+            guard self.activeStockCallLifecycle === activeStockCallLifecycle else { return }
+            await activeStockCallLifecycle.completeExternalTermination()
+        }
+    }
+}
+
+struct SalemXProductionDispatchStockCallPresentation {
+    let requestTermination: @MainActor () async -> Bool
+}
+
+enum SalemXProductionDispatchEligibility {
+    static func recipient(featureEnabled: Bool,
+                          startMode: ElementCallStartMode,
+                          isJoinedRoom: Bool,
+                          isEncrypted: Bool,
+                          isDirect: Bool,
+                          joinedMembersCount: Int,
+                          joinedUserIDs: [String],
+                          ownUserID: String) -> String? {
+        guard featureEnabled,
+              startMode == .audio,
+              isJoinedRoom,
+              isEncrypted,
+              isDirect,
+              joinedMembersCount == 2,
+              joinedUserIDs.count == 2 else {
+            return nil
+        }
+
+        let recipients = joinedUserIDs.filter { $0 != ownUserID }
+        guard recipients.count == 1 else { return nil }
+        return recipients[0]
     }
 }
 
@@ -86,6 +159,113 @@ final class SalemXProductionDispatchStockCallLifecycleRouter: SalemXProductionDi
 
     func awaitMembershipRemoval(for context: SalemXProductionDispatchStockCallContext) async {
         await lifecycle?.awaitMembershipRemoval(for: context)
+    }
+}
+
+@MainActor
+private final class SalemXProductionDispatchElementCallLifecycle: SalemXProductionDispatchStockCallLifecycleProtocol {
+    private let roomID: String
+    private let appSessionGeneration: String
+    private let attemptGeneration: UInt64
+    private let lifecycleProvider: SalemXStockElementCallLifecycleProviding
+    private let presentStockCall: @MainActor () -> SalemXProductionDispatchStockCallPresentation?
+    private let completion: @MainActor (SalemXProductionDispatchElementCallLifecycle) -> Void
+
+    private var observationHandle: SalemXStockElementCallObservationHandle?
+    private var callContext: SalemXProductionDispatchStockCallContext?
+    private var stockCallPresentation: SalemXProductionDispatchStockCallPresentation?
+    private var externalTermination = false
+    private var terminationRequested = false
+    private var completed = false
+
+    init(roomID: String,
+         appSessionGeneration: String,
+         attemptGeneration: UInt64,
+         lifecycleProvider: SalemXStockElementCallLifecycleProviding,
+         presentStockCall: @escaping @MainActor () -> SalemXProductionDispatchStockCallPresentation?,
+         completion: @escaping @MainActor (SalemXProductionDispatchElementCallLifecycle) -> Void) {
+        self.roomID = roomID
+        self.appSessionGeneration = appSessionGeneration
+        self.attemptGeneration = attemptGeneration
+        self.lifecycleProvider = lifecycleProvider
+        self.presentStockCall = presentStockCall
+        self.completion = completion
+    }
+
+    func startAudioCall() async -> Result<SalemXProductionDispatchStockCallContext, SalemXProductionDispatchStockCallLifecycleError> {
+        let handleResult = await lifecycleProvider.beginOutgoingObservation(roomID: roomID,
+                                                                            appSessionGeneration: appSessionGeneration,
+                                                                            attemptGeneration: attemptGeneration)
+        guard case .success(let handle) = handleResult else {
+            finish()
+            return .failure(.unavailable)
+        }
+        observationHandle = handle
+
+        guard let stockCallPresentation = presentStockCall() else {
+            lifecycleProvider.cancelObservation(handle)
+            finish()
+            return .failure(.unavailable)
+        }
+        self.stockCallPresentation = stockCallPresentation
+
+        guard case .success(let context) = await lifecycleProvider.awaitMembershipConfirmation(handle) else {
+            await requestTerminationIfNeeded()
+            _ = await lifecycleProvider.awaitMembershipRemoval(handle)
+            lifecycleProvider.cancelObservation(handle)
+            finish()
+            return .failure(.membershipNotConfirmed)
+        }
+
+        let dispatchContext = SalemXProductionDispatchStockCallContext(roomID: context.roomID,
+                                                                       callID: context.callID,
+                                                                       callHandle: context.callHandle)
+        callContext = dispatchContext
+        return .success(dispatchContext)
+    }
+
+    func awaitConfirmedLocalMembership(for context: SalemXProductionDispatchStockCallContext) async
+        -> Result<SalemXProductionDispatchStockCallContext, SalemXProductionDispatchStockCallLifecycleError> {
+        guard callContext == context else { return .failure(.membershipNotConfirmed) }
+        return .success(context)
+    }
+
+    func endAudioCall(_ context: SalemXProductionDispatchStockCallContext) async {
+        guard callContext == context else { return }
+        await requestTerminationIfNeeded()
+    }
+
+    func awaitMembershipRemoval(for context: SalemXProductionDispatchStockCallContext) async {
+        guard callContext == context, let observationHandle else { return }
+        _ = await lifecycleProvider.awaitMembershipRemoval(observationHandle)
+        lifecycleProvider.cancelObservation(observationHandle)
+        finish()
+    }
+
+    func markExternalTermination() {
+        externalTermination = true
+    }
+
+    func completeExternalTermination() async {
+        guard let observationHandle else {
+            finish()
+            return
+        }
+        _ = await lifecycleProvider.awaitMembershipRemoval(observationHandle)
+        lifecycleProvider.cancelObservation(observationHandle)
+        finish()
+    }
+
+    private func requestTerminationIfNeeded() async {
+        guard !externalTermination, !terminationRequested else { return }
+        terminationRequested = true
+        _ = await stockCallPresentation?.requestTermination()
+    }
+
+    private func finish() {
+        guard !completed else { return }
+        completed = true
+        completion(self)
     }
 }
 
