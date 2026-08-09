@@ -171,7 +171,7 @@ struct SalemXProductionDispatchClientTests {
     }
 
     @Test
-    func receiverConsumeModelsMatchServerContract() throws {
+    func receiverConsumeUsesExactContractAndParsesResponse() async throws {
         let request = SalemXProductionDispatchReceiverConsumeRequest(dispatchID: dispatchID,
                                                                      receiverReference: "receiver-ref",
                                                                      appSessionGeneration: generation)
@@ -179,8 +179,13 @@ struct SalemXProductionDispatchClientTests {
         #expect(Set(requestBody.keys) == ["dispatch_protocol_version", "dispatch_id", "receiver_reference", "app_session_generation"])
 
         let response = #"{"dispatch_protocol_version":1,"state":"consumed","version":1,"call_id":"call","room_id":"room","peer_user_id":"peer","direction":"incoming","intent":"audio","expires_at_ms":123}"#
-        let decoded = try JSONDecoder().decode(SalemXProductionDispatchReceiverConsumeResponse.self, from: Data(response.utf8))
+        let transport = DispatchTransportSpy(response: .success(.init(statusCode: 200, data: Data(response.utf8))))
+        let decoded = try await makeClient(transport: transport).consume(request).get()
+        let sent = try #require(transport.requests.first)
+
         #expect(decoded.state == .consumed)
+        #expect(sent.url.path == SalemXProductionDispatchClient.receiverConsumePath)
+        #expect(sent.headers["Authorization"] == "Bearer \(accessToken)")
         #expect(String(describing: decoded).contains("room") == false)
     }
 

@@ -4053,6 +4053,11 @@ private final class SalemXProductionDispatchCapabilityClientSpy: SalemXProductio
         -> Result<SalemXProductionDispatchCancelResponse, SalemXProductionDispatchClientError> {
         fatalError("Unexpected cancel")
     }
+
+    func consume(_ request: SalemXProductionDispatchReceiverConsumeRequest) async
+        -> Result<SalemXProductionDispatchReceiverConsumeResponse, SalemXProductionDispatchClientError> {
+        fatalError("Unexpected consume")
+    }
 }
 
 private struct DeclineOwnCallMockError: Error, CustomStringConvertible {

@@ -650,6 +650,11 @@ private final class DispatchClientSpy: SalemXProductionDispatchClientProtocol {
         return .success(.init(dispatchProtocolVersion: 1, state: .cancelled, cancelled: true, dispatchID: nil))
     }
 
+    func consume(_ request: SalemXProductionDispatchReceiverConsumeRequest) async
+        -> Result<SalemXProductionDispatchReceiverConsumeResponse, SalemXProductionDispatchClientError> {
+        fatalError("Unexpected consume")
+    }
+
     func waitUntilBlockedOperationIsEntered() async {
         while !blockedOperationEntered {
             await Task.yield()

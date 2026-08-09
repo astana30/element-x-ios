@@ -83,6 +83,8 @@ protocol SalemXProductionDispatchClientProtocol {
         -> Result<SalemXProductionDispatchSendPreparedResponse, SalemXProductionDispatchClientError>
     func cancelPrepared(_ request: SalemXProductionDispatchReferenceRequest) async
         -> Result<SalemXProductionDispatchCancelResponse, SalemXProductionDispatchClientError>
+    func consume(_ request: SalemXProductionDispatchReceiverConsumeRequest) async
+        -> Result<SalemXProductionDispatchReceiverConsumeResponse, SalemXProductionDispatchClientError>
 }
 
 @MainActor
@@ -92,6 +94,7 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
     static let claimPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/sender/claim"
     static let sendPreparedPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite/send-prepared"
     static let cancelPreparedPath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/invite/cancel-prepared"
+    static let receiverConsumePath = "/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/receiver/consume"
 
     private let homeserverOrigin: URL
     private let httpTransport: DirectCallHTTPTransportProtocol
@@ -194,6 +197,29 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
                              request: request,
                              expectedState: .cancelled,
                              expectedFlag: \SalemXProductionDispatchCancelResponse.cancelled)
+    }
+
+    func consume(_ request: SalemXProductionDispatchReceiverConsumeRequest) async
+        -> Result<SalemXProductionDispatchReceiverConsumeResponse, SalemXProductionDispatchClientError> {
+        guard !request.receiverReference.isEmpty, !request.appSessionGeneration.isEmpty else {
+            return .failure(.malformedReference)
+        }
+        let result: Result<SalemXProductionDispatchReceiverConsumeResponse, SalemXProductionDispatchClientError> = await perform(path: Self.receiverConsumePath,
+                                                                                                                                 request: request,
+                                                                                                                                 ambiguousOnTransportFailure: false)
+        return result.flatMap { response in
+            guard response.dispatchProtocolVersion == SalemXProductionDispatchProtocolVersion.v1.rawValue else {
+                return .failure(.unsupportedProtocol)
+            }
+            guard response.state == .consumed,
+                  response.version == SalemXProductionDispatchProtocolVersion.v1.rawValue,
+                  !response.callID.isEmpty,
+                  !response.roomID.isEmpty,
+                  !response.peerUserID.isEmpty else {
+                return .failure(.invalidState)
+            }
+            return .success(response)
+        }
     }
 
     private func stateOperation<Request, Response>(path: String,
