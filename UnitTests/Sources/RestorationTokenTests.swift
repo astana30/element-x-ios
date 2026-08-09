@@ -116,6 +116,27 @@ struct RestorationTokenTests {
         // Then the output should be a valid token.
         #expect(decodedToken == originalToken, "The token should remain identical.")
     }
+
+    @Test
+    func productionDispatchGenerationRoundTrips() throws {
+        let generation = try RestorationToken.makeProductionDispatchSessionGeneration()
+        let originalToken = RestorationToken(session: Session(accessToken: "1234",
+                                                              refreshToken: nil,
+                                                              userId: "@user:example.com",
+                                                              deviceId: "D3V1C3",
+                                                              homeserverUrl: "https://matrix.example.com",
+                                                              oidcData: nil,
+                                                              slidingSyncVersion: .native),
+                                             sessionDirectories: .init(),
+                                             passphrase: "passphrase",
+                                             pusherNotificationClientIdentifier: nil,
+                                             productionDispatchSessionGeneration: generation)
+
+        let decodedToken = try JSONDecoder().decode(RestorationToken.self, from: JSONEncoder().encode(originalToken))
+
+        #expect(decodedToken.productionDispatchSessionGeneration == generation)
+        #expect(try RestorationToken.makeProductionDispatchSessionGeneration() != generation)
+    }
     
     func assertEqual(session: Session, originalSession: SessionV1) {
         #expect(session.accessToken == originalSession.accessToken, "The access token should not be changed.")

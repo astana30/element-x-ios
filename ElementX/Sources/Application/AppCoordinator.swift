@@ -748,7 +748,11 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             directCallEngineSignalBridge = nil
         }
 
-        let flowParameters = CommonFlowParameters(userSession: userSession,
+        let productionDispatchSession = SalemXProductionDispatchSession.makeIfEnabled(appSettings: appSettings,
+                                                                                      userSession: userSession,
+                                                                                      elementCallService: elementCallService)
+
+        var flowParameters = CommonFlowParameters(userSession: userSession,
                                                   bugReportService: bugReportService,
                                                   elementCallService: elementCallService,
                                                   directCallEngine: directCallEngine,
@@ -762,6 +766,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
                                                   userIndicatorController: ServiceLocator.shared.userIndicatorController,
                                                   notificationManager: notificationManager,
                                                   stateMachineFactory: StateMachineFactory())
+        flowParameters.productionDispatchSession = productionDispatchSession
         
         let userSessionFlowCoordinator = makeUserSessionFlowCoordinator(isNewLogin: isNewLogin,
                                                                         flowParameters: flowParameters)

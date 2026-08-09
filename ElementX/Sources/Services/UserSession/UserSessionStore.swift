@@ -58,7 +58,12 @@ class UserSessionStore: UserSessionStoreProtocol {
         
         switch await restorePreviousLogin(credentials) {
         case .success(let clientProxy):
-            return .success(buildUserSessionWithClient(clientProxy))
+            do {
+                let generation = try productionDispatchSessionGeneration(for: credentials)
+                return .success(buildUserSessionWithClient(clientProxy, productionDispatchSessionGeneration: generation))
+            } catch {
+                return .failure(.failedRestoringLogin)
+            }
         case .failure(let error):
             MXLog.error("Failed restoring login with error: \(error)")
             
@@ -75,16 +80,19 @@ class UserSessionStore: UserSessionStoreProtocol {
             let session = try client.session()
             let userID = try client.userId()
             let clientProxy = try await setupProxyForClient(client)
+            let productionDispatchSessionGeneration = try RestorationToken.makeProductionDispatchSessionGeneration()
             
             keychainController.setRestorationToken(RestorationToken(session: session,
                                                                     sessionDirectories: sessionDirectories,
                                                                     passphrase: passphrase,
-                                                                    pusherNotificationClientIdentifier: clientProxy.pusherNotificationClientIdentifier),
+                                                                    pusherNotificationClientIdentifier: clientProxy.pusherNotificationClientIdentifier,
+                                                                    productionDispatchSessionGeneration: productionDispatchSessionGeneration),
                                                    forUsername: userID)
             
             MXLog.info("Set up session for user \(userID) at: \(sessionDirectories)")
             
-            return .success(buildUserSessionWithClient(clientProxy))
+            return .success(buildUserSessionWithClient(clientProxy,
+                                                       productionDispatchSessionGeneration: productionDispatchSessionGeneration))
         } catch {
             MXLog.error("Failed creating user session with error: \(error)")
             return .failure(.failedSettingUpSession)
@@ -103,7 +111,8 @@ class UserSessionStore: UserSessionStoreProtocol {
         
     // MARK: - Private
     
-    private func buildUserSessionWithClient(_ clientProxy: ClientProxyProtocol) -> UserSessionProtocol {
+    private func buildUserSessionWithClient(_ clientProxy: ClientProxyProtocol,
+                                            productionDispatchSessionGeneration: String) -> UserSessionProtocol {
         let mediaProvider = MediaProvider(mediaLoader: clientProxy.mediaLoader,
                                           imageCache: .onlyInMemory,
                                           homeserverReachabilityPublisher: clientProxy.homeserverReachabilityPublisher)
@@ -112,7 +121,24 @@ class UserSessionStore: UserSessionStoreProtocol {
         
         return UserSession(clientProxy: clientProxy,
                            mediaProvider: mediaProvider,
-                           voiceMessageMediaManager: voiceMessageMediaManager)
+                           voiceMessageMediaManager: voiceMessageMediaManager,
+                           productionDispatchSessionGeneration: productionDispatchSessionGeneration)
+    }
+
+    private func productionDispatchSessionGeneration(for credentials: KeychainCredentials) throws -> String {
+        if let generation = credentials.restorationToken.productionDispatchSessionGeneration {
+            return generation
+        }
+
+        let generation = try RestorationToken.makeProductionDispatchSessionGeneration()
+        let token = credentials.restorationToken
+        keychainController.setRestorationToken(.init(session: token.session,
+                                                     sessionDirectories: token.sessionDirectories,
+                                                     passphrase: token.passphrase,
+                                                     pusherNotificationClientIdentifier: token.pusherNotificationClientIdentifier,
+                                                     productionDispatchSessionGeneration: generation),
+                                               forUsername: credentials.userID)
+        return generation
     }
     
     private func restorePreviousLogin(_ credentials: KeychainCredentials) async -> Result<ClientProxyProtocol, UserSessionStoreError> {

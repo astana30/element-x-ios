@@ -20508,6 +20508,11 @@ class UserSessionMock: UserSessionProtocol, @unchecked Sendable {
         set(value) { underlyingVoiceMessageMediaManager = value }
     }
     var underlyingVoiceMessageMediaManager: VoiceMessageMediaManagerProtocol!
+    var productionDispatchSessionGeneration: String {
+        get { return underlyingProductionDispatchSessionGeneration }
+        set(value) { underlyingProductionDispatchSessionGeneration = value }
+    }
+    var underlyingProductionDispatchSessionGeneration: String!
     var sessionSecurityStatePublisher: CurrentValuePublisher<SessionSecurityState, Never> {
         get { return underlyingSessionSecurityStatePublisher }
         set(value) { underlyingSessionSecurityStatePublisher = value }

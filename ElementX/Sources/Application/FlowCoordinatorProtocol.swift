@@ -41,6 +41,7 @@ struct CommonFlowParameters {
     let userIndicatorController: UserIndicatorControllerProtocol
     let notificationManager: NotificationManagerProtocol
     let stateMachineFactory: StateMachineFactoryProtocol
+    var productionDispatchSession: SalemXProductionDispatchSession?
     
     var windowManager: WindowManagerProtocol {
         appMediator.windowManager

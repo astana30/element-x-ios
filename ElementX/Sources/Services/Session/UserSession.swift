@@ -17,6 +17,7 @@ class UserSession: UserSessionProtocol {
     let clientProxy: ClientProxyProtocol
     let mediaProvider: MediaProviderProtocol
     let voiceMessageMediaManager: VoiceMessageMediaManagerProtocol
+    let productionDispatchSessionGeneration: String
     
     let callbacks = PassthroughSubject<UserSessionCallback, Never>()
     
@@ -25,10 +26,14 @@ class UserSession: UserSessionProtocol {
         sessionSecurityStateSubject.asCurrentValuePublisher()
     }
     
-    init(clientProxy: ClientProxyProtocol, mediaProvider: MediaProviderProtocol, voiceMessageMediaManager: VoiceMessageMediaManagerProtocol) {
+    init(clientProxy: ClientProxyProtocol,
+         mediaProvider: MediaProviderProtocol,
+         voiceMessageMediaManager: VoiceMessageMediaManagerProtocol,
+         productionDispatchSessionGeneration: String) {
         self.clientProxy = clientProxy
         self.mediaProvider = mediaProvider
         self.voiceMessageMediaManager = voiceMessageMediaManager
+        self.productionDispatchSessionGeneration = productionDispatchSessionGeneration
         
         #if DEBUG && canImport(CallKit) && os(iOS)
         SalemXForegroundSSESmokeDebug.registerActiveUserSession(self)

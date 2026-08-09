@@ -8,6 +8,7 @@
 
 import Foundation
 import MatrixRustSDK
+import Security
 
 enum RestorationTokenError: Error {
     case slidingSyncProxyNotSupported
@@ -18,6 +19,19 @@ struct RestorationToken: Equatable {
     let sessionDirectories: SessionDirectories
     let passphrase: String
     let pusherNotificationClientIdentifier: String?
+    let productionDispatchSessionGeneration: String?
+
+    init(session: MatrixRustSDK.Session,
+         sessionDirectories: SessionDirectories,
+         passphrase: String,
+         pusherNotificationClientIdentifier: String?,
+         productionDispatchSessionGeneration: String? = nil) {
+        self.session = session
+        self.sessionDirectories = sessionDirectories
+        self.passphrase = passphrase
+        self.pusherNotificationClientIdentifier = pusherNotificationClientIdentifier
+        self.productionDispatchSessionGeneration = productionDispatchSessionGeneration
+    }
     
     enum CodingKeys: CodingKey {
         case session
@@ -25,6 +39,7 @@ struct RestorationToken: Equatable {
         case cacheDirectory
         case passphrase
         case pusherNotificationClientIdentifier
+        case productionDispatchSessionGeneration
     }
 }
 
@@ -45,7 +60,8 @@ extension RestorationToken: Codable {
         self = try .init(session: session,
                          sessionDirectories: sessionDirectories,
                          passphrase: container.decode(String.self, forKey: .passphrase),
-                         pusherNotificationClientIdentifier: container.decodeIfPresent(String.self, forKey: .pusherNotificationClientIdentifier))
+                         pusherNotificationClientIdentifier: container.decodeIfPresent(String.self, forKey: .pusherNotificationClientIdentifier),
+                         productionDispatchSessionGeneration: container.decodeIfPresent(String.self, forKey: .productionDispatchSessionGeneration))
     }
     
     func encode(to encoder: any Encoder) throws {
@@ -55,7 +71,20 @@ extension RestorationToken: Codable {
         try container.encode(sessionDirectories.cacheDirectory, forKey: .cacheDirectory)
         try container.encode(passphrase, forKey: .passphrase)
         try container.encode(pusherNotificationClientIdentifier, forKey: .pusherNotificationClientIdentifier)
+        try container.encodeIfPresent(productionDispatchSessionGeneration, forKey: .productionDispatchSessionGeneration)
     }
+
+    static func makeProductionDispatchSessionGeneration() throws -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
+            throw ProductionDispatchSessionGenerationError.randomGenerationFailed
+        }
+        return Data(bytes).base64EncodedString()
+    }
+}
+
+private enum ProductionDispatchSessionGenerationError: Error {
+    case randomGenerationFailed
 }
 
 extension MatrixRustSDK.Session: @retroactive Codable {

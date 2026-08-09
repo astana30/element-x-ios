@@ -26,6 +26,7 @@ protocol CommonSettingsProtocol: AnyObject {
     var enableKeyShareOnInvite: Bool { get }
     var threadsEnabled: Bool { get }
     var directOneToOneCallsEnabled: Bool { get }
+    var salemxProductionDispatchV1Enabled: Bool { get }
     var hideQuietNotificationAlerts: Bool { get }
 }
 
@@ -82,6 +83,7 @@ final class AppSettings: @unchecked Sendable {
         case linkNewDeviceEnabled
         case liveLocationSharingEnabled
         case directOneToOneCallsEnabled
+        case salemxProductionDispatchV1Enabled
         
         // Doug's tweaks 🔧
         case hideUnreadMessagesBadge
@@ -484,6 +486,9 @@ final class AppSettings: @unchecked Sendable {
 
     @UserPreference(key: UserDefaultsKeys.directOneToOneCallsEnabled, defaultValue: false, storageType: .userDefaults(store))
     var directOneToOneCallsEnabled
+
+    @UserPreference(key: UserDefaultsKeys.salemxProductionDispatchV1Enabled, defaultValue: false, storageType: .userDefaults(store))
+    var salemxProductionDispatchV1Enabled
     
     @UserPreference(key: UserDefaultsKeys.developerOptionsEnabled, defaultValue: appBuildType == .debug, storageType: .userDefaults(store))
     var developerOptionsEnabled

@@ -167,6 +167,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     
     func stop() {
         chatsTabFlowCoordinator.stop()
+        flowParameters.productionDispatchSession?.invalidate()
     }
     
     func handleAppRoute(_ appRoute: AppRoute, animated: Bool) {

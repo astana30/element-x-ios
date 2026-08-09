@@ -7,6 +7,88 @@
 
 import Foundation
 
+@MainActor
+final class SalemXProductionDispatchSession {
+    let coordinator: SalemXProductionDispatchCoordinator
+    let stockCallLifecycle: SalemXProductionDispatchStockCallLifecycleRouter
+    let appSessionGeneration: String
+
+    private let elementCallService: ElementCallServiceProtocol
+    private var invalidated = false
+
+    init(dispatchClient: SalemXProductionDispatchClientProtocol,
+         appSessionGeneration: String,
+         elementCallService: ElementCallServiceProtocol) {
+        self.appSessionGeneration = appSessionGeneration
+        self.elementCallService = elementCallService
+        stockCallLifecycle = .init()
+        coordinator = .init(dispatchClient: dispatchClient, stockCallLifecycle: stockCallLifecycle)
+    }
+
+    static func makeIfEnabled(appSettings: AppSettings,
+                              userSession: UserSessionProtocol,
+                              elementCallService: ElementCallServiceProtocol) -> SalemXProductionDispatchSession? {
+        guard appSettings.salemxProductionDispatchV1Enabled,
+              !userSession.productionDispatchSessionGeneration.isEmpty,
+              let homeserverOrigin = URL(string: userSession.clientProxy.homeserver),
+              let accessTokenProvider = userSession.clientProxy as? DirectCallMatrixAccessTokenProviding else {
+            elementCallService.configureProductionDispatchCapability(nil)
+            return nil
+        }
+
+        let client = SalemXProductionDispatchClient(homeserverOrigin: homeserverOrigin,
+                                                    accessTokenProvider: accessTokenProvider)
+        let session = SalemXProductionDispatchSession(dispatchClient: client,
+                                                      appSessionGeneration: userSession.productionDispatchSessionGeneration,
+                                                      elementCallService: elementCallService)
+        elementCallService.configureProductionDispatchCapability(.init(client: client,
+                                                                       appSessionGeneration: userSession.productionDispatchSessionGeneration))
+        return session
+    }
+
+    func invalidate() {
+        guard !invalidated else { return }
+        invalidated = true
+        elementCallService.configureProductionDispatchCapability(nil)
+        Task { await coordinator.invalidateSession(appSessionGeneration) }
+    }
+}
+
+@MainActor
+final class SalemXProductionDispatchStockCallLifecycleRouter: SalemXProductionDispatchStockCallLifecycleProtocol {
+    private var lifecycle: SalemXProductionDispatchStockCallLifecycleProtocol?
+
+    func install(_ lifecycle: SalemXProductionDispatchStockCallLifecycleProtocol) -> Bool {
+        guard self.lifecycle == nil else { return false }
+        self.lifecycle = lifecycle
+        return true
+    }
+
+    func remove(_ lifecycle: SalemXProductionDispatchStockCallLifecycleProtocol) {
+        guard self.lifecycle === lifecycle else { return }
+        self.lifecycle = nil
+    }
+
+    func startAudioCall() async -> Result<SalemXProductionDispatchStockCallContext, SalemXProductionDispatchStockCallLifecycleError> {
+        guard let lifecycle else { return .failure(.unavailable) }
+        return await lifecycle.startAudioCall()
+    }
+
+    func awaitConfirmedLocalMembership(for context: SalemXProductionDispatchStockCallContext) async
+        -> Result<SalemXProductionDispatchStockCallContext, SalemXProductionDispatchStockCallLifecycleError> {
+        guard let lifecycle else { return .failure(.unavailable) }
+        return await lifecycle.awaitConfirmedLocalMembership(for: context)
+    }
+
+    func endAudioCall(_ context: SalemXProductionDispatchStockCallContext) async {
+        await lifecycle?.endAudioCall(context)
+    }
+
+    func awaitMembershipRemoval(for context: SalemXProductionDispatchStockCallContext) async {
+        await lifecycle?.awaitMembershipRemoval(for: context)
+    }
+}
+
 enum SalemXProductionDispatchCoordinatorState: Equatable {
     case idle
     case startingMatrixRTC
