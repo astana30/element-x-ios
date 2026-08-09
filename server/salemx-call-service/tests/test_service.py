@@ -426,21 +426,14 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["dev_invite_used"], False)
         self.assertEqual(body["background_apns_push_requested"], False)
         self.assertEqual(body["background_apns_push_result"], "skipped_redacted")
-        self.assertEqual(body["persisted_pushkit_token_lookup_result"], "missing")
+        self.assertEqual(body["persisted_pushkit_token_lookup_result"], "not_requested")
         self.assertEqual(body["pushkit_token_redacted"], True)
-        self.assertEqual(body["pushkit_upload_store_key_redacted"], "none")
-        self.assertEqual(body["pushkit_upload_record_updated_age_bucket"], "missing")
-        self.assertEqual(body["pushkit_upload_environment"], "development")
-        self.assertEqual(body["pushkit_upload_token_is_hex"], False)
-        self.assertNotEqual(body["real_invite_lookup_store_key_redacted"], "none")
-        self.assertEqual(body["real_invite_lookup_record_updated_age_bucket"], "missing")
-        self.assertEqual(body["real_invite_lookup_environment"], "development")
-        self.assertEqual(body["real_invite_lookup_token_is_hex"], False)
-        self.assertEqual(body["upload_invite_store_key_match"], False)
+        self.assertEqual(body["safe_to_send_apns"], False)
+        self.assertEqual(body["apns_provider_invoked"], False)
         self.assertEqual(body["media_credentials_requested"], False)
         self.assertEqual(body["media_connect_requested"], False)
         self.assertEqual(body["matrix_event_emit_requested"], False)
-        self.assertEqual(body["blocked_reason"], "receiver_pushkit_token_missing")
+        self.assertEqual(body["blocked_reason"], "pending_metadata_reference_missing_before_apns")
         self.assertEqual(received.call_handle, "opaque-local-safe-handle")
         self.assertEqual(len(self.invite_issuer(app).issued), 0)
         self.assertIn("delivered=True", output)
@@ -451,7 +444,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("device-b", output)
         self.assertNotIn("opaque-local-safe-handle", output)
 
-    async def test_real_invite_route_requests_background_apns_when_recipient_token_exists(self) -> None:
+    async def test_real_invite_route_blocks_background_apns_without_pending_metadata(self) -> None:
         app_module = _load_app_module()
         signaling = ForegroundCallSignalingService(clock_ms=lambda: 2000)
         store = InMemoryPushKitTokenStore()
@@ -488,27 +481,17 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
                 self.targeted_invite_payload(),
             )
         output = json.dumps(body, sort_keys=True) + "\n" + "\n".join(logs.output)
-        provider_payload = json.dumps(provider.requests[0].payload, sort_keys=True)
 
         self.assertEqual(status, 200)
         self.assertEqual(body["real_non_dev_invite_used"], True)
         self.assertEqual(body["dev_invite_used"], False)
-        self.assertEqual(body["background_apns_push_requested"], True)
-        self.assertEqual(body["background_apns_push_result"], "sandbox_success")
+        self.assertEqual(body["background_apns_push_requested"], False)
+        self.assertEqual(body["background_apns_push_result"], "skipped_redacted")
         self.assertEqual(body["background_apns_failure_reason"], "none")
-        self.assertEqual(body["persisted_pushkit_token_lookup_result"], "found")
+        self.assertEqual(body["persisted_pushkit_token_lookup_result"], "not_requested")
         self.assertEqual(body["pushkit_token_redacted"], True)
         self.assertEqual(body["apns_environment"], "sandbox")
-        self.assertEqual(body["apns_topic_resolved"], True)
-        self.assertNotEqual(body["pushkit_upload_store_key_redacted"], "none")
-        self.assertEqual(body["pushkit_upload_record_updated_age_bucket"], "<5m")
-        self.assertEqual(body["pushkit_upload_environment"], "development")
-        self.assertEqual(body["pushkit_upload_token_is_hex"], False)
-        self.assertEqual(body["real_invite_lookup_store_key_redacted"], body["pushkit_upload_store_key_redacted"])
-        self.assertEqual(body["real_invite_lookup_record_updated_age_bucket"], "<5m")
-        self.assertEqual(body["real_invite_lookup_environment"], "development")
-        self.assertEqual(body["real_invite_lookup_token_is_hex"], False)
-        self.assertEqual(body["upload_invite_store_key_match"], True)
+        self.assertEqual(body["apns_topic_resolved"], False)
         self.assertEqual(body["media_credentials_requested"], False)
         self.assertEqual(body["media_connect_requested"], False)
         self.assertEqual(body["matrix_event_emit_requested"], False)
@@ -522,14 +505,9 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["pending_metadata_direction"], "none")
         self.assertEqual(body["pending_metadata_intent"], "none")
         self.assertEqual(body["pending_metadata_fetch_authenticated_required"], False)
-        self.assertEqual(body["blocked_reason"], "none")
-        self.assertEqual(len(provider.requests), 1)
-        self.assertEqual(provider.requests[0].environment, "sandbox")
-        self.assertIn("real_invite_controlled", provider_payload)
-        self.assertIn("\"redacted\": true", provider_payload)
-        self.assertNotIn("room_id", provider_payload)
-        self.assertNotIn("call_handle", provider_payload)
-        self.assertNotIn("recipient", provider_payload)
+        self.assertEqual(body["safe_to_send_apns"], False)
+        self.assertEqual(body["blocked_reason"], "pending_metadata_reference_missing_before_apns")
+        self.assertEqual(provider.requests, [])
         self.assertNotIn("synthetic-recipient-pushkit-token-fixture", output)
         self.assertNotIn("auth-a", output)
         self.assertNotIn("caller", output)
@@ -583,8 +561,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
                 payload,
             )
         provider_payload = provider.requests[0].payload
-        provider_output = json.dumps(provider_payload, sort_keys=True)
-        output = json.dumps(body, sort_keys=True) + "\n" + provider_output + "\n" + "\n".join(logs.output)
+        output = json.dumps(body, sort_keys=True) + "\n" + "\n".join(logs.output)
 
         self.assertEqual(status, 200)
         self.assertEqual(body["real_non_dev_invite_used"], True)
@@ -636,10 +613,10 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(metadata_body["peer_user_id"], "caller")
         self.assertEqual(metadata_body["direction"], "incoming")
         self.assertEqual(metadata_body["intent"], "audio")
-        self.assertEqual(wrong_user_status, 403)
-        self.assertEqual(wrong_user_body["errcode"], "M_FORBIDDEN")
-        self.assertEqual(wrong_device_status, 403)
-        self.assertEqual(wrong_device_body["errcode"], "M_FORBIDDEN")
+        self.assertEqual(wrong_user_status, 404)
+        self.assertEqual(wrong_user_body["errcode"], "M_NOT_FOUND")
+        self.assertEqual(wrong_device_status, 404)
+        self.assertEqual(wrong_device_body["errcode"], "M_NOT_FOUND")
 
         for raw_value in ["call-a", "!room:example.test", "caller", "callee", "device-b", "device-c", "opaque-local-safe-handle"]:
             self.assertNotIn(raw_value, output)
@@ -711,7 +688,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
             f"/_matrix/client/unstable/kz.salemx.direct_call/foreground-signaling/pending-metadata/{metadata_reference}",
             {"authorization": self.authorization("auth-a")},
         )
-        output = json.dumps(body, sort_keys=True) + "\n" + json.dumps(provider_payload, sort_keys=True)
+        output = json.dumps(body, sort_keys=True)
 
         self.assertEqual(status, 200)
         self.assertEqual(body["background_apns_push_result"], "sandbox_success")
@@ -724,8 +701,8 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(metadata_body["peer_user_id"], "caller")
         self.assertEqual(metadata_body["direction"], "incoming")
         self.assertEqual(metadata_body["intent"], "audio")
-        self.assertEqual(wrong_user_status, 403)
-        self.assertEqual(wrong_user_body["errcode"], "M_FORBIDDEN")
+        self.assertEqual(wrong_user_status, 404)
+        self.assertEqual(wrong_user_body["errcode"], "M_NOT_FOUND")
 
         for raw_value in [
             "call-b",
@@ -1667,12 +1644,13 @@ class APNsVoIPSandboxSendRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provider.requests, [])
         self.assertNotIn(self.synthetic_token(), output)
 
-    async def test_production_apns_environment_is_rejected_for_scaffold(self) -> None:
+    async def test_explicit_production_apns_environment_uses_fake_provider(self) -> None:
         app_module = _load_app_module()
+        provider = FakeAPNsVoIPProvider(result="production_success")
         app, _ = self.stored_token_app(
             app_module,
             config=self.config(enabled=True, environment="production", credentials_available=True),
-            provider=FakeAPNsVoIPProvider(),
+            provider=provider,
         )
 
         status, body = await _asgi_post_json(
@@ -1685,9 +1663,13 @@ class APNsVoIPSandboxSendRouteTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(status, 200)
         self.assertEqual(body["apns_environment"], "production")
-        self.assertEqual(body["apns_provider_requested"], False)
-        self.assertEqual(body["apns_voip_push_send_requested"], False)
-        self.assertEqual(body["blocked_reason"], "apns_production_environment_rejected")
+        self.assertEqual(body["apns_provider_requested"], True)
+        self.assertEqual(body["apns_provider_accepted"], True)
+        self.assertEqual(body["apns_voip_push_send_requested"], True)
+        self.assertEqual(body["apns_voip_push_send_result"], "production_success")
+        self.assertEqual(body["blocked_reason"], "none")
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(provider.requests[0].environment, "production")
         self.assertNotIn(self.synthetic_token(), output)
 
     async def test_unresolved_topic_blocks_apns_send(self) -> None:

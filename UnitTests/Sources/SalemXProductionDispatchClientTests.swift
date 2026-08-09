@@ -262,3 +262,145 @@ private struct DispatchAccessTokenProvider: DirectCallMatrixAccessTokenProviding
         accessToken
     }
 }
+
+@MainActor
+struct SalemXProductionDispatchLoopbackTests {
+    @Test
+    func swiftURLSessionExercisesPythonRoutesAndPostgreSQL() async throws {
+        guard let originValue = ProcessInfo.processInfo.environment["SALEMX_STAGE7_LOOPBACK_ORIGIN"] else {
+            return
+        }
+        let origin = try #require(URL(string: originValue))
+        let sender = makeClient(origin: origin, accessToken: senderAccessToken)
+        let receiver = makeClient(origin: origin, accessToken: receiverAccessToken)
+
+        _ = try await sender.registerCapability(.init(token: String(repeating: "a", count: 64),
+                                                      environment: .production,
+                                                      appSessionGeneration: senderGeneration)).get()
+        _ = try await receiver.registerCapability(.init(token: String(repeating: "b", count: 64),
+                                                        environment: .production,
+                                                        appSessionGeneration: receiverGeneration)).get()
+
+        let sentDispatch = try await prepareAndClaim(sender: sender,
+                                                     roomID: "!stage7-swift-room:example.invalid",
+                                                     callID: "stage7-swift-call")
+        let sent = try await sender.sendPrepared(.init(dispatchID: sentDispatch.dispatchID,
+                                                       senderReference: sentDispatch.senderReference,
+                                                       receiverReference: sentDispatch.receiverReference,
+                                                       appSessionGeneration: senderGeneration)).get()
+        #expect(sent.state == .sent)
+        #expect(sent.apnsSendCount == 1)
+
+        let consumed = try await receiver.consume(.init(dispatchID: sentDispatch.dispatchID,
+                                                        receiverReference: sentDispatch.receiverReference,
+                                                        appSessionGeneration: receiverGeneration)).get()
+        #expect(consumed.state == .consumed)
+        #expect(consumed.callID == "stage7-swift-call")
+        #expect(consumed.roomID == "!stage7-swift-room:example.invalid")
+        #expect(consumed.peerUserID == senderUserID)
+        #expect(await receiver.consume(.init(dispatchID: sentDispatch.dispatchID,
+                                             receiverReference: sentDispatch.receiverReference,
+                                             appSessionGeneration: receiverGeneration)) == .failure(.http(.conflict, .conflict)))
+
+        let cancelledDispatch = try await sender.prepare(prepareRequest(roomID: "!stage7-cancel-room:example.invalid",
+                                                                        callID: "stage7-cancel-call")).get()
+        let cancelled = try await sender.cancelPrepared(.init(dispatchID: cancelledDispatch.dispatchID,
+                                                              senderReference: cancelledDispatch.senderReference,
+                                                              appSessionGeneration: senderGeneration)).get()
+        #expect(cancelled.state == .cancelled)
+
+        let ambiguousDispatch = try await prepareAndClaim(sender: sender,
+                                                          roomID: "!stage7-ambiguous-room:example.invalid",
+                                                          callID: "stage7-ambiguous-call")
+        let ambiguous = await sender.sendPrepared(.init(dispatchID: ambiguousDispatch.dispatchID,
+                                                        senderReference: ambiguousDispatch.senderReference,
+                                                        receiverReference: ambiguousDispatch.receiverReference,
+                                                        appSessionGeneration: senderGeneration))
+        #expect(ambiguous == .failure(.http(.server, .deliveryFailed)))
+
+        let unauthorized = makeClient(origin: origin, accessToken: "stage7-invalid-auth-token")
+        let unauthorizedResult = await unauthorized.registerCapability(.init(token: String(repeating: "c", count: 64),
+                                                                             environment: .production,
+                                                                             appSessionGeneration: "stage7-invalid-generation"))
+        #expect(unauthorizedResult == .failure(.http(.authentication, .unknown)))
+
+        let metrics = try await metrics(origin: origin)
+        #expect(metrics.senderAuthCount > 0)
+        #expect(metrics.receiverAuthCount > 0)
+        #expect(metrics.rejectedAuthCount == 1)
+        #expect(metrics.fakeAPNsAttemptCount == 2)
+        #expect(metrics.fakeAPNsAcceptedCount == 1)
+        #expect(metrics.fakeAPNsAmbiguousCount == 1)
+    }
+
+    private func prepareAndClaim(sender: SalemXProductionDispatchClient,
+                                 roomID: String,
+                                 callID: String) async throws -> SalemXProductionDispatchPrepareResponse {
+        let prepared = try await sender.prepare(prepareRequest(roomID: roomID, callID: callID)).get()
+        let claimed = try await sender.claim(.init(dispatchID: prepared.dispatchID,
+                                                   senderReference: prepared.senderReference,
+                                                   appSessionGeneration: senderGeneration)).get()
+        #expect(claimed.state == .claimed)
+        return prepared
+    }
+
+    private func prepareRequest(roomID: String, callID: String) -> SalemXProductionDispatchPrepareRequest {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        return .init(recipient: receiverUserID,
+                     recipientDevice: nil,
+                     callHandle: "stage7-loopback-handle",
+                     createdAtMS: now,
+                     expiresAtMS: now + 60000,
+                     displayLabel: "Audio call",
+                     appSessionGeneration: senderGeneration,
+                     pendingMetadata: .init(callID: callID, roomID: roomID))
+    }
+
+    private func makeClient(origin: URL, accessToken: String) -> SalemXProductionDispatchClient {
+        SalemXProductionDispatchClient(homeserverOrigin: origin,
+                                       accessTokenProvider: Stage7AccessTokenProvider(accessToken: accessToken),
+                                       allowsInsecureTestOrigin: true)
+    }
+
+    private func metrics(origin: URL) async throws -> Stage7LoopbackMetrics {
+        let url = try #require(URL(string: metricsPath, relativeTo: origin)?.absoluteURL)
+        let (data, response) = try await URLSession.shared.data(from: url)
+        #expect((response as? HTTPURLResponse)?.statusCode == 200)
+        return try JSONDecoder().decode(Stage7LoopbackMetrics.self, from: data)
+    }
+
+    private let senderAccessToken = "stage7-sender-auth-token"
+    private let receiverAccessToken = "stage7-receiver-auth-token"
+    private let senderGeneration = "stage7-swift-sender-generation"
+    private let receiverGeneration = "stage7-swift-receiver-generation"
+    private let senderUserID = "@stage7-swift-sender:example.invalid"
+    private let receiverUserID = "@stage7-swift-receiver:example.invalid"
+    private let metricsPath = "/_salemx/test-only/stage7/metrics"
+}
+
+@MainActor
+private struct Stage7AccessTokenProvider: DirectCallMatrixAccessTokenProviding {
+    let accessToken: String
+
+    func matrixAccessToken() async -> String? {
+        accessToken
+    }
+}
+
+private struct Stage7LoopbackMetrics: Decodable {
+    let senderAuthCount: Int
+    let receiverAuthCount: Int
+    let rejectedAuthCount: Int
+    let fakeAPNsAttemptCount: Int
+    let fakeAPNsAcceptedCount: Int
+    let fakeAPNsAmbiguousCount: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case senderAuthCount = "sender_auth_count"
+        case receiverAuthCount = "receiver_auth_count"
+        case rejectedAuthCount = "rejected_auth_count"
+        case fakeAPNsAttemptCount = "fake_apns_attempt_count"
+        case fakeAPNsAcceptedCount = "fake_apns_accepted_count"
+        case fakeAPNsAmbiguousCount = "fake_apns_ambiguous_count"
+    }
+}
