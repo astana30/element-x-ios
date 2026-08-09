@@ -74,6 +74,10 @@ final class CallScreenCoordinator: CoordinatorProtocol {
     func stop() {
         viewModel.stop()
     }
+
+    func requestProductionDispatchTermination() async -> Bool {
+        await viewModel.requestProductionDispatchTermination()
+    }
         
     func toPresentable() -> AnyView {
         AnyView(CallScreen(context: viewModel.context))

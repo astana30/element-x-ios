@@ -251,6 +251,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         UIDevice.current.isProximityMonitoringEnabled = false
         UIApplication.shared.isIdleTimerDisabled = false
     }
+
+    func requestProductionDispatchTermination() async -> Bool {
+        await sendCallTerminationSignal(waitingFor: setupCallTask)
+    }
     
     // MARK: - Private
 

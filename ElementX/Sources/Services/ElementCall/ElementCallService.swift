@@ -310,9 +310,39 @@ private struct MatrixRTCCallMembershipStateKey: Hashable {
 
 private struct MatrixRTCCallMembershipStateUpdate {
     let eventID: String
+    let roomID: String?
     let stateKey: MatrixRTCCallMembershipStateKey
     let timestampMilliseconds: UInt64
     let memberships: [MatrixRTCCallMembership]
+}
+
+private final class SalemXStockElementCallObservationState {
+    let handle: SalemXStockElementCallObservationHandle
+    let roomID: String
+    let ownUserID: String
+    let ownDeviceID: String
+    let armedAtMilliseconds: UInt64
+    var observation: (any MatrixRTCCallMembershipStateObservationProtocol)?
+    var baselineEstablished = false
+    var baselineMemberships = Set<MatrixRTCCallMembershipIdentity>()
+    var confirmedMembership: MatrixRTCCallMembershipIdentity?
+    var confirmationResult: Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>?
+    var removalResult: Result<Void, SalemXStockElementCallLifecycleError>?
+    var armContinuations = [CheckedContinuation<Result<SalemXStockElementCallObservationHandle, SalemXStockElementCallLifecycleError>, Never>]()
+    var confirmationContinuations = [CheckedContinuation<Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>, Never>]()
+    var removalContinuations = [CheckedContinuation<Result<Void, SalemXStockElementCallLifecycleError>, Never>]()
+
+    init(handle: SalemXStockElementCallObservationHandle,
+         roomID: String,
+         ownUserID: String,
+         ownDeviceID: String,
+         armedAtMilliseconds: UInt64) {
+        self.handle = handle
+        self.roomID = roomID
+        self.ownUserID = ownUserID
+        self.ownDeviceID = ownDeviceID
+        self.armedAtMilliseconds = armedAtMilliseconds
+    }
 }
 
 /// Parses the exact call membership identity that the SDK's `RoomInfo` projection intentionally omits.
@@ -347,6 +377,7 @@ private enum MatrixRTCCallMembershipEventParser {
               let content = rawEvent["content"] as? [String: Any] else {
             return nil
         }
+        let roomID = nonEmptyString(rawEvent["room_id"])
 
         let rawStateKey = nonEmptyString(rawEvent["state_key"])
         let stickyKey = stickyKey(in: content)
@@ -362,6 +393,7 @@ private enum MatrixRTCCallMembershipEventParser {
         let membershipStateKey = MatrixRTCCallMembershipStateKey(eventType: eventType, stateKey: stateKey)
         if isRemovalContent(content, eventFamily: eventFamily) {
             return .init(eventID: eventID,
+                         roomID: roomID,
                          stateKey: membershipStateKey,
                          timestampMilliseconds: timestampMilliseconds,
                          memberships: [])
@@ -370,6 +402,7 @@ private enum MatrixRTCCallMembershipEventParser {
            let legacyMemberships = content["memberships"] as? [Any],
            legacyMemberships.isEmpty {
             return .init(eventID: eventID,
+                         roomID: roomID,
                          stateKey: membershipStateKey,
                          timestampMilliseconds: timestampMilliseconds,
                          memberships: [])
@@ -396,6 +429,7 @@ private enum MatrixRTCCallMembershipEventParser {
         }
 
         return .init(eventID: eventID,
+                     roomID: roomID,
                      stateKey: membershipStateKey,
                      timestampMilliseconds: timestampMilliseconds,
                      memberships: memberships)
@@ -841,7 +875,7 @@ private final class DirectRoomInfoTerminationStateMachine {
 }
 
 // swiftlint:disable type_body_length
-class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDelegate, CXProviderDelegate {
+class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockElementCallLifecycleProviding, PKPushRegistryDelegate, CXProviderDelegate {
     private enum IncomingFallbackConstants {
         static let unansweredTimeout: Duration = .seconds(45)
         static let suppressionDuration: TimeInterval = 30
@@ -971,6 +1005,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
     
     private var voIPPushToken: Data?
     private var registeredVoIPPushToken: Data?
+
+    @MainActor private var productionDispatchCapabilityConfiguration: SalemXProductionDispatchCapabilityConfiguration?
+    @MainActor private var productionDispatchCapabilityTokenRevision: UInt64 = 0
+    @MainActor private var registeredProductionDispatchCapability: (appSessionGeneration: String, tokenRevision: UInt64)?
+    @MainActor private var productionDispatchCapabilityRegistrationInFlight: (appSessionGeneration: String, tokenRevision: UInt64)?
+    @MainActor private var productionDispatchObservations = [UUID: SalemXStockElementCallObservationState]()
     
     private weak var clientProxy: ClientProxyProtocol? {
         didSet {
@@ -1106,7 +1146,98 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         if self.clientProxy !== clientProxy {
             self.clientProxy = clientProxy
         }
-        Task { await registerVoIPPusherIfNeeded() }
+        Task { @MainActor in await registerVoIPPusherIfNeeded() }
+    }
+
+    @MainActor
+    func configureProductionDispatchCapability(_ configuration: SalemXProductionDispatchCapabilityConfiguration?) {
+        productionDispatchCapabilityConfiguration = configuration
+        registeredProductionDispatchCapability = nil
+
+        guard configuration != nil else { return }
+        Task { @MainActor in await registerVoIPPusherIfNeeded() }
+    }
+
+    @MainActor
+    func beginOutgoingObservation(roomID: String,
+                                  appSessionGeneration: String,
+                                  attemptGeneration: UInt64) async
+        -> Result<SalemXStockElementCallObservationHandle, SalemXStockElementCallLifecycleError> {
+        guard !roomID.isEmpty,
+              !appSessionGeneration.isEmpty,
+              let clientProxy,
+              let ownDeviceID = clientProxy.deviceID,
+              case let .joined(roomProxy) = await clientProxy.roomForIdentifier(roomID),
+              let stateObserver = roomProxy as? any MatrixRTCCallMembershipStateObserving else {
+            return .failure(.unavailable)
+        }
+
+        let handle = SalemXStockElementCallObservationHandle(observationID: UUID(),
+                                                             appSessionGeneration: appSessionGeneration,
+                                                             attemptGeneration: attemptGeneration)
+        let state = SalemXStockElementCallObservationState(handle: handle,
+                                                           roomID: roomID,
+                                                           ownUserID: clientProxy.userID,
+                                                           ownDeviceID: ownDeviceID,
+                                                           armedAtMilliseconds: UInt64(max(0, timeProvider.now().timeIntervalSince1970 * 1000)))
+        productionDispatchObservations[handle.observationID] = state
+
+        let observation = await stateObserver.observeMatrixRTCCallMembershipState { [weak self] itemProxies in
+            Task { @MainActor [weak self] in
+                self?.reconcileProductionDispatchMembershipState(itemProxies, observationID: handle.observationID)
+            }
+        }
+
+        guard let observation,
+              productionDispatchObservations[handle.observationID] === state else {
+            cancelProductionDispatchObservation(observationID: handle.observationID)
+            return .failure(.unavailable)
+        }
+        state.observation = observation
+
+        if state.baselineEstablished {
+            return .success(handle)
+        }
+
+        return await withCheckedContinuation { continuation in
+            state.armContinuations.append(continuation)
+        }
+    }
+
+    @MainActor
+    func awaitMembershipConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
+        -> Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError> {
+        guard let state = productionDispatchObservation(matching: handle) else {
+            return .failure(.invalidHandle)
+        }
+        if let result = state.confirmationResult {
+            return result
+        }
+
+        return await withCheckedContinuation { continuation in
+            state.confirmationContinuations.append(continuation)
+        }
+    }
+
+    @MainActor
+    func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
+        -> Result<Void, SalemXStockElementCallLifecycleError> {
+        guard let state = productionDispatchObservation(matching: handle) else {
+            return .failure(.invalidHandle)
+        }
+        if let result = state.removalResult {
+            return result
+        }
+
+        return await withCheckedContinuation { continuation in
+            state.removalContinuations.append(continuation)
+        }
+    }
+
+    @MainActor
+    func cancelObservation(_ handle: SalemXStockElementCallObservationHandle) {
+        guard productionDispatchObservation(matching: handle) != nil else { return }
+        cancelProductionDispatchObservation(observationID: handle.observationID)
     }
 
     #if DEBUG
@@ -1264,7 +1395,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         SalemXPushKitRegistrationSmokeDebugBridge.recordElementCallServiceVoIPPushTokenForDebugUpload(pushCredentials.token)
         #endif
         
-        Task { await registerVoIPPusherIfNeeded() }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await registerVoIPPusherIfNeeded()
+        }
     }
     
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
@@ -2014,16 +2148,22 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
         ongoingCallTimelineCancellable = nil
     }
     
+    @MainActor
     private func registerVoIPPusherIfNeeded() async {
         guard let voIPPushToken, let clientProxy else {
             return
         }
         
         guard registeredVoIPPushToken != voIPPushToken else {
+            await registerProductionDispatchCapabilityIfNeeded(token: voIPPushToken,
+                                                               tokenRevision: productionDispatchCapabilityTokenRevision)
             return
         }
-        
+
         registeredVoIPPushToken = voIPPushToken
+        productionDispatchCapabilityTokenRevision &+= 1
+        registeredProductionDispatchCapability = nil
+        let tokenRevision = productionDispatchCapabilityTokenRevision
         
         do {
             let defaultPayload = APNSPayload(aps: APSInfo(mutableContent: 1,
@@ -2042,10 +2182,167 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, PKPushRegistryDe
                                                               lang: Bundle.app.preferredLocalizations.first ?? "en")
             try await clientProxy.setPusher(with: configuration)
             MXLog.info("Set VoIP pusher succeeded")
+            guard self.voIPPushToken == voIPPushToken,
+                  registeredVoIPPushToken == voIPPushToken else {
+                return
+            }
+            await registerProductionDispatchCapabilityIfNeeded(token: voIPPushToken,
+                                                               tokenRevision: tokenRevision)
         } catch {
-            registeredVoIPPushToken = nil
+            if registeredVoIPPushToken == voIPPushToken {
+                registeredVoIPPushToken = nil
+            }
             MXLog.error("Set VoIP pusher failed: \(error)")
         }
+    }
+
+    @MainActor
+    private func registerProductionDispatchCapabilityIfNeeded(token voIPPushToken: Data, tokenRevision: UInt64) async {
+        guard let configuration = productionDispatchCapabilityConfiguration,
+              !configuration.appSessionGeneration.isEmpty,
+              productionDispatchCapabilityTokenRevision == tokenRevision,
+              self.voIPPushToken == voIPPushToken,
+              registeredVoIPPushToken == voIPPushToken else {
+            return
+        }
+
+        let registrationIdentity = (configuration.appSessionGeneration, tokenRevision)
+        guard registeredProductionDispatchCapability?.appSessionGeneration != registrationIdentity.0 ||
+            registeredProductionDispatchCapability?.tokenRevision != registrationIdentity.1 else {
+            return
+        }
+        guard productionDispatchCapabilityRegistrationInFlight?.appSessionGeneration != registrationIdentity.0 ||
+            productionDispatchCapabilityRegistrationInFlight?.tokenRevision != registrationIdentity.1 else {
+            return
+        }
+        productionDispatchCapabilityRegistrationInFlight = registrationIdentity
+        defer {
+            if productionDispatchCapabilityRegistrationInFlight?.appSessionGeneration == registrationIdentity.0,
+               productionDispatchCapabilityRegistrationInFlight?.tokenRevision == registrationIdentity.1 {
+                productionDispatchCapabilityRegistrationInFlight = nil
+            }
+        }
+
+        #if DEBUG
+        let environment = SalemXProductionDispatchEnvironment.development
+        #else
+        let environment = SalemXProductionDispatchEnvironment.production
+        #endif
+        let request = SalemXProductionDispatchCapabilityRegistrationRequest(token: voIPPushToken.base64EncodedString(),
+                                                                            environment: environment,
+                                                                            appSessionGeneration: configuration.appSessionGeneration,
+                                                                            capabilityExpiresInSeconds: configuration.capabilityExpiresInSeconds)
+        let result = await configuration.client.registerCapability(request)
+        guard productionDispatchCapabilityConfiguration?.appSessionGeneration == registrationIdentity.0,
+              productionDispatchCapabilityTokenRevision == registrationIdentity.1,
+              registeredVoIPPushToken == voIPPushToken else {
+            return
+        }
+
+        switch result {
+        case .success:
+            registeredProductionDispatchCapability = registrationIdentity
+            MXLog.info("Production direct-call capability registration succeeded.")
+        case .failure:
+            MXLog.error("Production direct-call capability registration failed.")
+        }
+    }
+
+    @MainActor
+    private func reconcileProductionDispatchMembershipState(_ itemProxies: [TimelineItemProxy], observationID: UUID) {
+        guard let state = productionDispatchObservations[observationID] else { return }
+
+        var currentMemberships = [MatrixRTCCallMembershipIdentity: UInt64]()
+        let nowMilliseconds = UInt64(max(0, timeProvider.now().timeIntervalSince1970 * 1000))
+        for itemProxy in itemProxies {
+            guard let update = MatrixRTCCallMembershipEventParser.parse(itemProxy),
+                  update.roomID == state.roomID else {
+                continue
+            }
+
+            for membership in update.memberships {
+                let isUnexpired = membership.expiresAtMilliseconds.map { $0 > nowMilliseconds } ?? true
+                guard membership.identity.userID == state.ownUserID,
+                      membership.identity.deviceID == state.ownDeviceID,
+                      membership.identity.callScope == MatrixRTCCallScope.directRoom,
+                      isUnexpired else {
+                    continue
+                }
+                currentMemberships[membership.identity] = max(currentMemberships[membership.identity] ?? 0,
+                                                              update.timestampMilliseconds)
+            }
+        }
+
+        if !state.baselineEstablished {
+            state.baselineEstablished = true
+            state.baselineMemberships = Set(currentMemberships.keys)
+            let continuations = state.armContinuations
+            state.armContinuations.removeAll()
+            continuations.forEach { $0.resume(returning: .success(state.handle)) }
+            return
+        }
+
+        if state.confirmedMembership == nil, state.confirmationResult == nil {
+            let candidates = currentMemberships.filter { identity, timestamp in
+                !state.baselineMemberships.contains(identity) && timestamp >= state.armedAtMilliseconds
+            }
+            if candidates.count == 1, let candidate = candidates.first {
+                state.confirmedMembership = candidate.key
+                let context = SalemXStockElementCallContext(callID: candidate.key.callScope.callID,
+                                                            roomID: state.roomID,
+                                                            callHandle: candidate.key.stateKey)
+                finishProductionDispatchConfirmation(state, result: .success(context))
+            } else if candidates.count > 1 {
+                finishProductionDispatchConfirmation(state, result: .failure(.ambiguousMembership))
+            }
+        }
+
+        if let confirmedMembership = state.confirmedMembership,
+           currentMemberships[confirmedMembership] == nil,
+           state.removalResult == nil {
+            finishProductionDispatchRemoval(state, result: .success(()))
+        }
+    }
+
+    @MainActor
+    private func productionDispatchObservation(matching handle: SalemXStockElementCallObservationHandle)
+        -> SalemXStockElementCallObservationState? {
+        guard let state = productionDispatchObservations[handle.observationID], state.handle == handle else {
+            return nil
+        }
+        return state
+    }
+
+    @MainActor
+    private func finishProductionDispatchConfirmation(_ state: SalemXStockElementCallObservationState,
+                                                      result: Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>) {
+        guard state.confirmationResult == nil else { return }
+        state.confirmationResult = result
+        let continuations = state.confirmationContinuations
+        state.confirmationContinuations.removeAll()
+        continuations.forEach { $0.resume(returning: result) }
+    }
+
+    @MainActor
+    private func finishProductionDispatchRemoval(_ state: SalemXStockElementCallObservationState,
+                                                 result: Result<Void, SalemXStockElementCallLifecycleError>) {
+        guard state.removalResult == nil else { return }
+        state.removalResult = result
+        let continuations = state.removalContinuations
+        state.removalContinuations.removeAll()
+        continuations.forEach { $0.resume(returning: result) }
+    }
+
+    @MainActor
+    private func cancelProductionDispatchObservation(observationID: UUID) {
+        guard let state = productionDispatchObservations.removeValue(forKey: observationID) else { return }
+        state.observation?.cancel()
+
+        let armContinuations = state.armContinuations
+        state.armContinuations.removeAll()
+        armContinuations.forEach { $0.resume(returning: .failure(.cancelled)) }
+        finishProductionDispatchConfirmation(state, result: .failure(.cancelled))
+        finishProductionDispatchRemoval(state, result: .failure(.cancelled))
     }
 
     private func observeSessionGlobalIncomingCalls() {

@@ -162,6 +162,63 @@ final class EmbeddedElementCallProductionHandoff: EmbeddedElementCallHandoff {
     }
 }
 
+enum SalemXStockElementCallLifecycleError: Error, Equatable {
+    case unavailable
+    case invalidHandle
+    case cancelled
+    case ambiguousMembership
+}
+
+struct SalemXStockElementCallObservationHandle: Hashable, CustomStringConvertible {
+    let observationID: UUID
+    let appSessionGeneration: String
+    let attemptGeneration: UInt64
+
+    var description: String {
+        "SalemXStockElementCallObservationHandle(<redacted>)"
+    }
+}
+
+struct SalemXStockElementCallContext: Equatable, CustomStringConvertible {
+    let callID: String
+    let roomID: String
+    let callHandle: String
+
+    var description: String {
+        "SalemXStockElementCallContext(<redacted>)"
+    }
+}
+
+protocol SalemXStockElementCallLifecycleProviding {
+    @MainActor func beginOutgoingObservation(roomID: String,
+                                             appSessionGeneration: String,
+                                             attemptGeneration: UInt64) async
+        -> Result<SalemXStockElementCallObservationHandle, SalemXStockElementCallLifecycleError>
+    @MainActor func awaitMembershipConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
+        -> Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>
+    @MainActor func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
+        -> Result<Void, SalemXStockElementCallLifecycleError>
+    @MainActor func cancelObservation(_ handle: SalemXStockElementCallObservationHandle)
+}
+
+struct SalemXProductionDispatchCapabilityConfiguration: CustomStringConvertible {
+    let client: any SalemXProductionDispatchClientProtocol
+    let appSessionGeneration: String
+    let capabilityExpiresInSeconds: Int
+
+    init(client: any SalemXProductionDispatchClientProtocol,
+         appSessionGeneration: String,
+         capabilityExpiresInSeconds: Int = 3600) {
+        self.client = client
+        self.appSessionGeneration = appSessionGeneration
+        self.capabilityExpiresInSeconds = capabilityExpiresInSeconds
+    }
+
+    var description: String {
+        "SalemXProductionDispatchCapabilityConfiguration(<redacted>)"
+    }
+}
+
 // sourcery: AutoMockable
 protocol ElementCallServiceProtocol {
     var actions: AnyPublisher<ElementCallServiceAction, Never> { get }
@@ -169,6 +226,8 @@ protocol ElementCallServiceProtocol {
     var ongoingCallRoomIDPublisher: CurrentValuePublisher<String?, Never> { get }
     
     func setClientProxy(_ clientProxy: ClientProxyProtocol)
+
+    @MainActor func configureProductionDispatchCapability(_ configuration: SalemXProductionDispatchCapabilityConfiguration?)
 
     @MainActor func observeForegroundRoom(roomProxy: JoinedRoomProxyProtocol, roomDisplayName: String?)
 
@@ -188,6 +247,8 @@ protocol ElementCallServiceProtocol {
 }
 
 extension ElementCallServiceProtocol {
+    @MainActor func configureProductionDispatchCapability(_ configuration: SalemXProductionDispatchCapabilityConfiguration?) { }
+
     @MainActor func observeForegroundRoom(roomProxy _: JoinedRoomProxyProtocol, roomDisplayName _: String?) { }
 
     @MainActor func stopObservingForegroundRoom(roomID _: String) { }

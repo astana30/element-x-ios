@@ -2777,12 +2777,17 @@ final class ElementCallServiceTests {
     @Test
     func whenVoIPPushTokenUpdatesAndClientProxyExists_voIPPusherIsRegistered() async throws {
         await service.declineIncomingCall()
+        try? await Task.sleep(for: .milliseconds(200))
         service.setClientProxy(clientProxy)
 
         let pushCredentials = PKPushCredentialsMock(token: Data("1234".utf8))
+        let expectedPushkey = Data("1234".utf8).base64EncodedString()
+        var matchingConfiguration: PusherConfiguration?
 
         await confirmation { confirmation in
-            clientProxy.setPusherWithClosure = { _ in
+            clientProxy.setPusherWithClosure = { configuration in
+                guard configuration.identifiers.pushkey == expectedPushkey else { return }
+                matchingConfiguration = configuration
                 confirmation()
             }
 
@@ -2790,8 +2795,8 @@ final class ElementCallServiceTests {
             try? await Task.sleep(for: .milliseconds(100))
         }
 
-        let configuration = try #require(clientProxy.setPusherWithReceivedConfiguration)
-        #expect(configuration.identifiers.pushkey == Data("1234".utf8).base64EncodedString())
+        let configuration = try #require(matchingConfiguration)
+        #expect(configuration.identifiers.pushkey == expectedPushkey)
         #expect(configuration.identifiers.appId == appSettings.voIPPusherAppID)
         #expect(configuration.profileTag == appSettings.voIPPusherProfileTag)
     }
@@ -2799,11 +2804,16 @@ final class ElementCallServiceTests {
     @Test
     func whenClientProxyArrivesAfterVoIPPushToken_voIPPusherIsRegistered() async throws {
         await service.declineIncomingCall()
+        try? await Task.sleep(for: .milliseconds(200))
         let pushCredentials = PKPushCredentialsMock(token: Data("abcd".utf8))
+        let expectedPushkey = Data("abcd".utf8).base64EncodedString()
+        var matchingConfiguration: PusherConfiguration?
         service.pushRegistry(pushRegistry, didUpdate: pushCredentials, for: .voIP)
 
         await confirmation { confirmation in
-            clientProxy.setPusherWithClosure = { _ in
+            clientProxy.setPusherWithClosure = { configuration in
+                guard configuration.identifiers.pushkey == expectedPushkey else { return }
+                matchingConfiguration = configuration
                 confirmation()
             }
 
@@ -2811,9 +2821,131 @@ final class ElementCallServiceTests {
             try? await Task.sleep(for: .milliseconds(100))
         }
 
-        let configuration = try #require(clientProxy.setPusherWithReceivedConfiguration)
-        #expect(configuration.identifiers.pushkey == Data("abcd".utf8).base64EncodedString())
+        let configuration = try #require(matchingConfiguration)
+        #expect(configuration.identifiers.pushkey == expectedPushkey)
         #expect(configuration.identifiers.appId == appSettings.voIPPusherAppID)
+    }
+
+    @Test
+    func productionDispatchCapabilityReusesRegisteredVoIPToken() async throws {
+        await service.declineIncomingCall()
+        try? await Task.sleep(for: .milliseconds(200))
+        let capabilityClient = SalemXProductionDispatchCapabilityClientSpy()
+        service.configureProductionDispatchCapability(.init(client: capabilityClient,
+                                                            appSessionGeneration: "opaque-generation"))
+        clientProxy.setPusherWithClosure = { _ in }
+        service.setClientProxy(clientProxy)
+
+        await confirmation { confirmation in
+            capabilityClient.registrationHandler = { request in
+                guard request.token == Data("capability-token".utf8).base64EncodedString() else { return }
+                confirmation()
+            }
+            service.pushRegistry(pushRegistry,
+                                 didUpdate: PKPushCredentialsMock(token: Data("capability-token".utf8)),
+                                 for: .voIP)
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+
+        let matchingRequests = capabilityClient.registrationRequests.filter {
+            $0.token == Data("capability-token".utf8).base64EncodedString()
+        }
+        let request = try #require(matchingRequests.first)
+        #expect(matchingRequests.count == 1)
+        #expect(request.version == 1)
+        #expect(request.protocolVersion == 1)
+        #expect(request.intents == [.audio])
+        #expect(request.receiverHandoff == .matrixRTCElementCall)
+        #expect(request.appSessionGeneration == "opaque-generation")
+        #expect(request.token == Data("capability-token".utf8).base64EncodedString())
+        #expect(String(describing: request) == "SalemXProductionDispatchCapabilityRegistrationRequest(<redacted>)")
+    }
+
+    @Test
+    func productionDispatchObservationRejectsHistoricalAndWrongScopeThenTracksRemoval() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!outgoing:test"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true))
+        room.initialRawMembershipState = [makeMatrixRTCMembershipTimelineItem(eventID: "$historical",
+                                                                              roomID: roomID,
+                                                                              membershipID: "HISTORICAL",
+                                                                              createdAt: currentDate.addingTimeInterval(-10))]
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 7).get()
+        #expect(room.rawMembershipObservationStartCount == 1)
+
+        let wrongGenerationHandle = SalemXStockElementCallObservationHandle(observationID: handle.observationID,
+                                                                            appSessionGeneration: "stale-generation",
+                                                                            attemptGeneration: handle.attemptGeneration)
+        #expect(await service.awaitMembershipConfirmation(wrongGenerationHandle) == .failure(.invalidHandle))
+
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        #expect(room.receiveRawMembershipState([makeMatrixRTCMembershipTimelineItem(eventID: "$wrong-room",
+                                                                                    roomID: "!wrong:test",
+                                                                                    membershipID: "WRONG_ROOM",
+                                                                                    createdAt: currentDate.addingTimeInterval(1))]))
+        #expect(room.receiveRawMembershipState(room.initialRawMembershipState))
+        #expect(room.receiveRawMembershipState([makeMatrixRTCMembershipTimelineItem(eventID: "$fresh",
+                                                                                    roomID: roomID,
+                                                                                    membershipID: "FRESH",
+                                                                                    createdAt: currentDate.addingTimeInterval(1))]))
+
+        let context = try await confirmationTask.value.get()
+        #expect(context.callID == "ROOM")
+        #expect(context.roomID == roomID)
+        #expect(context.callHandle == "_@test:user.net_LOCAL_DEVICE_FRESH")
+
+        let removalTask = Task { @MainActor in
+            await self.service.awaitMembershipRemoval(handle)
+        }
+        #expect(room.receiveRawMembershipState([]))
+        switch await removalTask.value {
+        case .success:
+            break
+        case .failure(let error):
+            Issue.record("Unexpected removal error: \(error)")
+        }
+        service.cancelObservation(handle)
+    }
+
+    @Test
+    func productionDispatchObservationCancellationResumesExactlyOnce() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!cancel:test"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true))
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 8).get()
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        await Task.yield()
+        service.cancelObservation(handle)
+        service.cancelObservation(handle)
+
+        #expect(await confirmationTask.value == .failure(.cancelled))
+        #expect(room.receiveRawMembershipState([makeMatrixRTCMembershipTimelineItem(eventID: "$stale",
+                                                                                    roomID: roomID,
+                                                                                    membershipID: "STALE",
+                                                                                    createdAt: currentDate.addingTimeInterval(1))]))
+        #expect(await service.awaitMembershipConfirmation(handle) == .failure(.invalidHandle))
     }
 
     private func makeRoomInfo(id: String,
@@ -3887,6 +4019,39 @@ private class PKPushCredentialsMock: PKPushCredentials {
 
     override var token: Data {
         mockToken
+    }
+}
+
+@MainActor
+private final class SalemXProductionDispatchCapabilityClientSpy: SalemXProductionDispatchClientProtocol {
+    private(set) var registrationRequests = [SalemXProductionDispatchCapabilityRegistrationRequest]()
+    var registrationHandler: ((SalemXProductionDispatchCapabilityRegistrationRequest) -> Void)?
+
+    func registerCapability(_ request: SalemXProductionDispatchCapabilityRegistrationRequest) async
+        -> Result<SalemXProductionDispatchCapabilityRegistrationResponse, SalemXProductionDispatchClientError> {
+        registrationRequests.append(request)
+        registrationHandler?(request)
+        return .success(.init(registrationResult: "stored", tokenRedacted: true))
+    }
+
+    func prepare(_ request: SalemXProductionDispatchPrepareRequest) async
+        -> Result<SalemXProductionDispatchPrepareResponse, SalemXProductionDispatchClientError> {
+        fatalError("Unexpected prepare")
+    }
+
+    func claim(_ request: SalemXProductionDispatchReferenceRequest) async
+        -> Result<SalemXProductionDispatchClaimResponse, SalemXProductionDispatchClientError> {
+        fatalError("Unexpected claim")
+    }
+
+    func sendPrepared(_ request: SalemXProductionDispatchSendPreparedRequest) async
+        -> Result<SalemXProductionDispatchSendPreparedResponse, SalemXProductionDispatchClientError> {
+        fatalError("Unexpected send")
+    }
+
+    func cancelPrepared(_ request: SalemXProductionDispatchReferenceRequest) async
+        -> Result<SalemXProductionDispatchCancelResponse, SalemXProductionDispatchClientError> {
+        fatalError("Unexpected cancel")
     }
 }
 

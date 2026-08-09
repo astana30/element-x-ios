@@ -6316,6 +6316,48 @@ class ElementCallServiceMock: ElementCallServiceProtocol, @unchecked Sendable {
         }
         setClientProxyClosure?(clientProxy)
     }
+    //MARK: - configureProductionDispatchCapability
+
+    var configureProductionDispatchCapabilityUnderlyingCallsCount = 0
+    var configureProductionDispatchCapabilityCallsCount: Int {
+        get {
+            if Thread.isMainThread {
+                return configureProductionDispatchCapabilityUnderlyingCallsCount
+            } else {
+                var returnValue: Int? = nil
+                DispatchQueue.main.sync {
+                    returnValue = configureProductionDispatchCapabilityUnderlyingCallsCount
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                configureProductionDispatchCapabilityUnderlyingCallsCount = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    configureProductionDispatchCapabilityUnderlyingCallsCount = newValue
+                }
+            }
+        }
+    }
+    var configureProductionDispatchCapabilityCalled: Bool {
+        return configureProductionDispatchCapabilityCallsCount > 0
+    }
+    var configureProductionDispatchCapabilityReceivedConfiguration: SalemXProductionDispatchCapabilityConfiguration?
+    var configureProductionDispatchCapabilityReceivedInvocations: [SalemXProductionDispatchCapabilityConfiguration?] = []
+    var configureProductionDispatchCapabilityClosure: ((SalemXProductionDispatchCapabilityConfiguration?) -> Void)?
+
+    @MainActor
+    func configureProductionDispatchCapability(_ configuration: SalemXProductionDispatchCapabilityConfiguration?) {
+        configureProductionDispatchCapabilityCallsCount += 1
+        configureProductionDispatchCapabilityReceivedConfiguration = configuration
+        DispatchQueue.main.async {
+            self.configureProductionDispatchCapabilityReceivedInvocations.append(configuration)
+        }
+        configureProductionDispatchCapabilityClosure?(configuration)
+    }
     //MARK: - observeForegroundRoom
 
     var observeForegroundRoomRoomProxyRoomDisplayNameUnderlyingCallsCount = 0

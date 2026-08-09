@@ -13,5 +13,12 @@ protocol CallScreenViewModelProtocol {
     var actions: AnyPublisher<CallScreenViewModelAction, Never> { get }
     var context: CallScreenViewModelType.Context { get }
     
+    func requestProductionDispatchTermination() async -> Bool
     func stop()
+}
+
+extension CallScreenViewModelProtocol {
+    func requestProductionDispatchTermination() async -> Bool {
+        false
+    }
 }

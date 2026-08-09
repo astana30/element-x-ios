@@ -679,6 +679,30 @@ extension CallScreenViewModelTests {
     }
 
     @Test
+    func productionDispatchTerminationReusesStockHangupAndWaitsForMembershipRemoval() async throws {
+        let harness = try makeAudioRoomCallViewModel()
+        var evaluatedScripts = [String]()
+        installActiveWebViewBinding(in: harness) { script in
+            evaluatedScripts.append(script)
+            return true
+        }
+
+        let terminationTask = Task { @MainActor in
+            await harness.viewModel.requestProductionDispatchTermination()
+        }
+        await waitFor {
+            evaluatedScripts.contains { $0.contains("im.vector.hangup") }
+        }
+        #expect(evaluatedScripts.count { $0.contains("im.vector.hangup") } == 1)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 0)
+
+        await completeMatrixRTCHangup(in: harness)
+        #expect(await terminationTask.value)
+        #expect(harness.elementCallService.requestCallTerminationRoomIDCallsCount == 1)
+        harness.viewModel.stop()
+    }
+
+    @Test
     func unmatchedTerminationActionDoesNotEndActiveRoomCall() async throws {
         let harness = try makeAudioRoomCallViewModel()
         var evaluatedScripts = [String]()
