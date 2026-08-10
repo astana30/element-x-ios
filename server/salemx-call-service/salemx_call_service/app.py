@@ -8,9 +8,9 @@ import hmac
 import logging
 import secrets
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from os import environ
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from uuid import UUID
 
 from fastapi import FastAPI, Header, Request
@@ -112,8 +112,24 @@ PENDING_STORE_AUDIT_CREDENTIAL_HEADER = "X-SalemX-Pending-Store-Audit-Credential
 PENDING_STORE_AUDIT_CREDENTIAL_CONTEXT = b"salemx-pending-store-audit-v1"
 INVITE_DIAGNOSTICS_NO_SEND_HEADER_VALUE = "z4f_invite_401_reason"
 REDIS_READINESS_TIMEOUT_SECONDS = 0.5
+DEFAULT_STARTUP_READINESS_RETRY_BUDGET_SECONDS = 180.0
+MAXIMUM_STARTUP_READINESS_BACKOFF_SECONDS = 3.0
 FOREGROUND_SIGNALING_STREAM_HEARTBEAT_SECONDS = 15.0
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class StartupReadinessRetryPolicy:
+    total_wait_budget_seconds: float = DEFAULT_STARTUP_READINESS_RETRY_BUDGET_SECONDS
+    maximum_backoff_seconds: float = MAXIMUM_STARTUP_READINESS_BACKOFF_SECONDS
+
+    def __post_init__(self) -> None:
+        if self.total_wait_budget_seconds < 0:
+            raise ValueError("The startup readiness retry budget must not be negative.")
+        if self.maximum_backoff_seconds <= 0:
+            raise ValueError("The startup readiness retry backoff must be positive.")
+        if self.maximum_backoff_seconds > MAXIMUM_STARTUP_READINESS_BACKOFF_SECONDS:
+            raise ValueError("The startup readiness retry backoff must not exceed three seconds.")
 
 
 def create_app(config: ServiceConfig | None = None,
@@ -127,7 +143,10 @@ def create_app(config: ServiceConfig | None = None,
                direct_call_dispatch_v1_admission_enabled: bool | None = None,
                direct_call_dispatch_v1_completion_enabled: bool | None = None,
                pending_store_audit_credential: str | None = None,
-               strict_startup: bool = True) -> FastAPI:
+               strict_startup: bool = True,
+               startup_readiness_retry_policy: StartupReadinessRetryPolicy | None = None,
+               startup_readiness_clock: Callable[[], float] | None = None,
+               startup_readiness_sleeper: Callable[[float], None] | None = None) -> FastAPI:
     service: DirectCallTokenService | None
     readiness: ServiceReadiness
     runtime_config: ServiceConfig | None = None
@@ -168,7 +187,16 @@ def create_app(config: ServiceConfig | None = None,
             else:
                 readiness = service_readiness_from_config(config) if config is not None else validate_service_preflight()
                 config = config or ServiceConfig.from_env()
-                readiness = _readiness_with_live_store_checks(config, readiness)
+                if strict_startup:
+                    readiness = _readiness_with_startup_retry(
+                        config,
+                        readiness,
+                        policy=startup_readiness_retry_policy,
+                        clock=startup_readiness_clock,
+                        sleeper=startup_readiness_sleeper,
+                    )
+                else:
+                    readiness = _readiness_with_live_store_checks(config, readiness)
                 if not readiness.ready:
                     raise ServicePreflightError(readiness)
                 runtime_config = config
@@ -195,7 +223,7 @@ def create_app(config: ServiceConfig | None = None,
             readiness = error.readiness
             service = None
             if strict_startup:
-                raise RuntimeError(str(error)) from error
+                raise
 
     app = FastAPI(title="SalemX Direct Call Service", version="0.1.0")
 
@@ -1944,6 +1972,78 @@ def _readiness_with_live_store_checks(config: ServiceConfig, readiness: ServiceR
         allocation_store_connected=allocation_store_connected,
         rate_limit_connected=rate_limit_connected,
     )
+
+
+def _readiness_with_startup_retry(
+    config: ServiceConfig,
+    readiness: ServiceReadiness,
+    *,
+    policy: StartupReadinessRetryPolicy | None = None,
+    clock: Callable[[], float] | None = None,
+    sleeper: Callable[[float], None] | None = None,
+    readiness_probe: Callable[[ServiceConfig, ServiceReadiness], ServiceReadiness] | None = None,
+) -> ServiceReadiness:
+    retry_policy = policy or StartupReadinessRetryPolicy()
+    monotonic_clock = clock or time.monotonic
+    sleep = sleeper or time.sleep
+    probe = readiness_probe or _readiness_with_live_store_checks
+    started_at = monotonic_clock()
+    attempt = 1
+
+    while True:
+        result = probe(config, readiness)
+        if result.ready:
+            return result
+        if result.reason not in _transient_startup_readiness_reasons():
+            raise ServicePreflightError(result)
+
+        elapsed = max(0.0, monotonic_clock() - started_at)
+        remaining = max(0.0, retry_policy.total_wait_budget_seconds - elapsed)
+        if remaining <= 0:
+            LOGGER.error(
+                "Call-service startup readiness exhausted reason=%s attempt_bucket=%s elapsed_bucket=%s",
+                result.reason,
+                _startup_retry_attempt_bucket(attempt),
+                "budget_exhausted",
+            )
+            raise ServicePreflightError(result)
+
+        delay = min(float(attempt), retry_policy.maximum_backoff_seconds, remaining)
+        LOGGER.info(
+            "Call-service startup readiness retry reason=%s attempt_bucket=%s elapsed_bucket=%s",
+            result.reason,
+            _startup_retry_attempt_bucket(attempt),
+            _startup_retry_elapsed_bucket(elapsed, retry_policy.total_wait_budget_seconds),
+        )
+        sleep(delay)
+        attempt += 1
+
+
+def _transient_startup_readiness_reasons() -> frozenset[str]:
+    return frozenset({
+        ServicePreflightReason.ALLOCATION_STORE_UNAVAILABLE.value,
+        ServicePreflightReason.RATE_LIMIT_STORE_UNAVAILABLE.value,
+    })
+
+
+def _startup_retry_attempt_bucket(attempt: int) -> str:
+    if attempt <= 1:
+        return "initial"
+    if attempt <= 3:
+        return "early"
+    if attempt <= 10:
+        return "repeated"
+    return "extended"
+
+
+def _startup_retry_elapsed_bucket(elapsed: float, budget: float) -> str:
+    if elapsed <= 0:
+        return "initial"
+    if elapsed < min(10.0, budget):
+        return "under_10_seconds"
+    if elapsed < min(60.0, budget):
+        return "under_60_seconds"
+    return "under_budget"
 
 
 def _request_time_readiness(config: ServiceConfig | None, readiness: ServiceReadiness) -> ServiceReadiness:

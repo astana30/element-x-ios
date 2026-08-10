@@ -8,6 +8,7 @@ import json
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
@@ -42,6 +43,8 @@ from salemx_call_service.config import (
     ServiceConfig,
     ServiceMode,
     ServicePreflightError,
+    ServicePreflightReason,
+    ServiceReadiness,
     service_readiness_from_env,
     validate_service_preflight,
 )
@@ -2863,6 +2866,197 @@ class ServicePreflightTests(unittest.TestCase):
         self.assertEqual(config.native_audio_eligibility_allowed_homeservers, ("example.test",))
 
 
+class FakeStartupReadinessClock:
+    def __init__(self) -> None:
+        self.elapsed = 0.0
+        self.sleeps: list[float] = []
+
+    def __call__(self) -> float:
+        return self.elapsed
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.elapsed += seconds
+
+
+class StartupReadinessRetryTests(unittest.TestCase):
+    def config_and_readiness(self) -> tuple[ServiceConfig, ServiceReadiness]:
+        env = _staging_env()
+        with patch.dict(os.environ, env, clear=True):
+            config = ServiceConfig.from_env()
+        return config, service_readiness_from_env(env)
+
+    def test_retry_policy_rejects_backoff_above_three_seconds(self) -> None:
+        app_module = _load_app_module()
+
+        with self.assertRaisesRegex(ValueError, "must not exceed three seconds"):
+            app_module.StartupReadinessRetryPolicy(maximum_backoff_seconds=3.1)
+
+    def test_allocation_store_unavailable_then_ready(self) -> None:
+        app_module = _load_app_module()
+        config, readiness = self.config_and_readiness()
+        unavailable = replace(
+            readiness,
+            ready=False,
+            reason=ServicePreflightReason.ALLOCATION_STORE_UNAVAILABLE.value,
+            allocation_store_connected=False,
+        )
+        results = [unavailable, readiness]
+        clock = FakeStartupReadinessClock()
+
+        result = app_module._readiness_with_startup_retry(
+            config,
+            readiness,
+            clock=clock,
+            sleeper=clock.sleep,
+            readiness_probe=lambda _config, _readiness: results.pop(0),
+        )
+
+        self.assertTrue(result.ready)
+        self.assertEqual(clock.sleeps, [1.0])
+        self.assertEqual(results, [])
+
+    def test_rate_limit_store_unavailable_then_ready(self) -> None:
+        app_module = _load_app_module()
+        config, readiness = self.config_and_readiness()
+        unavailable = replace(
+            readiness,
+            ready=False,
+            reason=ServicePreflightReason.RATE_LIMIT_STORE_UNAVAILABLE.value,
+            rate_limit_connected=False,
+        )
+        results = [unavailable, readiness]
+        clock = FakeStartupReadinessClock()
+
+        result = app_module._readiness_with_startup_retry(
+            config,
+            readiness,
+            clock=clock,
+            sleeper=clock.sleep,
+            readiness_probe=lambda _config, _readiness: results.pop(0),
+        )
+
+        self.assertTrue(result.ready)
+        self.assertEqual(clock.sleeps, [1.0])
+        self.assertEqual(results, [])
+
+    def test_permanent_unavailability_stops_at_exact_budget(self) -> None:
+        app_module = _load_app_module()
+        config, readiness = self.config_and_readiness()
+        unavailable = replace(
+            readiness,
+            ready=False,
+            reason=ServicePreflightReason.ALLOCATION_STORE_UNAVAILABLE.value,
+            allocation_store_connected=False,
+        )
+        clock = FakeStartupReadinessClock()
+        attempts = 0
+
+        def probe(_config: ServiceConfig, _readiness: ServiceReadiness) -> ServiceReadiness:
+            nonlocal attempts
+            attempts += 1
+            return unavailable
+
+        with self.assertLogs("salemx_call_service.app", level="INFO") as logs:
+            with self.assertRaises(ServicePreflightError) as context:
+                app_module._readiness_with_startup_retry(
+                    config,
+                    readiness,
+                    clock=clock,
+                    sleeper=clock.sleep,
+                    readiness_probe=probe,
+                )
+
+        self.assertEqual(context.exception.readiness.reason, "allocationStoreUnavailable")
+        self.assertEqual(clock.elapsed, 180.0)
+        self.assertEqual(sum(clock.sleeps), 180.0)
+        self.assertLessEqual(max(clock.sleeps), 3.0)
+        self.assertEqual(attempts, len(clock.sleeps) + 1)
+        self.assertTrue(any("elapsed_bucket=budget_exhausted" in entry for entry in logs.output))
+
+    def test_static_preflight_failures_are_not_retried(self) -> None:
+        app_module = _load_app_module()
+        config, readiness = self.config_and_readiness()
+        static_reasons = set(ServicePreflightReason) - {
+            ServicePreflightReason.OK,
+            ServicePreflightReason.ALLOCATION_STORE_UNAVAILABLE,
+            ServicePreflightReason.RATE_LIMIT_STORE_UNAVAILABLE,
+        }
+
+        for reason in static_reasons:
+            with self.subTest(reason=reason.value):
+                attempts = 0
+                clock = FakeStartupReadinessClock()
+                failure = replace(readiness, ready=False, reason=reason.value)
+
+                def probe(_config: ServiceConfig, _readiness: ServiceReadiness) -> ServiceReadiness:
+                    nonlocal attempts
+                    attempts += 1
+                    return failure
+
+                with self.assertRaises(ServicePreflightError) as context:
+                    app_module._readiness_with_startup_retry(
+                        config,
+                        readiness,
+                        clock=clock,
+                        sleeper=clock.sleep,
+                        readiness_probe=probe,
+                    )
+
+                self.assertEqual(context.exception.readiness.reason, reason.value)
+                self.assertEqual(attempts, 1)
+                self.assertEqual(clock.sleeps, [])
+
+    def test_successful_initial_readiness_performs_no_sleep(self) -> None:
+        app_module = _load_app_module()
+        config, readiness = self.config_and_readiness()
+        clock = FakeStartupReadinessClock()
+        attempts = 0
+
+        def probe(_config: ServiceConfig, _readiness: ServiceReadiness) -> ServiceReadiness:
+            nonlocal attempts
+            attempts += 1
+            return readiness
+
+        result = app_module._readiness_with_startup_retry(
+            config,
+            readiness,
+            clock=clock,
+            sleeper=clock.sleep,
+            readiness_probe=probe,
+        )
+
+        self.assertTrue(result.ready)
+        self.assertEqual(attempts, 1)
+        self.assertEqual(clock.sleeps, [])
+
+    def test_transient_recovery_initializes_application_service_once(self) -> None:
+        app_module = _load_app_module()
+        config, readiness = self.config_and_readiness()
+        unavailable = replace(
+            readiness,
+            ready=False,
+            reason=ServicePreflightReason.ALLOCATION_STORE_UNAVAILABLE.value,
+            allocation_store_connected=False,
+        )
+        clock = FakeStartupReadinessClock()
+
+        with patch.dict(os.environ, _staging_env(), clear=True), \
+                patch.object(app_module, "_readiness_with_live_store_checks", side_effect=[unavailable, readiness]) as probe, \
+                patch.object(app_module, "_allocation_store_for_config", return_value=object()), \
+                patch.object(app_module, "_rate_limiter_for_config", return_value=object()), \
+                patch.object(app_module, "DirectCallTokenService", return_value=object()) as service_initializer:
+            app_module.create_app(
+                config=config,
+                startup_readiness_clock=clock,
+                startup_readiness_sleeper=clock.sleep,
+            )
+
+        self.assertEqual(probe.call_count, 2)
+        self.assertEqual(clock.sleeps, [1.0])
+        service_initializer.assert_called_once()
+
+
 class LocalFakeCapabilityTests(unittest.IsolatedAsyncioTestCase):
     def test_fake_capabilities_payload_matches_app_contract(self) -> None:
         payload = make_fake_capabilities_payload(TOKEN_ENDPOINT_PATH)
@@ -3728,7 +3922,11 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module, allocation_connected=False):
             with self.assertRaisesRegex(RuntimeError, "allocationStoreUnavailable"):
-                app_module.create_app()
+                app_module.create_app(
+                    startup_readiness_retry_policy=app_module.StartupReadinessRetryPolicy(
+                        total_wait_budget_seconds=0,
+                    ),
+                )
             app = app_module.create_app(strict_startup=False)
 
         status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
@@ -3752,7 +3950,11 @@ class LocalFakeModeTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.dict(os.environ, env, clear=True), _patch_redis_ping(app_module, rate_limit_connected=False):
             with self.assertRaisesRegex(RuntimeError, "rateLimitStoreUnavailable"):
-                app_module.create_app()
+                app_module.create_app(
+                    startup_readiness_retry_policy=app_module.StartupReadinessRetryPolicy(
+                        total_wait_budget_seconds=0,
+                    ),
+                )
             app = app_module.create_app(strict_startup=False)
 
         status_code, body = await _asgi_get_json(app, app_module.READINESS_PATH)
