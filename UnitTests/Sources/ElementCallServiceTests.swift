@@ -441,15 +441,25 @@ final class ElementCallServiceTests {
             return .success(())
         }
 
+        var endedRoomIDs = [String]()
+        service.actions
+            .sink { action in
+                if case .endCall(let endedRoomID) = action {
+                    endedRoomIDs.append(endedRoomID)
+                }
+            }
+            .store(in: &cancellables)
+
         let payload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
-        service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) { }
-        try? await Task.sleep(for: .milliseconds(120))
+        await deliverIncomingPush(payload)
+        #expect(await waitForIncomingLifecycleObservation(on: room))
 
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
         service.tearDownCallSession()
         await service.requestCallTermination(roomID: roomID)
 
-        #expect(room.declineCallNotificationIDCalled)
+        #expect(endedRoomIDs == [roomID])
+        #expect(!room.declineCallNotificationIDCalled)
     }
 
     @Test
@@ -486,10 +496,11 @@ final class ElementCallServiceTests {
         }
         configureLiveTimeline(for: room)
 
+        let declineHandle = TaskHandleSDKMock()
         var declineListener: CallDeclineListener?
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, listener in
             declineListener = listener
-            return .success(TaskHandle(noHandle: .init()))
+            return .success(declineHandle)
         }
 
         await confirmation { confirmation in
@@ -500,11 +511,13 @@ final class ElementCallServiceTests {
             }
 
             let payload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
-            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) { }
-            try? await Task.sleep(for: .milliseconds(120))
+            await deliverIncomingPush(payload)
+            #expect(await waitForIncomingLifecycleObservation(on: room))
 
             declineListener?.call(declinerUserId: remoteUserID)
         }
+
+        #expect(declineHandle.cancelCalled)
     }
 
     @Test
@@ -542,13 +555,14 @@ final class ElementCallServiceTests {
             }
 
             let payload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
-            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) { }
-            try? await Task.sleep(for: .milliseconds(120))
+            await deliverIncomingPush(payload)
+            #expect(await waitForIncomingLifecycleObservation(on: room))
 
             roomInfoSubject.send(makeRoomInfo(id: roomID,
                                               isDirect: true,
-                                              hasRoomCall: true,
+                                              hasRoomCall: false,
                                               participants: []))
+            #expect(await waitForEndedCall(reason: .remoteEnded))
         }
     }
 
@@ -582,8 +596,11 @@ final class ElementCallServiceTests {
         let timelineProxy = try #require(room.timeline as? TimelineProxyMock)
         let timelineItemProvider = try #require(timelineProxy.timelineItemProvider as? TimelineItemProviderMock)
         let timelineUpdates = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>(([], .initial))
+        let timelineSubscriptionProbe = PublisherSubscriptionProbe()
         timelineItemProvider.itemProxies = []
-        timelineItemProvider.updatePublisher = timelineUpdates.eraseToAnyPublisher()
+        timelineItemProvider.updatePublisher = timelineUpdates
+            .handleEvents { _ in timelineSubscriptionProbe.recordSubscription() }
+            .eraseToAnyPublisher()
         timelineItemProvider.paginationState = .initial
         timelineItemProvider.kind = .live
 
@@ -595,13 +612,15 @@ final class ElementCallServiceTests {
             }
 
             let payload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
-            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) { }
-            try? await Task.sleep(for: .milliseconds(120))
+            await deliverIncomingPush(payload)
+            #expect(await waitForIncomingLifecycleObservation(on: room))
+            #expect(await waitForPublisherSubscription(timelineSubscriptionProbe))
 
             let hangupItem = makeCallTimelineItem(eventID: "$hangup",
                                                   sender: remoteUserID,
                                                   isOwn: false,
-                                                  eventType: .callHangup)
+                                                  eventType: .callHangup,
+                                                  timestamp: currentDate)
             timelineUpdates.send(([hangupItem], .initial))
         }
     }
@@ -633,10 +652,11 @@ final class ElementCallServiceTests {
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .failure(.missingTransactionID)
         }
-        room.infoPublisher = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
-                                                                                            isDirect: true,
-                                                                                            hasRoomCall: true,
-                                                                                            participants: [])).asCurrentValuePublisher()
+        let roomInfoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
+                                                                                             isDirect: true,
+                                                                                             hasRoomCall: true,
+                                                                                             participants: []))
+        room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
 
         await confirmation { confirmation in
             callProvider.reportCallWithEndedAtReasonClosure = { _, _, reason in
@@ -646,8 +666,8 @@ final class ElementCallServiceTests {
             }
 
             let payload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
-            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) { }
-            try? await Task.sleep(for: .milliseconds(120))
+            await deliverIncomingPush(payload)
+            #expect(await waitForIncomingLifecycleObservation(on: room))
 
             roomSummaries.send([
                 makeRoomSummary(id: roomID,
@@ -656,6 +676,13 @@ final class ElementCallServiceTests {
                                 participants: [],
                                 lastCallEvent: .init(state: .ended, intent: .audio))
             ])
+            #expect(await waitForEndedCall(reason: .remoteEnded) == false)
+
+            roomInfoSubject.send(makeRoomInfo(id: roomID,
+                                              isDirect: true,
+                                              hasRoomCall: false,
+                                              participants: []))
+            #expect(await waitForEndedCall(reason: .remoteEnded))
         }
     }
 
@@ -1087,7 +1114,7 @@ final class ElementCallServiceTests {
         #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
                                                            isDirect: true,
                                                            hasRoomCall: true,
-                                                           participants: [ownUserID])))
+                                                           participants: [ownUserID, remoteUserID])))
 
         let mismatchedMutation = makeMatrixRTCMembershipTimelineItem(eventID: "$guarded-remote-mismatched",
                                                                      roomID: roomID,
@@ -1114,6 +1141,10 @@ final class ElementCallServiceTests {
                                                               membershipID: "REMOTE_PARTY",
                                                               createdAt: initialTimestamp.addingTimeInterval(1))
         #expect(subscription.receiveSDKRawMembershipUpdate([localMembership, authoritativeEmpty, staleActive, mismatchedMutation]))
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID])))
         for _ in 0..<30 where endCallCount == 0 {
             try? await Task.sleep(for: .milliseconds(20))
         }
@@ -1175,7 +1206,7 @@ final class ElementCallServiceTests {
         #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
                                                            isDirect: true,
                                                            hasRoomCall: true,
-                                                           participants: [ownUserID])))
+                                                           participants: [ownUserID, remoteUserID])))
         try? await Task.sleep(for: .milliseconds(50))
         #expect(endCallCount == 0)
         #expect(service.ongoingCallRoomIDPublisher.value == roomID)
@@ -1183,6 +1214,10 @@ final class ElementCallServiceTests {
         currentDate = membershipCreatedAt.addingTimeInterval(1)
         #expect(endCallCount == 0)
         await testClock.advance(by: .milliseconds(1))
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID])))
         for _ in 0..<30 where endCallCount == 0 {
             await Task.yield()
         }
@@ -1245,7 +1280,7 @@ final class ElementCallServiceTests {
         #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
                                                            isDirect: true,
                                                            hasRoomCall: true,
-                                                           participants: [ownUserID])))
+                                                           participants: [ownUserID, remoteUserID])))
         #expect(subscription.receiveSDKTimelineUpdate([
             localMembership,
             makeMatrixRTCMembershipTimelineItem(eventID: "$membership-refresh-remote-new",
@@ -1294,6 +1329,10 @@ final class ElementCallServiceTests {
 
         currentDate = membershipCreatedAt.addingTimeInterval(11.5)
         await testClock.advance(by: .milliseconds(1))
+        #expect(subscription.receiveSDKUpdate(makeRoomInfo(id: roomID,
+                                                           isDirect: true,
+                                                           hasRoomCall: true,
+                                                           participants: [ownUserID])))
         for _ in 0..<30 where endCallCount == 0 {
             await Task.yield()
         }
@@ -1887,7 +1926,7 @@ final class ElementCallServiceTests {
         #expect(firstSubscription.receiveSDKUpdate(makeRoomInfo(id: firstRoomID,
                                                                 isDirect: true,
                                                                 hasRoomCall: true,
-                                                                participants: [ownUserID])))
+                                                                participants: [ownUserID, remoteUserID])))
         try? await Task.sleep(for: .milliseconds(50))
 
         await service.setupCallSession(roomID: secondRoomID, roomDisplayName: "Second")
@@ -1900,6 +1939,10 @@ final class ElementCallServiceTests {
 
         currentDate = membershipCreatedAt.addingTimeInterval(1)
         await testClock.advance(by: .milliseconds(1))
+        #expect(firstSubscription.receiveSDKUpdate(makeRoomInfo(id: firstRoomID,
+                                                                isDirect: true,
+                                                                hasRoomCall: true,
+                                                                participants: [ownUserID])))
         for _ in 0..<10 {
             await Task.yield()
         }
@@ -2305,12 +2348,13 @@ final class ElementCallServiceTests {
                                                                                              participants: [ownUserID, remoteUserID]))
         room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
 
+        let declineHandle = TaskHandleSDKMock()
         var observedRTCNotificationID: String?
         var declineListener: CallDeclineListener?
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { rtcNotificationEventID, listener in
             observedRTCNotificationID = rtcNotificationEventID
             declineListener = listener
-            return .success(TaskHandle(noHandle: .init()))
+            return .success(declineHandle)
         }
 
         let payload = PKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
@@ -2326,11 +2370,12 @@ final class ElementCallServiceTests {
                 }
                 .store(in: &cancellables)
 
-            try? await Task.sleep(for: .milliseconds(120))
+            #expect(await waitForIncomingLifecycleObservation(on: room))
             declineListener?.call(declinerUserId: remoteUserID)
         }
 
         #expect(observedRTCNotificationID == "$000")
+        #expect(declineHandle.cancelCalled)
     }
 
     @Test
@@ -2375,7 +2420,7 @@ final class ElementCallServiceTests {
         var observedRTCNotificationID: String?
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { rtcNotificationEventID, _ in
             observedRTCNotificationID = rtcNotificationEventID
-            return .success(TaskHandle(noHandle: .init()))
+            return .success(TaskHandleSDKMock())
         }
 
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
@@ -2686,8 +2731,11 @@ final class ElementCallServiceTests {
         let timelineProxy = try #require(room.timeline as? TimelineProxyMock)
         let timelineItemProvider = try #require(timelineProxy.timelineItemProvider as? TimelineItemProviderMock)
         let timelineUpdates = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>(([], .initial))
+        let timelineSubscriptionProbe = PublisherSubscriptionProbe()
         timelineItemProvider.itemProxies = []
-        timelineItemProvider.updatePublisher = timelineUpdates.eraseToAnyPublisher()
+        timelineItemProvider.updatePublisher = timelineUpdates
+            .handleEvents { _ in timelineSubscriptionProbe.recordSubscription() }
+            .eraseToAnyPublisher()
         timelineItemProvider.paginationState = .initial
         timelineItemProvider.kind = .live
 
@@ -2702,13 +2750,15 @@ final class ElementCallServiceTests {
                 }
                 .store(in: &cancellables)
 
-            try? await Task.sleep(for: .milliseconds(120))
+            #expect(await waitForPublisherSubscription(timelineSubscriptionProbe))
 
             let hangupItem = makeCallTimelineItem(eventID: "$hangup",
                                                   sender: remoteUserID,
                                                   isOwn: false,
-                                                  eventType: .callHangup)
+                                                  eventType: .callHangup,
+                                                  timestamp: currentDate)
             timelineUpdates.send(([hangupItem], .initial))
+            #expect(await waitForOngoingCallToEnd(roomID: roomID))
         }
 
         #expect(service.ongoingCallRoomIDPublisher.value == nil)
@@ -2741,13 +2791,15 @@ final class ElementCallServiceTests {
         clientProxy.roomForIdentifierClosure = { _ in
             .joined(room)
         }
+        let timelineSubscriptionProbe = configureLiveTimeline(for: room)
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
             .failure(.missingTransactionID)
         }
-        room.infoPublisher = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
-                                                                                            isDirect: true,
-                                                                                            hasRoomCall: true,
-                                                                                            participants: [ownUserID, remoteUserID])).asCurrentValuePublisher()
+        let roomInfoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
+                                                                                             isDirect: true,
+                                                                                             hasRoomCall: true,
+                                                                                             participants: [ownUserID, remoteUserID]))
+        room.infoPublisher = roomInfoSubject.asCurrentValuePublisher()
 
         await service.setupCallSession(roomID: roomID, roomDisplayName: "Room")
 
@@ -2760,7 +2812,7 @@ final class ElementCallServiceTests {
                 }
                 .store(in: &cancellables)
 
-            try? await Task.sleep(for: .milliseconds(120))
+            #expect(await waitForPublisherSubscription(timelineSubscriptionProbe))
 
             roomSummaries.send([
                 makeRoomSummary(id: roomID,
@@ -2769,6 +2821,14 @@ final class ElementCallServiceTests {
                                 participants: [ownUserID, remoteUserID],
                                 lastCallEvent: .init(state: .ended, intent: .audio))
             ])
+            await Task.yield()
+            #expect(service.ongoingCallRoomIDPublisher.value == roomID)
+
+            roomInfoSubject.send(makeRoomInfo(id: roomID,
+                                              isDirect: true,
+                                              hasRoomCall: false,
+                                              participants: []))
+            #expect(await waitForOngoingCallToEnd(roomID: roomID))
         }
 
         #expect(service.ongoingCallRoomIDPublisher.value == nil)
@@ -3038,10 +3098,55 @@ final class ElementCallServiceTests {
         return false
     }
 
+    private func deliverIncomingPush(_ payload: PKPushPayload) async {
+        await confirmation { confirmation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) {
+                confirmation()
+            }
+        }
+    }
+
+    private func waitForIncomingLifecycleObservation(on room: JoinedRoomProxyMock) async -> Bool {
+        for _ in 0..<30 {
+            if room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerCalled {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        return false
+    }
+
+    private func waitForPublisherSubscription(_ probe: PublisherSubscriptionProbe) async -> Bool {
+        for _ in 0..<30 {
+            if probe.hasSubscription {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        return false
+    }
+
+    private func waitForOngoingCallToEnd(roomID: String) async -> Bool {
+        for _ in 0..<30 {
+            if service.ongoingCallRoomIDPublisher.value != roomID {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        return false
+    }
+
     private func makeCallTimelineItem(eventID: String,
                                       sender: String,
                                       isOwn: Bool,
-                                      eventType: MessageLikeEventType) -> TimelineItemProxy {
+                                      eventType: MessageLikeEventType,
+                                      timestamp: Date? = nil) -> TimelineItemProxy {
         let lazyProvider = LazyTimelineItemProviderSDKMock()
         lazyProvider.debugInfoReturnValue = .init(model: "call event",
                                                   originalJson: nil,
@@ -3051,27 +3156,35 @@ final class ElementCallServiceTests {
                                                                  inReplyTo: nil,
                                                                  threadRoot: nil,
                                                                  threadSummary: nil))
-        let item = EventTimelineItem(configuration: .init(eventID: eventID,
+        var item = EventTimelineItem(configuration: .init(eventID: eventID,
                                                           sender: sender,
                                                           isOwn: isOwn,
                                                           content: content,
                                                           lazyProvider: lazyProvider))
+        if let timestamp {
+            item.timestamp = UInt64(timestamp.timeIntervalSince1970 * 1000)
+        }
         let proxy = EventTimelineItemProxy(item: item, uniqueID: .init(UUID().uuidString))
         return .event(proxy)
     }
 
-    private func configureLiveTimeline(for room: JoinedRoomProxyMock) {
+    @discardableResult
+    private func configureLiveTimeline(for room: JoinedRoomProxyMock) -> PublisherSubscriptionProbe {
+        let subscriptionProbe = PublisherSubscriptionProbe()
         guard let timelineProxy = room.timeline as? TimelineProxyMock,
               let timelineItemProvider = timelineProxy.timelineItemProvider as? TimelineItemProviderMock else {
-            return
+            return subscriptionProbe
         }
 
         room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerReturnValue = .failure(.missingTransactionID)
         let timelineUpdates = CurrentValueSubject<([TimelineItemProxy], TimelinePaginationState), Never>(([], .initial))
         timelineItemProvider.itemProxies = []
-        timelineItemProvider.updatePublisher = timelineUpdates.eraseToAnyPublisher()
+        timelineItemProvider.updatePublisher = timelineUpdates
+            .handleEvents { _ in subscriptionProbe.recordSubscription() }
+            .eraseToAnyPublisher()
         timelineItemProvider.paginationState = .initial
         timelineItemProvider.kind = .live
+        return subscriptionProbe
     }
 
     private func waitForEndedCall(reason: CXCallEndedReason) async -> Bool {
@@ -3868,6 +3981,23 @@ private final class MatrixRTCCallMembershipStateObservationMock: MatrixRTCCallMe
     func cancel() {
         cancellation?()
         cancellation = nil
+    }
+}
+
+private final class PublisherSubscriptionProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var subscriptionCount = 0
+
+    var hasSubscription: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return subscriptionCount > 0
+    }
+
+    func recordSubscription() {
+        lock.lock()
+        subscriptionCount += 1
+        lock.unlock()
     }
 }
 
