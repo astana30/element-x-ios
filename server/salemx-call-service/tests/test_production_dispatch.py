@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import json
 from types import SimpleNamespace
 import os
 import time
@@ -13,6 +14,7 @@ import httpx
 os.environ.setdefault("SALEMX_CALL_SERVICE_MODE", "local_fake")
 
 from salemx_call_service import app as app_module
+from salemx_call_service.apns_voip import _voip_payload
 from salemx_call_service.auth import AuthenticatedUser
 from salemx_call_service.errors import CallServiceError
 from salemx_call_service.production_dispatch_store import (
@@ -37,6 +39,7 @@ class FakeAuthValidator:
             "auth-a": AuthenticatedUser("@sender:example.org", "SENDER"),
             "auth-b": AuthenticatedUser("@receiver:example.org", "RECEIVER"),
             "auth-other": AuthenticatedUser("@sender:example.org", "OTHER"),
+            "auth-receiver-other": AuthenticatedUser("@receiver:example.org", "OTHER"),
         }
         if bearer_token not in users:
             raise CallServiceError(status_code=401, errcode="M_UNKNOWN_TOKEN", error="Unknown token.")
@@ -174,9 +177,14 @@ class FakeAPNsService:
     def __init__(self, outcome: str = "accepted") -> None:
         self.outcome = outcome
         self.invocations = 0
+        self.dispatch_ids: list[str | None] = []
+        self.call_bootstraps: list[object] = []
 
-    def send(self, *_: object, **__: object) -> object:
+    def send(self, *_: object, **values: object) -> object:
         self.invocations += 1
+        dispatch_id = values.get("dispatch_id")
+        self.dispatch_ids.append(dispatch_id if isinstance(dispatch_id, str) else None)
+        self.call_bootstraps.append(values.get("call_bootstrap"))
         if self.outcome == "exception":
             raise RuntimeError("redacted transport failure")
         accepted = self.outcome == "accepted"
@@ -371,7 +379,40 @@ class ProductionDispatchRouteTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(sorted((first.status_code, second.status_code)), [200, 200])
         self.assertEqual(self.apns.invocations, 1)
+        self.assertEqual(self.apns.dispatch_ids, [str(DISPATCH_ID)])
+        self.assertEqual(self.apns.call_bootstraps, [None])
         self.assertEqual(self.store.send_attempts, 1)
+
+    def test_production_apns_payload_adds_only_opaque_dispatch_routing(self) -> None:
+        payload = _voip_payload(
+            "real_invite_controlled",
+            pending_metadata_reference="receiver-reference",
+            dispatch_id=str(DISPATCH_ID),
+        )
+        self.assertEqual(payload, {
+            "aps": {"content-available": 1},
+            "salemx_direct_call": {
+                "version": 1,
+                "kind": "real_invite_controlled",
+                "redacted": True,
+                "receiver_reference": "receiver-reference",
+                "dispatch_id": str(DISPATCH_ID),
+            },
+        })
+        self.assertLess(len(json.dumps(payload, separators=(",", ":")).encode("utf-8")), 512)
+
+    def test_legacy_apns_payload_is_unchanged_without_dispatch_id(self) -> None:
+        payload = _voip_payload("real_invite_controlled", pending_metadata_reference="receiver-reference")
+        self.assertEqual(payload, {
+            "aps": {"content-available": 1},
+            "salemx_direct_call": {
+                "version": 1,
+                "kind": "real_invite_controlled",
+                "redacted": True,
+                "pending_metadata_reference": "receiver-reference",
+                "pending_metadata_reference_redacted": True,
+            },
+        })
 
     async def test_token_rotation_after_prepare_fails_closed_without_apns(self) -> None:
         app = self._app()
@@ -483,6 +524,40 @@ class ProductionDispatchRouteTests(unittest.IsolatedAsyncioTestCase):
         })
         self.assertEqual(consume.status_code, 200)
         self.assertEqual(self.store.consume_count, 1)
+        replay = await self._post(app, app_module.FOREGROUND_SIGNALING_PENDING_METADATA_RECEIVER_CONSUME_PATH, "auth-b", {
+            "dispatch_protocol_version": 1,
+            "dispatch_id": str(DISPATCH_ID),
+            "receiver_reference": "receiver-reference",
+            "app_session_generation": "gen-receiver",
+        })
+        self.assertEqual(replay.status_code, 409)
+        self.assertEqual(self.store.consume_count, 1)
+
+    async def test_receiver_consume_rejects_wrong_generation_and_device_before_store(self) -> None:
+        for token, generation in (("auth-b", "stale"), ("auth-receiver-other", "gen-receiver-other")):
+            with self.subTest(token=token):
+                self.store = FakeDispatchStore()
+                app = self._app()
+                await self._prepare_and_claim(app)
+                sent = await self._post(
+                    app, app_module.FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH, "auth-a", self._send_payload(),
+                )
+                self.assertEqual(sent.status_code, 200)
+                if token == "auth-receiver-other":
+                    self._register("@receiver:example.org", "OTHER", generation)
+                consume = await self._post(
+                    app,
+                    app_module.FOREGROUND_SIGNALING_PENDING_METADATA_RECEIVER_CONSUME_PATH,
+                    token,
+                    {
+                        "dispatch_protocol_version": 1,
+                        "dispatch_id": str(DISPATCH_ID),
+                        "receiver_reference": "receiver-reference",
+                        "app_session_generation": generation,
+                    },
+                )
+                self.assertEqual(consume.status_code, 403)
+                self.assertEqual(self.store.consume_count, 0)
 
     def _send_payload(self) -> dict[str, object]:
         return {

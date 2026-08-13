@@ -19,4 +19,11 @@ enum ElementCallServiceNotificationKey: String {
     case expirationDate
 }
 
+enum SalemXProductionDispatchNotificationKey: String {
+    case envelope = "salemx_direct_call"
+    case protocolVersion = "version"
+    case dispatchID = "dispatch_id"
+    case receiverReference = "receiver_reference"
+}
+
 let ElementCallServiceNotificationDiscardDelta = 15.0

@@ -336,6 +336,7 @@ struct DirectCallHTTPTransportRequest: Equatable, CustomStringConvertible, Custo
     let method: String
     let headers: [String: String]
     let body: Data
+    let timeoutInterval: TimeInterval?
 
     static func getJSON(from url: URL, bearerAccessToken: String) -> Self {
         .init(url: url,
@@ -344,10 +345,14 @@ struct DirectCallHTTPTransportRequest: Equatable, CustomStringConvertible, Custo
                   "Accept": "application/json",
                   "Authorization": "Bearer \(bearerAccessToken)"
               ],
-              body: Data())
+              body: Data(),
+              timeoutInterval: nil)
     }
 
-    static func postJSON(to url: URL, bearerAccessToken: String, body: Data) -> Self {
+    static func postJSON(to url: URL,
+                         bearerAccessToken: String,
+                         body: Data,
+                         timeoutInterval: TimeInterval? = nil) -> Self {
         .init(url: url,
               method: "POST",
               headers: [
@@ -355,7 +360,8 @@ struct DirectCallHTTPTransportRequest: Equatable, CustomStringConvertible, Custo
                   "Authorization": "Bearer \(bearerAccessToken)",
                   "Content-Type": "application/json"
               ],
-              body: body)
+              body: body,
+              timeoutInterval: timeoutInterval)
     }
 
     var description: String {
@@ -389,6 +395,9 @@ final class URLSessionDirectCallHTTPTransport: DirectCallHTTPTransportProtocol, 
         var urlRequest = URLRequest(url: request.url)
         urlRequest.httpMethod = request.method
         urlRequest.httpBody = request.body
+        if let timeoutInterval = request.timeoutInterval {
+            urlRequest.timeoutInterval = timeoutInterval
+        }
 
         for (header, value) in request.headers {
             urlRequest.setValue(value, forHTTPHeaderField: header)

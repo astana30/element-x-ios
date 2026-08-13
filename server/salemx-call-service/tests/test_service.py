@@ -592,6 +592,7 @@ class ForegroundCallSignalingServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(metadata_reference, "")
         self.assertEqual(salemx_payload["pending_metadata_reference_redacted"], True)
         self.assertEqual(salemx_payload["redacted"], True)
+        self.assertNotIn("dispatch_id", salemx_payload)
 
         metadata_status, metadata_body = await _asgi_get_json(
             app,

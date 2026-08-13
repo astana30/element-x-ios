@@ -206,7 +206,8 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
         }
         let result: Result<SalemXProductionDispatchReceiverConsumeResponse, SalemXProductionDispatchClientError> = await perform(path: Self.receiverConsumePath,
                                                                                                                                  request: request,
-                                                                                                                                 ambiguousOnTransportFailure: false)
+                                                                                                                                 ambiguousOnTransportFailure: false,
+                                                                                                                                 timeoutInterval: 4)
         return result.flatMap { response in
             guard response.dispatchProtocolVersion == SalemXProductionDispatchProtocolVersion.v1.rawValue else {
                 return .failure(.unsupportedProtocol)
@@ -250,7 +251,8 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
 
     private func perform<Request: Encodable, Response: Decodable>(path: String,
                                                                   request: Request,
-                                                                  ambiguousOnTransportFailure: Bool) async -> Result<Response, SalemXProductionDispatchClientError> {
+                                                                  ambiguousOnTransportFailure: Bool,
+                                                                  timeoutInterval: TimeInterval? = nil) async -> Result<Response, SalemXProductionDispatchClientError> {
         guard let endpoint = endpointURL(path: path) else { return .failure(.invalidConfiguration) }
         guard let accessToken = await accessTokenProvider.matrixAccessToken(), !accessToken.isEmpty else {
             return .failure(.accessTokenUnavailable)
@@ -263,7 +265,8 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
         }
         let transportRequest = DirectCallHTTPTransportRequest.postJSON(to: endpoint,
                                                                        bearerAccessToken: accessToken,
-                                                                       body: body)
+                                                                       body: body,
+                                                                       timeoutInterval: timeoutInterval)
         switch await httpTransport.send(transportRequest) {
         case .failure:
             if Task.isCancelled { return .failure(.cancelled) }

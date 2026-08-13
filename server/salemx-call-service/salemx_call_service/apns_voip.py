@@ -233,6 +233,7 @@ class APNsVoIPSandboxSendService:
              token_record: PushKitTokenRecord | None,
              payload_kind: str = "sandbox_voip_smoke",
              pending_metadata_reference: str | None = None,
+             dispatch_id: str | None = None,
              call_bootstrap: dict[str, object] | None = None) -> APNsVoIPSendDiagnostics:
         config, provider = self._configuration_and_provider(token_record)
         if token_record is None:
@@ -273,6 +274,7 @@ class APNsVoIPSandboxSendService:
 
         payload = _voip_payload(payload_kind,
                                 pending_metadata_reference=pending_metadata_reference,
+                                dispatch_id=dispatch_id,
                                 call_bootstrap=call_bootstrap)
         if request.dry_run:
             return APNsVoIPSendDiagnostics(
@@ -341,13 +343,17 @@ class APNsVoIPSandboxSendService:
 
 def _voip_payload(kind: str = "sandbox_voip_smoke",
                   pending_metadata_reference: str | None = None,
+                  dispatch_id: str | None = None,
                   call_bootstrap: dict[str, object] | None = None) -> dict[str, object]:
     salemx_payload: dict[str, object] = {
         "version": 1,
         "kind": kind,
         "redacted": True,
     }
-    if pending_metadata_reference:
+    if pending_metadata_reference and dispatch_id:
+        salemx_payload["receiver_reference"] = pending_metadata_reference
+        salemx_payload["dispatch_id"] = dispatch_id
+    elif pending_metadata_reference:
         salemx_payload["pending_metadata_reference"] = pending_metadata_reference
         salemx_payload["pending_metadata_reference_redacted"] = True
 

@@ -304,6 +304,171 @@ final class ElementCallServiceTests {
     }
 
     @Test
+    func productionDispatchDisabledPreservesLegacyPushWithoutConsume() async {
+        let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
+        service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                            appSessionGeneration: "opaque-generation"))
+        let payload = productionDispatchPayload(includingLegacyCallBootstrap: true)
+
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) {
+                continuation.resume()
+            }
+        }
+
+        #expect(dispatchClient.consumeRequests.isEmpty)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        await service.declineIncomingCall()
+    }
+
+    @Test
+    func serverGeneratedProductionDispatchPayloadParsesAtPushKitIngress() async throws {
+        appSettings.salemxProductionDispatchV1Enabled = true
+        let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
+        dispatchClient.consumeResult = .success(productionDispatchConsumeResponse())
+        service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                            appSessionGeneration: "opaque-generation"))
+        let json = #"{"aps":{"content-available":1},"salemx_direct_call":{"version":1,"kind":"real_invite_controlled","redacted":true,"receiver_reference":"receiver-reference","dispatch_id":"11111111-1111-4111-8111-111111111111"}}"#
+        let serverPayload = try #require(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        let payload = PKPushPayloadMock(dictionaryPayload: serverPayload)
+
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) {
+                continuation.resume()
+            }
+        }
+
+        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        await service.declineIncomingCall()
+    }
+
+    @Test
+    func productionDispatchValidPushConsumesExactlyOnceBeforeExistingCallKitIngress() async {
+        appSettings.salemxProductionDispatchV1Enabled = true
+        let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
+        dispatchClient.consumeResult = .success(productionDispatchConsumeResponse())
+        service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                            appSessionGeneration: "opaque-generation"))
+        let payload = productionDispatchPayload()
+
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) {
+                continuation.resume()
+            }
+        }
+
+        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(dispatchClient.consumeRequests.first?.appSessionGeneration == "opaque-generation")
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) {
+                continuation.resume()
+            }
+        }
+        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        await service.declineIncomingCall()
+    }
+
+    @Test
+    func productionDispatchInvalidOrFailedPushCompletesWithoutCallKit() async throws {
+        appSettings.salemxProductionDispatchV1Enabled = true
+        let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
+        dispatchClient.consumeResult = .failure(.http(.authentication, .unknown))
+        service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                            appSessionGeneration: "opaque-generation"))
+
+        let malformedPayload = productionDispatchPayload(dispatchID: "invalid")
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: malformedPayload, for: .voIP) {
+                continuation.resume()
+            }
+        }
+        #expect(dispatchClient.consumeRequests.isEmpty)
+
+        let missingDispatchIDPayload = productionDispatchPayload()
+        var envelope = try #require(missingDispatchIDPayload.dict[SalemXProductionDispatchNotificationKey.envelope.rawValue] as? [String: Any])
+        envelope.removeValue(forKey: SalemXProductionDispatchNotificationKey.dispatchID.rawValue)
+        missingDispatchIDPayload.dict[SalemXProductionDispatchNotificationKey.envelope.rawValue] = envelope
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: missingDispatchIDPayload, for: .voIP) {
+                continuation.resume()
+            }
+        }
+        #expect(dispatchClient.consumeRequests.isEmpty)
+
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: productionDispatchPayload(), for: .voIP) {
+                continuation.resume()
+            }
+        }
+        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+    }
+
+    @Test
+    func productionDispatchStaleAndInvalidResponsesFailClosed() async {
+        appSettings.salemxProductionDispatchV1Enabled = true
+        let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
+        service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                            appSessionGeneration: "opaque-generation"))
+
+        dispatchClient.consumeResult = .success(productionDispatchConsumeResponse(direction: "outgoing"))
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: productionDispatchPayload(), for: .voIP) {
+                continuation.resume()
+            }
+        }
+
+        dispatchClient.consumeResult = .success(productionDispatchConsumeResponse(expiresAt: currentDate))
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry,
+                                 didReceiveIncomingPushWith: productionDispatchPayload(dispatchID: "22222222-2222-4222-8222-222222222222"),
+                                 for: .voIP) {
+                continuation.resume()
+            }
+        }
+
+        #expect(dispatchClient.consumeRequests.count == 2)
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+    }
+
+    @Test
+    func productionDispatchSessionReplacementFailsClosedAndCompletesOnce() async {
+        appSettings.salemxProductionDispatchV1Enabled = true
+        let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
+        dispatchClient.consumeHandler = { [weak self] _ in
+            self?.service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                                      appSessionGeneration: "replacement-generation"))
+            return .success(self?.productionDispatchConsumeResponse() ?? .init(dispatchProtocolVersion: 1,
+                                                                               state: .consumed,
+                                                                               version: 1,
+                                                                               callID: "redacted",
+                                                                               roomID: "redacted",
+                                                                               peerUserID: "redacted",
+                                                                               direction: "incoming",
+                                                                               intent: .audio,
+                                                                               expiresAtMS: 1))
+        }
+        service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                            appSessionGeneration: "opaque-generation"))
+        var completionCount = 0
+
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: productionDispatchPayload(), for: .voIP) {
+                completionCount += 1
+                continuation.resume()
+            }
+        }
+
+        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(completionCount == 1)
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+    }
+
+    @Test
     func callIsTimingOut() async {
         #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
 
@@ -3256,6 +3421,35 @@ final class ElementCallServiceTests {
                                  for: .voIP) { }
         }
     }
+
+    private func productionDispatchPayload(dispatchID: String = "11111111-1111-4111-8111-111111111111",
+                                           includingLegacyCallBootstrap: Bool = false) -> PKPushPayloadMock {
+        let payload = PKPushPayloadMock()
+        if includingLegacyCallBootstrap {
+            _ = payload.updatingExpiration(currentDate, lifetime: 30)
+        } else {
+            payload.dict.removeAll()
+        }
+        payload.dict[SalemXProductionDispatchNotificationKey.envelope.rawValue] = [
+            SalemXProductionDispatchNotificationKey.protocolVersion.rawValue: 1,
+            SalemXProductionDispatchNotificationKey.dispatchID.rawValue: dispatchID,
+            SalemXProductionDispatchNotificationKey.receiverReference.rawValue: "receiver-reference"
+        ]
+        return payload
+    }
+
+    private func productionDispatchConsumeResponse(direction: String = "incoming",
+                                                   expiresAt: Date? = nil) -> SalemXProductionDispatchReceiverConsumeResponse {
+        .init(dispatchProtocolVersion: 1,
+              state: .consumed,
+              version: 1,
+              callID: "opaque-call",
+              roomID: "!room:example.com",
+              peerUserID: "@peer:example.com",
+              direction: direction,
+              intent: .audio,
+              expiresAtMS: Int64((expiresAt ?? currentDate.addingTimeInterval(30)).timeIntervalSince1970 * 1000))
+    }
 }
 
 @MainActor
@@ -4124,6 +4318,10 @@ private class PKPushPayloadMock: PKPushPayload {
         dict[ElementCallServiceNotificationKey.expirationDate.rawValue] = Date(timeIntervalSince1970: 10)
     }
 
+    init(dictionaryPayload: [AnyHashable: Any]) {
+        dict = dictionaryPayload
+    }
+
     override var dictionaryPayload: [AnyHashable: Any] {
         dict
     }
@@ -4155,7 +4353,11 @@ private class PKPushCredentialsMock: PKPushCredentials {
 @MainActor
 private final class SalemXProductionDispatchCapabilityClientSpy: SalemXProductionDispatchClientProtocol {
     private(set) var registrationRequests = [SalemXProductionDispatchCapabilityRegistrationRequest]()
+    private(set) var consumeRequests = [SalemXProductionDispatchReceiverConsumeRequest]()
     var registrationHandler: ((SalemXProductionDispatchCapabilityRegistrationRequest) -> Void)?
+    var consumeResult: Result<SalemXProductionDispatchReceiverConsumeResponse, SalemXProductionDispatchClientError> = .failure(.invalidState)
+    var consumeHandler: ((SalemXProductionDispatchReceiverConsumeRequest) async
+        -> Result<SalemXProductionDispatchReceiverConsumeResponse, SalemXProductionDispatchClientError>)?
 
     func registerCapability(_ request: SalemXProductionDispatchCapabilityRegistrationRequest) async
         -> Result<SalemXProductionDispatchCapabilityRegistrationResponse, SalemXProductionDispatchClientError> {
@@ -4186,7 +4388,11 @@ private final class SalemXProductionDispatchCapabilityClientSpy: SalemXProductio
 
     func consume(_ request: SalemXProductionDispatchReceiverConsumeRequest) async
         -> Result<SalemXProductionDispatchReceiverConsumeResponse, SalemXProductionDispatchClientError> {
-        fatalError("Unexpected consume")
+        consumeRequests.append(request)
+        if let consumeHandler {
+            return await consumeHandler(request)
+        }
+        return consumeResult
     }
 }
 

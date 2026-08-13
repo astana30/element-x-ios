@@ -186,6 +186,7 @@ struct SalemXProductionDispatchClientTests {
         #expect(decoded.state == .consumed)
         #expect(sent.url.path == SalemXProductionDispatchClient.receiverConsumePath)
         #expect(sent.headers["Authorization"] == "Bearer \(accessToken)")
+        #expect(sent.timeoutInterval == 4)
         #expect(String(describing: decoded).contains("room") == false)
     }
 

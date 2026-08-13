@@ -645,6 +645,7 @@ def create_app(config: ServiceConfig | None = None,
                         token_record=current_receiver_record,
                         voip_send_service=voip_send_service,
                         pending_metadata_reference=receiver_reference,
+                        dispatch_id=admission.snapshot.dispatch_id,
                         metadata=metadata,
                         expires_at_ms=expires_at_ms,
                     )
@@ -1556,6 +1557,7 @@ def _prepared_invite_apns_diagnostics(
     pending_metadata_reference: str,
     metadata: PendingCallMetadataRequest,
     expires_at_ms: int,
+    dispatch_id: UUID | None = None,
 ) -> dict[str, object]:
     lookup_store_key_redacted = redacted_latest_user_record_key(recipient, token_record.environment_class)
     diagnostics = voip_send_service.send(
@@ -1563,7 +1565,12 @@ def _prepared_invite_apns_diagnostics(
         token_record,
         payload_kind="real_invite_controlled",
         pending_metadata_reference=pending_metadata_reference,
-        call_bootstrap=_call_bootstrap_payload(metadata, pending_metadata_reference, expires_at_ms),
+        dispatch_id=str(dispatch_id) if dispatch_id is not None else None,
+        call_bootstrap=(
+            None
+            if dispatch_id is not None
+            else _call_bootstrap_payload(metadata, pending_metadata_reference, expires_at_ms)
+        ),
     )
     return {
         "real_non_dev_invite_used": True,

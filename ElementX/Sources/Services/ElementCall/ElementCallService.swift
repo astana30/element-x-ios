@@ -876,6 +876,11 @@ private final class DirectRoomInfoTerminationStateMachine {
 
 // swiftlint:disable type_body_length
 class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockElementCallLifecycleProviding, PKPushRegistryDelegate, CXProviderDelegate {
+    private struct ProductionDispatchReceiverInput {
+        let dispatchID: UUID
+        let receiverReference: String
+    }
+
     private enum IncomingFallbackConstants {
         static let unansweredTimeout: Duration = .seconds(45)
         static let suppressionDuration: TimeInterval = 30
@@ -1010,6 +1015,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     @MainActor private var productionDispatchCapabilityTokenRevision: UInt64 = 0
     @MainActor private var registeredProductionDispatchCapability: (appSessionGeneration: String, tokenRevision: UInt64)?
     @MainActor private var productionDispatchCapabilityRegistrationInFlight: (appSessionGeneration: String, tokenRevision: UInt64)?
+    @MainActor private var productionDispatchReceiverConsumptions = Set<UUID>()
     @MainActor private var productionDispatchObservations = [UUID: SalemXStockElementCallObservationState]()
     
     private weak var clientProxy: ClientProxyProtocol? {
@@ -1153,6 +1159,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     func configureProductionDispatchCapability(_ configuration: SalemXProductionDispatchCapabilityConfiguration?) {
         productionDispatchCapabilityConfiguration = configuration
         registeredProductionDispatchCapability = nil
+        if configuration == nil {
+            productionDispatchReceiverConsumptions.removeAll()
+        }
 
         guard configuration != nil else { return }
         Task { @MainActor in await registerVoIPPusherIfNeeded() }
@@ -1402,19 +1411,40 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
     
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
+        if appSettings.salemxProductionDispatchV1Enabled {
+            guard let input = Self.productionDispatchReceiverInput(from: payload.dictionaryPayload) else {
+                completion()
+                return
+            }
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    completion()
+                    return
+                }
+                await self.consumeProductionDispatchReceiverInput(input, completion: completion)
+            }
+            return
+        }
         #if DEBUG
         if SalemXPushKitRegistrationSmokeDebugBridge.handleElementCallServicePushKitReceipt(payload.dictionaryPayload, completion: completion) {
             return
         }
         #endif
-        guard let roomID = payload.dictionaryPayload[ElementCallServiceNotificationKey.roomID.rawValue] as? String else {
-            MXLog.error("Something went wrong, missing room identifier for incoming voip call: \(payload)")
+        handleIncomingPushPayload(payload.dictionaryPayload, completion: completion)
+    }
+
+    private func handleIncomingPushPayload(_ payload: [AnyHashable: Any],
+                                           requiresRTCNotificationID: Bool = true,
+                                           completion: @escaping () -> Void) {
+        guard let roomID = payload[ElementCallServiceNotificationKey.roomID.rawValue] as? String else {
+            MXLog.error("Incoming VoIP call is missing its room binding.")
             completion()
             return
         }
-        
-        guard let rtcNotificationID = payload.dictionaryPayload[ElementCallServiceNotificationKey.rtcNotifyEventID.rawValue] as? String else {
-            MXLog.error("Something went wrong, missing rtc notification event identifier for incoming voip call: \(payload)")
+
+        let rtcNotificationID = payload[ElementCallServiceNotificationKey.rtcNotifyEventID.rawValue] as? String
+        guard !requiresRTCNotificationID || rtcNotificationID != nil else {
+            MXLog.error("Incoming VoIP call is missing its notification binding.")
             completion()
             return
         }
@@ -1430,8 +1460,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             return
         }
         
-        guard let expirationDate = (payload.dictionaryPayload[ElementCallServiceNotificationKey.expirationDate.rawValue] as? Date) else {
-            MXLog.error("Something went wrong, missing expiration timestamp for incoming voip call: \(payload)")
+        guard let expirationDate = (payload[ElementCallServiceNotificationKey.expirationDate.rawValue] as? Date) else {
+            MXLog.error("Incoming VoIP call is missing its expiration.")
             completion()
             return
         }
@@ -1444,9 +1474,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             return
         }
 
-        let incomingStartMode = incomingStartMode(for: payload.dictionaryPayload, roomID: roomID)
-        let intentTrace = callIntentTrace(from: payload.dictionaryPayload)
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH] room_id=\(roomID) payload_fields=\(Self.callTracePayloadSummary(payload.dictionaryPayload)) " +
+        let incomingStartMode = incomingStartMode(for: payload, roomID: roomID)
+        let intentTrace = callIntentTrace(from: payload)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH] room_id=\(roomID) payload_fields=\(Self.callTracePayloadSummary(payload)) " +
             "parsed_intent_key=\(intentTrace.key ?? "nil") parsed_intent_value=\(intentTrace.value ?? "nil") " +
             "parsed_intent_start_mode=\(Self.callTraceStartMode(intentTrace.parsedStartMode)) incoming_start_mode=\(incomingStartMode)")
         cachedRemoteCallIDByRoomID.removeValue(forKey: roomID)
@@ -1458,7 +1488,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                             startMode: incomingStartMode,
                             startedAt: nowDate)
         incomingCallID = callID
-        cacheRTCNotificationID(rtcNotificationID, for: roomID, isOwnEvent: false)
+        if let rtcNotificationID {
+            cacheRTCNotificationID(rtcNotificationID, for: roomID, isOwnEvent: false)
+        }
         openCallSession(roomID: roomID,
                         callKitID: callID.callKitID,
                         direction: .incoming,
@@ -1466,7 +1498,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         
         let ringDuration: Duration = .seconds(min(expirationDate.timeIntervalSince1970 - nowDate.timeIntervalSince1970, 90))
         
-        let roomDisplayName = payload.dictionaryPayload[ElementCallServiceNotificationKey.roomDisplayName.rawValue] as? String
+        let roomDisplayName = payload[ElementCallServiceNotificationKey.roomDisplayName.rawValue] as? String
         
         let update = CXCallUpdate()
         // Incoming direct calls behave as regular phone calls unless proven video.
@@ -1498,6 +1530,54 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
             }
         }
+    }
+
+    private static func productionDispatchReceiverInput(from payload: [AnyHashable: Any]) -> ProductionDispatchReceiverInput? {
+        guard let rawEnvelope = payload[SalemXProductionDispatchNotificationKey.envelope.rawValue] as? NSDictionary,
+              let protocolNumber = rawEnvelope[SalemXProductionDispatchNotificationKey.protocolVersion.rawValue] as? NSNumber,
+              CFGetTypeID(protocolNumber) != CFBooleanGetTypeID(),
+              let protocolVersion = Int(exactly: protocolNumber),
+              protocolVersion == SalemXProductionDispatchProtocolVersion.v1.rawValue,
+              let dispatchIDString = rawEnvelope[SalemXProductionDispatchNotificationKey.dispatchID.rawValue] as? String,
+              let dispatchID = UUID(uuidString: dispatchIDString),
+              let receiverReference = rawEnvelope[SalemXProductionDispatchNotificationKey.receiverReference.rawValue] as? String,
+              !receiverReference.isEmpty,
+              receiverReference.count <= 512 else {
+            return nil
+        }
+        return .init(dispatchID: dispatchID, receiverReference: receiverReference)
+    }
+
+    @MainActor
+    private func consumeProductionDispatchReceiverInput(_ input: ProductionDispatchReceiverInput,
+                                                        completion: @escaping () -> Void) async {
+        guard productionDispatchReceiverConsumptions.insert(input.dispatchID).inserted,
+              let configuration = productionDispatchCapabilityConfiguration,
+              !configuration.appSessionGeneration.isEmpty else {
+            completion()
+            return
+        }
+
+        let request = SalemXProductionDispatchReceiverConsumeRequest(dispatchID: input.dispatchID,
+                                                                     receiverReference: input.receiverReference,
+                                                                     appSessionGeneration: configuration.appSessionGeneration)
+        let result = await configuration.client.consume(request)
+        guard !Task.isCancelled,
+              productionDispatchCapabilityConfiguration?.appSessionGeneration == configuration.appSessionGeneration,
+              case .success(let response) = result,
+              response.direction == "incoming",
+              response.intent == .audio,
+              response.expiresAtMS > Int64(timeProvider.now().timeIntervalSince1970 * 1000) else {
+            completion()
+            return
+        }
+
+        handleIncomingPushPayload([
+            ElementCallServiceNotificationKey.roomID.rawValue: response.roomID,
+            ElementCallServiceNotificationKey.roomDisplayName.rawValue: "SalemX audio call",
+            ElementCallServiceNotificationKey.callIntent.rawValue: "audio",
+            ElementCallServiceNotificationKey.expirationDate.rawValue: Date(timeIntervalSince1970: TimeInterval(response.expiresAtMS) / 1000)
+        ], requiresRTCNotificationID: false, completion: completion)
     }
     
     // MARK: - CXProviderDelegate
@@ -2792,6 +2872,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             let renderedValue: String
             switch key {
             case ElementCallServiceNotificationKey.roomDisplayName.rawValue:
+                renderedValue = "<redacted>"
+            case SalemXProductionDispatchNotificationKey.envelope.rawValue:
                 renderedValue = "<redacted>"
             default:
                 renderedValue = String(describing: value ?? "nil")
