@@ -97,6 +97,24 @@ struct SalemXProductionDispatchCoordinatorTests {
     }
 
     @Test
+    func disabledServerAfterMatrixRTCStartTearsDownExactlyOnce() async {
+        let lifecycle = LifecycleSpy()
+        let disabled = SalemXProductionDispatchClientError.http(.notFound, .disabled)
+        let client = DispatchClientSpy(prepareResult: .failure(disabled))
+        let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
+
+        #expect(await coordinator.start(input()) == .failed(.dispatch(disabled)))
+        #expect(client.events == [.prepare])
+        #expect(client.claimCount == 0)
+        #expect(client.sendCount == 0)
+        #expect(client.cancelCount == 0)
+        #expect(lifecycle.events == [.start, .membershipConfirmed, .end, .membershipRemoved])
+        #expect(lifecycle.events.filter { $0 == .end }.count == 1)
+        #expect(lifecycle.events.filter { $0 == .membershipRemoved }.count == 1)
+        #expect(coordinator.state == .idle)
+    }
+
+    @Test
     func claimFailureCancelsExactPreparedRecordAndEndsMembership() async {
         let lifecycle = LifecycleSpy()
         let client = DispatchClientSpy(claimResult: .failure(.http(.forbidden, .capability)))

@@ -409,6 +409,27 @@ final class ElementCallServiceTests {
     }
 
     @Test
+    func productionDispatchDisabledResponseCompletesOnceWithoutCallKit() async {
+        appSettings.salemxProductionDispatchV1Enabled = true
+        let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
+        dispatchClient.consumeResult = .failure(.http(.notFound, .disabled))
+        service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                            appSessionGeneration: "opaque-generation"))
+        var completionCount = 0
+
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: productionDispatchPayload(), for: .voIP) {
+                completionCount += 1
+                continuation.resume()
+            }
+        }
+
+        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(completionCount == 1)
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+    }
+
+    @Test
     func productionDispatchStaleAndInvalidResponsesFailClosed() async {
         appSettings.salemxProductionDispatchV1Enabled = true
         let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
