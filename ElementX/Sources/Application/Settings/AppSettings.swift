@@ -38,6 +38,16 @@ enum AppBuildType {
 
 /// Store Element specific app settings.
 final class AppSettings: @unchecked Sendable {
+    static let salemxProductionDispatchV1ActivationBuild: Bool = {
+        #if SALEMX_PRODUCTION_DISPATCH_ACTIVATION
+        true
+        #else
+        false
+        #endif
+    }()
+
+    static let salemxProductionDispatchV1DefaultEnabled = salemxProductionDispatchV1ActivationBuild
+
     private enum UserDefaultsKeys: String {
         case lastVersionLaunched
         case seenInvites
@@ -487,7 +497,9 @@ final class AppSettings: @unchecked Sendable {
     @UserPreference(key: UserDefaultsKeys.directOneToOneCallsEnabled, defaultValue: false, storageType: .userDefaults(store))
     var directOneToOneCallsEnabled
 
-    @UserPreference(key: UserDefaultsKeys.salemxProductionDispatchV1Enabled, defaultValue: false, storageType: .userDefaults(store))
+    @UserPreference(key: UserDefaultsKeys.salemxProductionDispatchV1Enabled,
+                    defaultValue: AppSettings.salemxProductionDispatchV1DefaultEnabled,
+                    storageType: .userDefaults(store))
     var salemxProductionDispatchV1Enabled
     
     @UserPreference(key: UserDefaultsKeys.developerOptionsEnabled, defaultValue: appBuildType == .debug, storageType: .userDefaults(store))

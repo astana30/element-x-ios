@@ -133,6 +133,11 @@ targets:
         DEVELOPMENT_ASSET_PATHS: DevelopmentAssets/Media
         OTHER_SWIFT_FLAGS:
         - "-DIS_MAIN_APP"
+      configs:
+        SalemXDispatchActivation:
+          CODE_SIGN_IDENTITY: Apple Development
+          CODE_SIGN_STYLE: Automatic
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SALEMX_PRODUCTION_DISPATCH_ACTIVATION"
 
     preBuildScripts:
     - name: 🛠 SwiftGen

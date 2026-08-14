@@ -1015,6 +1015,7 @@
 		A6BE72C71030D6EA9DA50FF6 /* NotificationSettingsChatType.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B1FE09C51F1E8C94411F37 /* NotificationSettingsChatType.swift */; };
 		A6D458E32BA62A3E85F96F62 /* FileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85F8CD06B32AFE86CD4F44C /* FileManager.swift */; };
 		A6DD4E2C881BFC86F18AF2CE /* AnalyticsSettingsScreenCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACDB75016465A45374C47081 /* AnalyticsSettingsScreenCoordinator.swift */; };
+		A6EF0F21F3F045075737B452 /* ProductionDispatchActivationBuildTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEED05E96C7EA043B35F0346 /* ProductionDispatchActivationBuildTests.swift */; };
 		A6FF3A0382AE8EA3BAEFD03E /* AnalyticsPromptScreenViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0267E02EF9D047448A7A7DA9 /* AnalyticsPromptScreenViewModel.swift */; };
 		A71CF29C60BF81F312EE3D1C /* TimelineItemMacContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0940072FA513B0EAE5B0528 /* TimelineItemMacContextMenu.swift */; };
 		A7250DCED5FDECF6C5DA6ABC /* UIFont+AttributedStringBuilder.m in Sources */ = {isa = PBXBuildFile; fileRef = C7F73B83C5FBA3499594CF2F /* UIFont+AttributedStringBuilder.m */; };
@@ -2666,6 +2667,7 @@
 		BEAF11CB32AB86EA01DE019D /* KnockRequestsListScreenViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnockRequestsListScreenViewModelTests.swift; sourceTree = "<group>"; };
 		BECE7790A9513A915DD5633A /* VoiceMessageCacheProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMessageCacheProtocol.swift; sourceTree = "<group>"; };
 		BEE4A4571EF73B2529652039 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = es; path = es.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
+		BEED05E96C7EA043B35F0346 /* ProductionDispatchActivationBuildTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionDispatchActivationBuildTests.swift; sourceTree = "<group>"; };
 		BEF89B66F7D51DA6E9A0E711 /* DeactivateAccountScreenModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeactivateAccountScreenModels.swift; sourceTree = "<group>"; };
 		BF2014B57D3D18F77F4861AA /* Application.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Application.swift; sourceTree = "<group>"; };
 		BF28059AD243A592131655A3 /* RoomSelectionScreenViewModelProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomSelectionScreenViewModelProtocol.swift; sourceTree = "<group>"; };
@@ -6553,6 +6555,7 @@
 				CB37DB647C53E32C817FC5F7 /* PillContextTests.swift */,
 				215DABC2B31CB203DEA25E16 /* PinnedEventsBannerStateTests.swift */,
 				2440A44A9356F234AF63494C /* PollFormScreenViewModelTests.swift */,
+				BEED05E96C7EA043B35F0346 /* ProductionDispatchActivationBuildTests.swift */,
 				4030F6836BE7E0EC2FE31855 /* QRCodeLoginScreenViewModelTests.swift */,
 				961A9C9841876A433998317C /* RemotePreferenceTests.swift */,
 				E4C5E83E824BC2E423E6FF57 /* ReportContentScreenViewModelTests.swift */,
@@ -7307,21 +7310,21 @@
 				ORGANIZATIONNAME = Element;
 				TargetAttributes = {
 					0721BB2EE4FEC388DA4CA748 = {
-						DevelopmentTeam = M639Y9MFR2;
+						DevelopmentTeam = 83LGSC2QPV;
 						TestTargetID = 972666A09AFB6DEBC7F1343F;
 					};
 					0750EF7EE4F3079D28EF5B20 = {
-						DevelopmentTeam = M639Y9MFR2;
+						DevelopmentTeam = 83LGSC2QPV;
 					};
 					13871BBAD7310F1E14C1F7AF = {
-						DevelopmentTeam = M639Y9MFR2;
+						DevelopmentTeam = 83LGSC2QPV;
 					};
 					2A8391AA26F0A4A044F61C17 = {
-						DevelopmentTeam = M639Y9MFR2;
+						DevelopmentTeam = 83LGSC2QPV;
 						TestTargetID = 972666A09AFB6DEBC7F1343F;
 					};
 					4904E10E664422076CAFD71D = {
-						DevelopmentTeam = M639Y9MFR2;
+						DevelopmentTeam = 83LGSC2QPV;
 						TestTargetID = 972666A09AFB6DEBC7F1343F;
 					};
 					81D2DB92805A278D9863BFB2 = {
@@ -7334,10 +7337,10 @@
 						DevelopmentTeam = "$(DEVELOPMENT_TEAM)";
 					};
 					BDD5CA58FE2A95ED4C2DD495 = {
-						DevelopmentTeam = M639Y9MFR2;
+						DevelopmentTeam = 83LGSC2QPV;
 					};
 					D9DEE3B2DA4C978A84814894 = {
-						DevelopmentTeam = M639Y9MFR2;
+						DevelopmentTeam = 83LGSC2QPV;
 					};
 				};
 			};
@@ -9061,6 +9064,7 @@
 				1099C4A03EF78B653DA71F32 /* PillContextTests.swift in Sources */,
 				263B40B3CA916A53F4770588 /* PinnedEventsBannerStateTests.swift in Sources */,
 				44609F6465B969625F8F4317 /* PollFormScreenViewModelTests.swift in Sources */,
+				A6EF0F21F3F045075737B452 /* ProductionDispatchActivationBuildTests.swift in Sources */,
 				205D8CBC8C2F2F75FB2E902C /* Publisher.swift in Sources */,
 				0B3D048F1451AF2D4F56AE35 /* QRCodeLoginScreenViewModelTests.swift in Sources */,
 				BF49D406D9C8BD39ED165DC5 /* RemotePreferenceTests.swift in Sources */,
@@ -9459,7 +9463,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = M639Y9MFR2;
+				DEVELOPMENT_TEAM = 83LGSC2QPV;
 				ENABLE_BITCODE = NO;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -9523,11 +9527,68 @@
 			};
 			name = Release;
 		};
+		381BF5C4375DDF1672315CAB /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = AccessibilityTests/SupportingFiles/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "${BASE_BUNDLE_IDENTIFIER}.accessibility.tests";
+				PRODUCT_NAME = AccessibilityTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SalemX;
+			};
+			name = SalemXDispatchActivation;
+		};
+		3E0193EE0E2B7F4734751C1A /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = UnitTests/SupportingFiles/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "${BASE_BUNDLE_IDENTIFIER}.unit.tests";
+				PRODUCT_NAME = UnitTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SalemX.app/SalemX";
+			};
+			name = SalemXDispatchActivation;
+		};
 		416517521F67E93BD5B78851 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 			};
 			name = Release;
+		};
+		43D5C0191272138DC908C112 /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/SupportingFiles/ShareExtension.entitlements;
+				CURRENT_PROJECT_VERSION = "$(CURRENT_PROJECT_VERSION)";
+				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
+				INFOPLIST_FILE = ShareExtension/SupportingFiles/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				PRODUCT_BUNDLE_IDENTIFIER = "${BASE_BUNDLE_IDENTIFIER}.shareextension";
+				PRODUCT_DISPLAY_NAME = "$(APP_DISPLAY_NAME)";
+				PRODUCT_NAME = ShareExtension;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = SalemXDispatchActivation;
 		};
 		48E902C9EDDC8B9ED3BCF6A7 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -9553,6 +9614,55 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		4FD9BD5AA8F490EE347B7F5E /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = SalemXDispatchActivation;
+		};
+		51096A8179DA663B38F60752 /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NSE/SupportingFiles/NSE.entitlements;
+				CURRENT_PROJECT_VERSION = "$(CURRENT_PROJECT_VERSION)";
+				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
+				INFOPLIST_FILE = NSE/SupportingFiles/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				OTHER_SWIFT_FLAGS = (
+					"-DIS_NSE",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "${BASE_BUNDLE_IDENTIFIER}.nse";
+				PRODUCT_DISPLAY_NAME = "$(APP_DISPLAY_NAME)";
+				PRODUCT_NAME = NSE;
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "GeneratedInterface-Swift.h";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = SalemXDispatchActivation;
+		};
+		5BDEDB416D0521BCE2196B57 /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = UITests/SupportingFiles/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "${BASE_BUNDLE_IDENTIFIER}.ui.tests";
+				PRODUCT_NAME = UITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SalemX;
+			};
+			name = SalemXDispatchActivation;
 		};
 		5DA6CED1720A043F101BB055 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -9711,6 +9821,20 @@
 			};
 			name = Debug;
 		};
+		9B6F0B657CAE482358EC1ED8 /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_NAME = MatrixRustSDKMocks;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = SalemXDispatchActivation;
+		};
 		9BB543AB854D3AE33379266C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -9728,6 +9852,41 @@
 				TEST_TARGET_NAME = SalemX;
 			};
 			name = Release;
+		};
+		9D79916296C62594C31E37FE /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ElementX/SupportingFiles/ElementX.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(CURRENT_PROJECT_VERSION)";
+				DEVELOPMENT_ASSET_PATHS = DevelopmentAssets/Media;
+				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
+				INFOPLIST_FILE = ElementX/SupportingFiles/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"-DIS_MAIN_APP",
+				);
+				PILLS_UT_TYPE_IDENTIFIER = "$(BASE_BUNDLE_IDENTIFIER).pills";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BASE_BUNDLE_IDENTIFIER)";
+				PRODUCT_MODULE_NAME = ElementX;
+				PRODUCT_NAME = "$(APP_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) SALEMX_PRODUCTION_DISPATCH_ACTIVATION";
+				SWIFT_OBJC_BRIDGING_HEADER = "ElementX/SupportingFiles/ElementX-Bridging-Header.h";
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "GeneratedInterface-Swift.h";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = SalemXDispatchActivation;
 		};
 		9F5EF92A6F78737E229D2BB2 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -9828,7 +9987,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = M639Y9MFR2;
+				DEVELOPMENT_TEAM = 83LGSC2QPV;
 				ENABLE_BITCODE = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -9863,6 +10022,77 @@
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
+		};
+		C33175CEA9F488AB93C6847F /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				APP_DISPLAY_NAME = SalemX;
+				APP_GROUP_IDENTIFIER = group.kz.salemx.msg.dev;
+				APP_NAME = SalemX;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "colors/accent-color";
+				BASE_BUNDLE_IDENTIFIER = kz.salemx.msg;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 83LGSC2QPV;
+				ENABLE_BITCODE = NO;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				KEYCHAIN_ACCESS_GROUP_IDENTIFIER = "$(DEVELOPMENT_TEAM).$(BASE_BUNDLE_IDENTIFIER)";
+				MACOSX_DEPLOYMENT_TARGET = 14.5;
+				MARKETING_VERSION = 26.03.4;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCTION_APP_NAME = SalemX;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PUSH_GATEWAY_BASE_URL = "https://matrix.org";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = SalemXDispatchActivation;
 		};
 		C9B00E922C4CCC2D0A8AAC4D /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -9917,6 +10147,42 @@
 			};
 			name = Debug;
 		};
+		D631F7EBB25AAA3BFF81C6B7 /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = IntegrationTests/SupportingFiles/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "${BASE_BUNDLE_IDENTIFIER}.integration.tests";
+				PRODUCT_NAME = IntegrationTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SalemX;
+			};
+			name = SalemXDispatchActivation;
+		};
+		EFF865AF2D531C9FCB00E829 /* SalemXDispatchActivation */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = PreviewTests/SupportingFiles/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "${BASE_BUNDLE_IDENTIFIER}.preview.tests";
+				PRODUCT_NAME = PreviewTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SalemX.app/SalemX";
+			};
+			name = SalemXDispatchActivation;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -9925,6 +10191,7 @@
 			buildConfigurations = (
 				02CE09820A00D26C3C5E835F /* Debug */,
 				416517521F67E93BD5B78851 /* Release */,
+				4FD9BD5AA8F490EE347B7F5E /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -9934,6 +10201,7 @@
 			buildConfigurations = (
 				5DA6CED1720A043F101BB055 /* Debug */,
 				0302D99BEF146F329EC688BF /* Release */,
+				9D79916296C62594C31E37FE /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -9943,6 +10211,7 @@
 			buildConfigurations = (
 				741AB7C777F78AA0F438AC0B /* Debug */,
 				236D4C45F44A9BE039C8DB0E /* Release */,
+				5BDEDB416D0521BCE2196B57 /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -9952,6 +10221,7 @@
 			buildConfigurations = (
 				C1180CFD8DDC41CC2994217D /* Debug */,
 				0EC604D347A495FBDC6515E5 /* Release */,
+				C33175CEA9F488AB93C6847F /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -9961,6 +10231,7 @@
 			buildConfigurations = (
 				82697EE388F55B040EB58665 /* Debug */,
 				9F5EF92A6F78737E229D2BB2 /* Release */,
+				3E0193EE0E2B7F4734751C1A /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -9970,6 +10241,7 @@
 			buildConfigurations = (
 				82D15A36AAF75395902FF6C1 /* Debug */,
 				C9B00E922C4CCC2D0A8AAC4D /* Release */,
+				EFF865AF2D531C9FCB00E829 /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -9979,6 +10251,7 @@
 			buildConfigurations = (
 				7C46A96E113D955DBF4041DD /* Debug */,
 				48E902C9EDDC8B9ED3BCF6A7 /* Release */,
+				51096A8179DA663B38F60752 /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -9988,6 +10261,7 @@
 			buildConfigurations = (
 				BDD36DBE655323B2D5768BA5 /* Debug */,
 				9BB543AB854D3AE33379266C /* Release */,
+				D631F7EBB25AAA3BFF81C6B7 /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -9997,6 +10271,7 @@
 			buildConfigurations = (
 				ADE0A2A993D409914D626B78 /* Debug */,
 				7A36D4803647D1D40D2E374B /* Release */,
+				381BF5C4375DDF1672315CAB /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -10006,6 +10281,7 @@
 			buildConfigurations = (
 				D32BC8E4CDD83578F2F8F783 /* Debug */,
 				6DC1B60E7FFF5419264F7F07 /* Release */,
+				43D5C0191272138DC908C112 /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -10015,6 +10291,7 @@
 			buildConfigurations = (
 				123B2AC1C3103EED4B984F7F /* Debug */,
 				CEC27FF040ABFF370C51DFC6 /* Release */,
+				9B6F0B657CAE482358EC1ED8 /* SalemXDispatchActivation */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

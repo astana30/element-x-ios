@@ -1,5 +1,9 @@
 ---
 name: SalemX
+configs:
+  Debug: debug
+  Release: release
+  SalemXDispatchActivation: release
 attributes:
   ORGANIZATIONNAME: Element
 
