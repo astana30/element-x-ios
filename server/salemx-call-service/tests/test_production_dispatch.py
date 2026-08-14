@@ -16,6 +16,7 @@ os.environ.setdefault("SALEMX_CALL_SERVICE_MODE", "local_fake")
 from salemx_call_service import app as app_module
 from salemx_call_service.apns_voip import _voip_payload
 from salemx_call_service.auth import AuthenticatedUser
+from salemx_call_service.config import DirectCallStoreConfigurationError, ServiceConfig
 from salemx_call_service.errors import CallServiceError
 from salemx_call_service.production_dispatch_store import (
     APNsOutcome,
@@ -228,15 +229,16 @@ class ProductionDispatchRouteTests(unittest.IsolatedAsyncioTestCase):
         })
         self.tokens.store(user_id, device_id, request)
 
-    def _app(self, enabled: bool = True) -> object:
+    def _app(self, enabled: bool = True, *, flags: tuple[bool, bool, bool] | None = None) -> object:
+        capability, admission, completion = flags or (enabled, enabled, enabled)
         return app_module.create_app(
             token_service=self.service,
             pushkit_token_store=self.tokens,
             apns_voip_send_service=self.apns,
             production_dispatch_store=self.store,
-            direct_call_capability_v1_enabled=enabled,
-            direct_call_dispatch_v1_admission_enabled=enabled,
-            direct_call_dispatch_v1_completion_enabled=enabled,
+            direct_call_capability_v1_enabled=capability,
+            direct_call_dispatch_v1_admission_enabled=admission,
+            direct_call_dispatch_v1_completion_enabled=completion,
         )
 
     def _prepare_payload(self) -> dict[str, object]:
@@ -282,6 +284,82 @@ class ProductionDispatchRouteTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertIsNone(self.store.sender)
+
+    async def test_all_disabled_blocks_stale_dispatch_and_apns(self) -> None:
+        enabled_app = self._app()
+        await self._prepare_and_claim(enabled_app)
+        sent = await self._post(
+            enabled_app, app_module.FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH, "auth-a", self._send_payload(),
+        )
+        self.assertEqual(sent.status_code, 200)
+        self.assertEqual(self.apns.invocations, 1)
+
+        disabled_app = self._app(False)
+        before_token = self.tokens.retrieve("@sender:example.org", "SENDER", "production")
+        registration = await self._post(disabled_app, app_module.PUSHKIT_TOKEN_REGISTRATION_PATH, "auth-a", {
+            "version": 1,
+            "token": "b" * 64,
+            "environment": "production",
+            "protocol_version": 1,
+            "intents": ["audio"],
+            "receiver_handoff": "matrixrtc_element_call",
+            "app_session_generation": "new-generation",
+        })
+        self.assertEqual(registration.status_code, 404)
+        self.assertEqual(self.tokens.retrieve("@sender:example.org", "SENDER", "production"), before_token)
+
+        claim_count = self.store.claim_count
+        claim = await self._post(disabled_app, app_module.FOREGROUND_SIGNALING_PENDING_METADATA_SENDER_CLAIM_PATH, "auth-a", {
+            "dispatch_protocol_version": 1,
+            "dispatch_id": str(DISPATCH_ID),
+            "sender_reference": "sender-reference",
+            "app_session_generation": "gen-sender",
+        })
+        self.assertEqual(claim.status_code, 404)
+        self.assertEqual(self.store.claim_count, claim_count)
+
+        send_attempts = self.store.send_attempts
+        apns_invocations = self.apns.invocations
+        send = await self._post(
+            disabled_app, app_module.FOREGROUND_SIGNALING_INVITE_SEND_PREPARED_PATH, "auth-a", self._send_payload(),
+        )
+        self.assertEqual(send.status_code, 404)
+        self.assertEqual(self.store.send_attempts, send_attempts)
+        self.assertEqual(self.apns.invocations, apns_invocations)
+
+        consume = await self._post(disabled_app, app_module.FOREGROUND_SIGNALING_PENDING_METADATA_RECEIVER_CONSUME_PATH, "auth-b", {
+            "dispatch_protocol_version": 1,
+            "dispatch_id": str(DISPATCH_ID),
+            "receiver_reference": "receiver-reference",
+            "app_session_generation": "gen-receiver",
+        })
+        self.assertEqual(consume.status_code, 404)
+        self.assertEqual(self.store.consume_count, 0)
+
+    def test_flag_matrix_allows_only_all_disabled_or_all_enabled(self) -> None:
+        for bits in range(8):
+            flags = tuple(bool(bits & (1 << offset)) for offset in range(3))
+            configuration = dict(
+                synapse_base_url="https://matrix.example.invalid",
+                synapse_admin_token="redacted",
+                livekit_url="wss://livekit.example.invalid",
+                livekit_api_key="redacted",
+                livekit_api_secret="redacted",
+                direct_call_pending_store_enabled=True,
+                direct_call_database_dsn="postgresql://dispatch.example.invalid/salemx",
+                direct_call_store_master_key=b"k" * 32,
+                direct_call_capability_v1_enabled=flags[0],
+                direct_call_dispatch_v1_admission_enabled=flags[1],
+                direct_call_dispatch_v1_completion_enabled=flags[2],
+            )
+            if flags in ((False, False, False), (True, True, True)):
+                ServiceConfig(**configuration)
+                self._app(flags=flags)
+            else:
+                with self.assertRaises(DirectCallStoreConfigurationError):
+                    ServiceConfig(**configuration)
+                with self.assertRaises(DirectCallStoreConfigurationError):
+                    self._app(flags=flags)
 
     async def test_capability_registration_derives_authenticated_identity(self) -> None:
         response = await self._post(self._app(), app_module.PUSHKIT_TOKEN_REGISTRATION_PATH, "auth-a", {

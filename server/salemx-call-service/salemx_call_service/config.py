@@ -138,6 +138,15 @@ class DirectCallStoreConfigurationError(RuntimeError):
     """Raised without including database or key material in the error."""
 
 
+def direct_call_protocol_v1_enabled(capability_enabled: bool,
+                                    admission_enabled: bool,
+                                    completion_enabled: bool) -> bool:
+    flags = (capability_enabled, admission_enabled, completion_enabled)
+    if len(set(flags)) != 1:
+        raise DirectCallStoreConfigurationError("Direct-call protocol v1 flags must be enabled or disabled together.")
+    return flags[0]
+
+
 @dataclass(frozen=True)
 class DirectCallStoreSettings:
     enabled: bool = False
@@ -172,14 +181,17 @@ class ServiceConfig:
     direct_call_dispatch_v1_completion_enabled: bool = False
 
     def __post_init__(self) -> None:
+        protocol_v1_enabled = direct_call_protocol_v1_enabled(
+            self.direct_call_capability_v1_enabled,
+            self.direct_call_dispatch_v1_admission_enabled,
+            self.direct_call_dispatch_v1_completion_enabled,
+        )
         _validate_direct_call_store_values(
             self.direct_call_pending_store_enabled,
             self.direct_call_database_dsn,
             self.direct_call_store_master_key,
         )
-        if (self.direct_call_capability_v1_enabled
-                or self.direct_call_dispatch_v1_admission_enabled
-                or self.direct_call_dispatch_v1_completion_enabled) and not self.direct_call_pending_store_enabled:
+        if protocol_v1_enabled and not self.direct_call_pending_store_enabled:
             raise DirectCallStoreConfigurationError("Direct-call protocol v1 requires the durable pending store.")
 
     @classmethod

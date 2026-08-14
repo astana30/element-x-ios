@@ -30,6 +30,7 @@ from .config import (
     ServicePreflightReason,
     ServiceReadiness,
     FOREGROUND_SIGNALING_DEV_INVITE_ENABLED_ENV,
+    direct_call_protocol_v1_enabled,
     service_mode_from_env,
     service_readiness_from_config,
     validate_service_preflight,
@@ -256,6 +257,18 @@ def create_app(config: ServiceConfig | None = None,
         if direct_call_dispatch_v1_completion_enabled is not None
         else runtime_config is not None and runtime_config.direct_call_dispatch_v1_completion_enabled
     )
+    protocol_v1_enabled = direct_call_protocol_v1_enabled(
+        capability_v1_enabled,
+        dispatch_v1_admission_enabled,
+        dispatch_v1_completion_enabled,
+    )
+
+    def require_protocol_v1_enabled() -> None:
+        if not protocol_v1_enabled:
+            raise CallServiceError(status_code=404,
+                                   errcode="M_UNRECOGNIZED",
+                                   error="Direct-call dispatch v1 is disabled.")
+
     root_audit_credential = _pending_store_root_audit_credential(
         pending_store_audit_credential,
         runtime_config,
@@ -342,9 +355,11 @@ def create_app(config: ServiceConfig | None = None,
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
             registration_request = PushKitTokenRegistrationRequest.from_mapping(payload)
+            if registration_request.protocol_version == 1:
+                require_protocol_v1_enabled()
             store_result = token_store.store(authenticated_user.user_id, authenticated_user.device_id, registration_request)
             stored_record = token_store.retrieve(authenticated_user.user_id, authenticated_user.device_id, registration_request.environment_class)
-            if registration_request.protocol_version == 1 and capability_v1_enabled:
+            if registration_request.protocol_version == 1:
                 active_dispatch_store = _require_dispatch_store(dispatch_store)
                 identity = _dispatch_identity_for_record(authenticated_user.user_id, stored_record)
                 active_dispatch_store.register_capability(
@@ -492,8 +507,7 @@ def create_app(config: ServiceConfig | None = None,
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
             if payload.get("dispatch_protocol_version") == 1:
-                if not capability_v1_enabled or not dispatch_v1_admission_enabled:
-                    raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+                require_protocol_v1_enabled()
                 active_dispatch_store = _require_dispatch_store(dispatch_store)
                 invite_request = ForegroundCallInviteRequest.from_mapping(payload)
                 pending_metadata = pending_metadata_from_invite_payload(payload, authenticated_user)
@@ -599,8 +613,7 @@ def create_app(config: ServiceConfig | None = None,
             if not isinstance(payload, dict):
                 raise bad_request(error="Request body must be a JSON object.")
             if payload.get("dispatch_protocol_version") == 1:
-                if not dispatch_v1_completion_enabled:
-                    raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+                require_protocol_v1_enabled()
                 active_dispatch_store = _require_dispatch_store(dispatch_store)
                 dispatch_id, sender_reference, receiver_reference = _exact_dispatch_request(payload, require_receiver_reference=True)
                 generation = _required_opaque_generation(payload)
@@ -951,8 +964,7 @@ def create_app(config: ServiceConfig | None = None,
             raise CallServiceError(status_code=503,
                                    errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
                                    error="Direct-call service is not ready.")
-        if not dispatch_v1_admission_enabled:
-            raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+        require_protocol_v1_enabled()
         authenticated_user = await service.auth_validator.validate_bearer_token(
             bearer_token_from_authorization(authorization),
         )
@@ -984,8 +996,7 @@ def create_app(config: ServiceConfig | None = None,
             raise CallServiceError(status_code=503,
                                    errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
                                    error="Direct-call service is not ready.")
-        if not dispatch_v1_admission_enabled:
-            raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+        require_protocol_v1_enabled()
         authenticated_user = await service.auth_validator.validate_bearer_token(
             bearer_token_from_authorization(authorization),
         )
@@ -1017,8 +1028,7 @@ def create_app(config: ServiceConfig | None = None,
             raise CallServiceError(status_code=503,
                                    errcode="M_DIRECT_CALL_SERVICE_UNAVAILABLE",
                                    error="Direct-call service is not ready.")
-        if not dispatch_v1_completion_enabled:
-            raise CallServiceError(status_code=404, errcode="M_UNRECOGNIZED", error="Direct-call dispatch v1 is disabled.")
+        require_protocol_v1_enabled()
         authenticated_user = await service.auth_validator.validate_bearer_token(
             bearer_token_from_authorization(authorization),
         )
