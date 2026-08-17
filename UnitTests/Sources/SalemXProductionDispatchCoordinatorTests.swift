@@ -361,6 +361,35 @@ struct SalemXProductionDispatchCoordinatorTests {
                                                               ownUserID: "self") == "other")
     }
 
+    @Test
+    func memberResolutionReturnsJoinedUserIDs() async {
+        let room = JoinedRoomProxyMock(.init(members: [.mockMe, .mockAlice, .mockInvitedAlice]))
+
+        let result = await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: room,
+                                                                                timeout: .seconds(1))
+
+        #expect(result == .resolved([RoomMemberProxyMock.mockMe.userID, RoomMemberProxyMock.mockAlice.userID]))
+        #expect(room.updateMembersCallsCount == 1)
+    }
+
+    @Test
+    func memberResolutionTimeoutFailsClosed() async {
+        let room = JoinedRoomProxyMock(.init(members: [.mockMe, .mockAlice]))
+        var mayFinish = false
+        room.updateMembersClosure = {
+            while !mayFinish {
+                await Task.yield()
+            }
+        }
+
+        let result = await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: room,
+                                                                                timeout: .milliseconds(20))
+        mayFinish = true
+
+        #expect(result == .unavailable)
+        #expect(room.updateMembersCallsCount == 1)
+    }
+
     private func input() -> SalemXProductionDispatchAttemptInput {
         .init(appSessionGeneration: "session-generation",
               admission: .init(recipient: "@receiver:example.test",

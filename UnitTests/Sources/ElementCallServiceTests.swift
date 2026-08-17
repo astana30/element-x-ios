@@ -3165,6 +3165,41 @@ final class ElementCallServiceTests {
     }
 
     @Test
+    func productionDispatchObservationDoesNotWaitForAnInitialTimelineDiff() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!outgoing-without-initial-diff:test"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true))
+        room.emitsInitialRawMembershipState = false
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 9).get()
+        #expect(room.rawMembershipObservationStartCount == 1)
+
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        #expect(room.receiveRawMembershipState([makeMatrixRTCMembershipTimelineItem(eventID: "$historical",
+                                                                                    roomID: roomID,
+                                                                                    membershipID: "HISTORICAL",
+                                                                                    createdAt: currentDate.addingTimeInterval(-10))]))
+        #expect(room.receiveRawMembershipState([makeMatrixRTCMembershipTimelineItem(eventID: "$fresh",
+                                                                                    roomID: roomID,
+                                                                                    membershipID: "FRESH",
+                                                                                    createdAt: currentDate.addingTimeInterval(1))]))
+
+        let context = try await confirmationTask.value.get()
+        #expect(context.callHandle == "_@test:user.net_LOCAL_DEVICE_FRESH")
+        service.cancelObservation(handle)
+    }
+
+    @Test
     func productionDispatchObservationCancellationResumesExactlyOnce() async throws {
         await service.declineIncomingCall()
         let roomID = "!cancel:test"
@@ -4218,6 +4253,7 @@ private final class PublisherSubscriptionProbe: @unchecked Sendable {
 
 final class MatrixRTCCallMembershipRoomProxyMock: JoinedRoomProxyMock, MatrixRTCCallMembershipStateObserving, @unchecked Sendable {
     var initialRawMembershipState = [TimelineItemProxy]()
+    var emitsInitialRawMembershipState = true
     private(set) var rawMembershipObservationStartCount = 0
     private var rawMembershipListener: (([TimelineItemProxy]) -> Void)?
     private var rawMembershipObservationID: UUID?
@@ -4228,7 +4264,9 @@ final class MatrixRTCCallMembershipRoomProxyMock: JoinedRoomProxyMock, MatrixRTC
         let observationID = UUID()
         rawMembershipObservationID = observationID
         rawMembershipListener = listener
-        listener(initialRawMembershipState)
+        if emitsInitialRawMembershipState {
+            listener(initialRawMembershipState)
+        }
 
         return MatrixRTCCallMembershipStateObservationMock { [weak self] in
             guard self?.rawMembershipObservationID == observationID else { return }

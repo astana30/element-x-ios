@@ -328,7 +328,6 @@ private final class SalemXStockElementCallObservationState {
     var confirmedMembership: MatrixRTCCallMembershipIdentity?
     var confirmationResult: Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>?
     var removalResult: Result<Void, SalemXStockElementCallLifecycleError>?
-    var armContinuations = [CheckedContinuation<Result<SalemXStockElementCallObservationHandle, SalemXStockElementCallLifecycleError>, Never>]()
     var confirmationContinuations = [CheckedContinuation<Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>, Never>]()
     var removalContinuations = [CheckedContinuation<Result<Void, SalemXStockElementCallLifecycleError>, Never>]()
 
@@ -1204,13 +1203,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
         state.observation = observation
 
-        if state.baselineEstablished {
-            return .success(handle)
+        if !state.baselineEstablished {
+            // The SDK observation is diff-driven and doesn't guarantee an initial callback.
+            // The timestamp gate below still rejects memberships that predate this observation.
+            state.baselineEstablished = true
+            state.baselineMemberships = []
         }
 
-        return await withCheckedContinuation { continuation in
-            state.armContinuations.append(continuation)
-        }
+        return .success(handle)
     }
 
     @MainActor
@@ -2356,9 +2356,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         if !state.baselineEstablished {
             state.baselineEstablished = true
             state.baselineMemberships = Set(currentMemberships.keys)
-            let continuations = state.armContinuations
-            state.armContinuations.removeAll()
-            continuations.forEach { $0.resume(returning: .success(state.handle)) }
             return
         }
 
@@ -2418,9 +2415,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         guard let state = productionDispatchObservations.removeValue(forKey: observationID) else { return }
         state.observation?.cancel()
 
-        let armContinuations = state.armContinuations
-        state.armContinuations.removeAll()
-        armContinuations.forEach { $0.resume(returning: .failure(.cancelled)) }
         finishProductionDispatchConfirmation(state, result: .failure(.cancelled))
         finishProductionDispatchRemoval(state, result: .failure(.cancelled))
     }

@@ -19,6 +19,30 @@ enum UserSessionFlowCoordinatorAction {
     case forceLogout
 }
 
+enum SalemXProductionDispatchMemberResolution: Equatable {
+    case resolved([String])
+    case unavailable
+}
+
+enum SalemXProductionDispatchMemberResolver {
+    static func joinedUserIDs(roomProxy: JoinedRoomProxyProtocol,
+                              timeout: Duration) async -> SalemXProductionDispatchMemberResolution {
+        let runner = ExpiringTaskRunner<[String]?> {
+            guard let members = await roomProxy.members() else { return nil }
+            return members.filter { $0.membership == .join }.map(\.userID)
+        }
+
+        do {
+            guard let joinedUserIDs = try await runner.run(timeout: timeout) else {
+                return .unavailable
+            }
+            return .resolved(joinedUserIDs)
+        } catch {
+            return .unavailable
+        }
+    }
+}
+
 class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     enum HomeTab: Hashable {
         case chats, calls, contacts, settings
@@ -49,6 +73,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     // periphery:ignore - retaining purpose
     private var settingsFlowCoordinator: SettingsFlowCoordinator?
     private let nativeDirectCallDiagnosticRuntimeGate: () -> Bool
+    private let productionDispatchMemberResolutionTimeout: Duration
     
     enum State: StateType {
         /// The state machine hasn't started.
@@ -72,6 +97,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private let stateMachine: StateMachine<State, Event>
     private var cancellables: Set<AnyCancellable> = []
     private var activeCallStartMode: ElementCallStartMode?
+    private var isProductionDispatchCallPresentationInFlight = false
     
     private let actionsSubject: PassthroughSubject<UserSessionFlowCoordinatorAction, Never> = .init()
     private var hasHandledInitialSecurityGate = false
@@ -84,6 +110,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
          appLockService: AppLockServiceProtocol,
          flowParameters: CommonFlowParameters,
          nativeDirectCallDiagnosticRuntimeGate: @escaping () -> Bool = { ProcessInfo.isRunningUITests },
+         productionDispatchMemberResolutionTimeout: Duration = .seconds(5),
          nativeDirectCallDiagnosticCommandConfiguration: NativeDirectCallRoomDeveloperCommandConfiguration = .init(),
          nativeDirectCallRoomFlowOwnerFactory: @escaping @MainActor (JoinedRoomProxyProtocol) -> NativeDirectCallRoomFlowOwning = { roomProxy in
              NativeDirectCallRoomFlowOwner(roomProxy: roomProxy)
@@ -101,6 +128,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         self.appLockService = appLockService
         self.flowParameters = flowParameters
         self.nativeDirectCallDiagnosticRuntimeGate = nativeDirectCallDiagnosticRuntimeGate
+        self.productionDispatchMemberResolutionTimeout = productionDispatchMemberResolutionTimeout
         
         navigationTabCoordinator = NavigationTabCoordinator()
         navigationRootCoordinator.setRootCoordinator(navigationTabCoordinator)
@@ -696,7 +724,13 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
             return
         }
 
-        Task { await presentEligibleProductionDispatchCall(roomProxy: roomProxy, configuration: configuration) }
+        guard !isProductionDispatchCallPresentationInFlight else { return }
+        isProductionDispatchCallPresentationInFlight = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { isProductionDispatchCallPresentationInFlight = false }
+            await presentEligibleProductionDispatchCall(roomProxy: roomProxy, configuration: configuration)
+        }
     }
     
     private var callScreenPictureInPictureController: AVPictureInPictureController?
@@ -749,13 +783,21 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         let roomInfo = roomProxy.infoPublisher.value
         guard roomInfo.isEncrypted,
               roomInfo.isDirect,
-              roomInfo.joinedMembersCount == 2,
-              let members = await roomProxy.members() else {
+              roomInfo.joinedMembersCount == 2 else {
             presentStockCallScreen(configuration: configuration)
             return
         }
 
-        let joinedUserIDs = members.filter { $0.membership == .join }.map(\.userID)
+        let joinedUserIDs: [String]
+        switch await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: roomProxy,
+                                                                          timeout: productionDispatchMemberResolutionTimeout) {
+        case .resolved(let resolvedUserIDs):
+            joinedUserIDs = resolvedUserIDs
+        case .unavailable:
+            flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
+            return
+        }
+
         guard let recipient = SalemXProductionDispatchEligibility.recipient(featureEnabled: true,
                                                                             startMode: configuration.startMode,
                                                                             isJoinedRoom: true,
