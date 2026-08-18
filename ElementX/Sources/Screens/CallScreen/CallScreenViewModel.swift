@@ -650,7 +650,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         audioRouteEnforcementTask = Task { @MainActor [weak self] in
-            let delays: [Duration] = [.zero, .milliseconds(300), .seconds(1)]
+            let delays: [Duration] = [.zero, .milliseconds(300), .seconds(1), .seconds(2), .seconds(4)]
 
             for delay in delays {
                 if delay > .zero {

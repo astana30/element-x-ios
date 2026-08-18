@@ -8,71 +8,63 @@
 import AVFoundation
 
 enum CallVoiceAudioSession {
-    private static var hasPreparedCategory = false
-    private static var lastLoggedSpeakerEnabled: Bool?
-    private static var lastLoggedOutput: String?
+    private static var lastLoggedSignature: String?
 
     static func reset() {
-        hasPreparedCategory = false
-        lastLoggedSpeakerEnabled = nil
-        lastLoggedOutput = nil
+        lastLoggedSignature = nil
     }
 
-    /// Sets PlayAndRecord + voiceChat once. Never activates the session: CallKit or
-    /// WebRTC owns activation. Repeated `setActive` interrupts WKWebView audio.
+    /// Restores PlayAndRecord + voiceChat without activating the session.
+    /// CallKit or WebRTC owns `setActive`. WebRTC often reapplies `.defaultToSpeaker`
+    /// after getUserMedia; this clears that option and then overrides the port.
     static func prepareEarpieceCategoryIfNeeded() {
-        let session = AVAudioSession.sharedInstance()
-        guard !hasPreparedCategory || session.category != .playAndRecord || session.mode != .voiceChat else {
-            applyOutputPort(speakerEnabled: false)
-            return
-        }
-
-        do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
-            hasPreparedCategory = true
-            applyOutputPort(speakerEnabled: false)
-        } catch {
-            MXLog.error("Failed preparing call audio session with error: \(error)")
-        }
+        applyOutputPort(speakerEnabled: false)
     }
 
     static func applyOutputPort(speakerEnabled: Bool) {
         let session = AVAudioSession.sharedInstance()
         let previousOutput = session.currentRoute.outputs.first?.portType
         if isExternalOutput(previousOutput) {
-            logIfChanged(speakerEnabled: false, output: previousOutput)
+            logIfChanged(session: session, speakerEnabled: false, output: previousOutput)
             return
         }
 
-        let alreadyCorrect = speakerEnabled ? previousOutput == .builtInSpeaker : previousOutput == .builtInReceiver
-        if alreadyCorrect {
-            logIfChanged(speakerEnabled: speakerEnabled, output: previousOutput)
+        let needsVoiceChatCategory = session.category != .playAndRecord
+            || session.mode != .voiceChat
+            || session.categoryOptions.contains(.defaultToSpeaker)
+        let needsPort = speakerEnabled ? previousOutput != .builtInSpeaker : previousOutput != .builtInReceiver
+
+        if !needsVoiceChatCategory, !needsPort {
+            logIfChanged(session: session, speakerEnabled: speakerEnabled, output: previousOutput)
             return
         }
 
         do {
+            if needsVoiceChatCategory {
+                try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
+            }
             try session.overrideOutputAudioPort(speakerEnabled ? .speaker : .none)
         } catch {
             MXLog.error("Failed updating call audio output port with error: \(error)")
             return
         }
 
-        logIfChanged(speakerEnabled: speakerEnabled, output: session.currentRoute.outputs.first?.portType)
+        logIfChanged(session: session, speakerEnabled: speakerEnabled, output: session.currentRoute.outputs.first?.portType)
     }
 
     static func restoreEarpieceIfNeeded() {
         applyOutputPort(speakerEnabled: false)
     }
 
-    private static func logIfChanged(speakerEnabled: Bool, output: AVAudioSession.Port?) {
+    private static func logIfChanged(session: AVAudioSession, speakerEnabled: Bool, output: AVAudioSession.Port?) {
         let outputName = output?.rawValue ?? "none"
-        guard lastLoggedSpeakerEnabled != speakerEnabled || lastLoggedOutput != outputName else {
+        let signature = "\(speakerEnabled)|\(outputName)|\(session.category.rawValue)|\(session.mode.rawValue)|\(session.categoryOptions.rawValue)"
+        guard lastLoggedSignature != signature else {
             return
         }
 
-        lastLoggedSpeakerEnabled = speakerEnabled
-        lastLoggedOutput = outputName
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-ROUTE] speaker_enabled=\(speakerEnabled) mode=voiceChat output=\(outputName)")
+        lastLoggedSignature = signature
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-ROUTE] speaker_enabled=\(speakerEnabled) category=\(session.category.rawValue) mode=\(session.mode.rawValue) options=\(session.categoryOptions.rawValue) output=\(outputName)")
     }
 
     private static func isExternalOutput(_ port: AVAudioSession.Port?) -> Bool {
