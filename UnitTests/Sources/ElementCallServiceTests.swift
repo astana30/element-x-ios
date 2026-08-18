@@ -3117,7 +3117,7 @@ final class ElementCallServiceTests {
         room.initialRawMembershipState = [makeMatrixRTCMembershipTimelineItem(eventID: "$historical",
                                                                               roomID: roomID,
                                                                               membershipID: "HISTORICAL",
-                                                                              createdAt: currentDate.addingTimeInterval(-10))]
+                                                                              createdAt: currentDate.addingTimeInterval(-60))]
         clientProxy.roomForIdentifierClosure = { identifier in
             identifier == roomID ? .joined(room) : nil
         }
@@ -3188,7 +3188,7 @@ final class ElementCallServiceTests {
         #expect(room.receiveRawMembershipState([makeMatrixRTCMembershipTimelineItem(eventID: "$historical",
                                                                                     roomID: roomID,
                                                                                     membershipID: "HISTORICAL",
-                                                                                    createdAt: currentDate.addingTimeInterval(-10))]))
+                                                                                    createdAt: currentDate.addingTimeInterval(-60))]))
         #expect(room.receiveRawMembershipState([makeMatrixRTCMembershipTimelineItem(eventID: "$fresh",
                                                                                     roomID: roomID,
                                                                                     membershipID: "FRESH",
@@ -3196,6 +3196,35 @@ final class ElementCallServiceTests {
 
         let context = try await confirmationTask.value.get()
         #expect(context.callHandle == "_@test:user.net_LOCAL_DEVICE_FRESH")
+        service.cancelObservation(handle)
+    }
+
+    @Test
+    func productionDispatchObservationConfirmsMembershipSlightlyBeforeArmTime() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!outgoing-clock-skew:test"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true))
+        room.emitsInitialRawMembershipState = false
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 10).get()
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        #expect(room.receiveRawMembershipState([makeMatrixRTCMembershipTimelineItem(eventID: "$skewed",
+                                                                                    roomID: roomID,
+                                                                                    membershipID: "SKEWED",
+                                                                                    createdAt: currentDate.addingTimeInterval(-2))]))
+
+        let context = try await confirmationTask.value.get()
+        #expect(context.callHandle == "_@test:user.net_LOCAL_DEVICE_SKEWED")
         service.cancelObservation(handle)
     }
 

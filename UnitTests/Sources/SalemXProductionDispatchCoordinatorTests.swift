@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import Combine
 @testable import ElementX
 import Foundation
 import Testing
@@ -388,6 +389,41 @@ struct SalemXProductionDispatchCoordinatorTests {
 
         #expect(result == .unavailable)
         #expect(room.updateMembersCallsCount == 1)
+    }
+
+    @Test
+    func memberResolutionUsesDirectRoomHeroWhenMemberListIsIncomplete() async {
+        let room = JoinedRoomProxyMock(.init(members: [.mockMe],
+                                             heroes: [.mockAlice],
+                                             isDirect: true))
+        (room.infoPublisher.value as? RoomInfoProxyMock)?.joinedMembersCount = 2
+
+        let result = await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: room,
+                                                                                ownUserID: RoomMemberProxyMock.mockMe.userID,
+                                                                                timeout: .milliseconds(20))
+
+        #expect(result == .resolved([RoomMemberProxyMock.mockMe.userID, RoomMemberProxyMock.mockAlice.userID]))
+        #expect(room.updateMembersCallsCount == 0)
+    }
+
+    @Test
+    func memberResolutionWaitsForASecondJoinedMemberInsteadOfFailingOpen() async {
+        let room = JoinedRoomProxyMock(.init(members: [.mockMe], isDirect: true))
+        (room.infoPublisher.value as? RoomInfoProxyMock)?.joinedMembersCount = 2
+        var refreshCount = 0
+        room.updateMembersClosure = {
+            refreshCount += 1
+            if refreshCount >= 2 {
+                room.membersPublisher = CurrentValueSubject([RoomMemberProxyMock.mockMe, RoomMemberProxyMock.mockAlice]).asCurrentValuePublisher()
+            }
+        }
+
+        let result = await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: room,
+                                                                                ownUserID: RoomMemberProxyMock.mockMe.userID,
+                                                                                timeout: .seconds(1))
+
+        #expect(result == .resolved([RoomMemberProxyMock.mockMe.userID, RoomMemberProxyMock.mockAlice.userID]))
+        #expect(refreshCount >= 2)
     }
 
     private func input() -> SalemXProductionDispatchAttemptInput {

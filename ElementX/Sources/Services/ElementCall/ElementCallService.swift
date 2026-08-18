@@ -2411,7 +2411,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
         if state.confirmedMembership == nil, state.confirmationResult == nil {
             let candidates = currentMemberships.filter { identity, timestamp in
-                !state.baselineMemberships.contains(identity) && timestamp >= state.armedAtMilliseconds
+                !state.baselineMemberships.contains(identity) &&
+                    Self.isProductionDispatchMembershipFresh(timestamp, armedAtMilliseconds: state.armedAtMilliseconds)
             }
             if candidates.count == 1, let candidate = candidates.first {
                 state.confirmedMembership = candidate.key
@@ -2429,6 +2430,15 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
            state.removalResult == nil {
             finishProductionDispatchRemoval(state, result: .success(()))
         }
+    }
+
+    private static let productionDispatchMembershipTimestampSkewMilliseconds: UInt64 = 15_000
+
+    private static func isProductionDispatchMembershipFresh(_ timestamp: UInt64, armedAtMilliseconds: UInt64) -> Bool {
+        if timestamp >= armedAtMilliseconds {
+            return true
+        }
+        return armedAtMilliseconds - timestamp <= productionDispatchMembershipTimestampSkewMilliseconds
     }
 
     @MainActor

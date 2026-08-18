@@ -25,11 +25,25 @@ enum SalemXProductionDispatchMemberResolution: Equatable {
 }
 
 enum SalemXProductionDispatchMemberResolver {
+    private static let memberRefreshInterval: Duration = .milliseconds(100)
+
     static func joinedUserIDs(roomProxy: JoinedRoomProxyProtocol,
+                              ownUserID: String? = nil,
                               timeout: Duration) async -> SalemXProductionDispatchMemberResolution {
+        if let ownUserID, let heroUserIDs = heroJoinedUserIDs(roomProxy: roomProxy, ownUserID: ownUserID) {
+            return .resolved(heroUserIDs)
+        }
+
         let runner = ExpiringTaskRunner<[String]?> {
-            guard let members = await roomProxy.members() else { return nil }
-            return members.filter { $0.membership == .join }.map(\.userID)
+            while !Task.isCancelled {
+                guard let members = await roomProxy.members() else { return nil }
+                let joinedUserIDs = members.filter { $0.membership == .join }.map(\.userID)
+                if joinedUserIDs.count >= 2 {
+                    return joinedUserIDs
+                }
+                try await Task.sleep(for: Self.memberRefreshInterval)
+            }
+            return nil
         }
 
         do {
@@ -40,6 +54,19 @@ enum SalemXProductionDispatchMemberResolver {
         } catch {
             return .unavailable
         }
+    }
+
+    private static func heroJoinedUserIDs(roomProxy: JoinedRoomProxyProtocol, ownUserID: String) -> [String]? {
+        let roomInfo = roomProxy.infoPublisher.value
+        guard roomInfo.isDirect, roomInfo.joinedMembersCount == 2 else {
+            return nil
+        }
+
+        let peerUserIDs = roomInfo.heroes.map(\.userId).filter { !$0.isEmpty && $0 != ownUserID }
+        guard peerUserIDs.count == 1 else {
+            return nil
+        }
+        return [ownUserID, peerUserIDs[0]]
     }
 }
 
@@ -813,10 +840,12 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
 
         let joinedUserIDs: [String]
         switch await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: roomProxy,
+                                                                          ownUserID: userSession.clientProxy.userID,
                                                                           timeout: productionDispatchMemberResolutionTimeout) {
         case .resolved(let resolvedUserIDs):
             joinedUserIDs = resolvedUserIDs
         case .unavailable:
+            MXLog.error("Timed out resolving members for production dispatch.")
             flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
             return
         }
@@ -830,7 +859,8 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                                             joinedUserIDs: joinedUserIDs,
                                                                             ownUserID: userSession.clientProxy.userID),
             let session = flowParameters.productionDispatchSession else {
-            presentStockCallScreen(configuration: configuration)
+            MXLog.error("Failed resolving a production dispatch recipient for an encrypted 1:1 audio room.")
+            flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
             return
         }
 
