@@ -3258,6 +3258,100 @@ final class ElementCallServiceTests {
         #expect(await service.awaitMembershipConfirmation(handle) == .failure(.invalidHandle))
     }
 
+    @Test
+    func productionDispatchObservationConfirmsLocalParticipationFromRoomInfoWhenTimelineIsSilent() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!outgoing-room-info:test"
+        let ownUserID = "@test:user.net"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true,
+                                                              hasOngoingCall: false))
+        let infoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
+                                                                                         isDirect: true,
+                                                                                         hasRoomCall: false,
+                                                                                         participants: []))
+        room.infoPublisher = infoSubject.asCurrentValuePublisher()
+        room.emitsInitialRawMembershipState = false
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 11).get()
+        #expect(room.subscribeToRoomInfoUpdatesCalled)
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        infoSubject.send(makeRoomInfo(id: roomID,
+                                      isDirect: true,
+                                      hasRoomCall: true,
+                                      participants: [ownUserID]))
+
+        let context = try await confirmationTask.value.get()
+        #expect(context.callID == "ROOM")
+        #expect(context.roomID == roomID)
+        #expect(context.callHandle == "_@test:user.net_LOCAL_DEVICE_m.call")
+
+        let removalTask = Task { @MainActor in
+            await self.service.awaitMembershipRemoval(handle)
+        }
+        infoSubject.send(makeRoomInfo(id: roomID,
+                                      isDirect: true,
+                                      hasRoomCall: false,
+                                      participants: []))
+        switch await removalTask.value {
+        case .success:
+            break
+        case .failure(let error):
+            Issue.record("Unexpected removal error: \(error)")
+        }
+        service.cancelObservation(handle)
+    }
+
+    @Test
+    func productionDispatchObservationIgnoresHistoricalRoomInfoParticipation() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!outgoing-room-info-historical:test"
+        let ownUserID = "@test:user.net"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true,
+                                                              hasOngoingCall: true))
+        let infoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
+                                                                                         isDirect: true,
+                                                                                         hasRoomCall: true,
+                                                                                         participants: [ownUserID]))
+        room.infoPublisher = infoSubject.asCurrentValuePublisher()
+        room.emitsInitialRawMembershipState = false
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 12).get()
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        infoSubject.send(makeRoomInfo(id: roomID,
+                                      isDirect: true,
+                                      hasRoomCall: true,
+                                      participants: [ownUserID]))
+        await Task.yield()
+        #expect(room.receiveRawMembershipState([makeMatrixRTCMembershipTimelineItem(eventID: "$fresh",
+                                                                                    roomID: roomID,
+                                                                                    membershipID: "FRESH",
+                                                                                    createdAt: currentDate.addingTimeInterval(1))]))
+
+        let context = try await confirmationTask.value.get()
+        #expect(context.callHandle == "_@test:user.net_LOCAL_DEVICE_FRESH")
+        service.cancelObservation(handle)
+    }
+
     private func makeRoomInfo(id: String,
                               isDirect: Bool,
                               hasRoomCall: Bool,

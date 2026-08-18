@@ -323,9 +323,14 @@ private final class SalemXStockElementCallObservationState {
     let ownDeviceID: String
     let armedAtMilliseconds: UInt64
     var observation: (any MatrixRTCCallMembershipStateObservationProtocol)?
+    var roomInfoCancellable: AnyCancellable?
     var baselineEstablished = false
     var baselineMemberships = Set<MatrixRTCCallMembershipIdentity>()
+    var roomInfoBaselineEstablished = false
+    var baselineLocalParticipantPresent = false
     var confirmedMembership: MatrixRTCCallMembershipIdentity?
+    var observedConfirmedMembershipInTimeline = false
+    var observedLocalParticipantAfterConfirmation = false
     var confirmationResult: Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>?
     var removalResult: Result<Void, SalemXStockElementCallLifecycleError>?
     var confirmationContinuations = [CheckedContinuation<Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>, Never>]()
@@ -1214,6 +1219,15 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             state.baselineEstablished = true
             state.baselineMemberships = []
         }
+
+        // RoomInfo still updates when the event cache rejects membership timeline diffs.
+        roomProxy.subscribeToRoomInfoUpdates()
+        reconcileProductionDispatchRoomInfo(roomProxy.infoPublisher.value, observationID: handle.observationID)
+        state.roomInfoCancellable = roomProxy.infoPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] roomInfo in
+                self?.reconcileProductionDispatchRoomInfo(roomInfo, observationID: handle.observationID)
+            }
 
         return .success(handle)
     }
@@ -2437,6 +2451,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             }
             if candidates.count == 1, let candidate = candidates.first {
                 state.confirmedMembership = candidate.key
+                state.observedConfirmedMembershipInTimeline = true
                 let context = SalemXStockElementCallContext(callID: candidate.key.callScope.callID,
                                                             roomID: state.roomID,
                                                             callHandle: candidate.key.stateKey)
@@ -2448,11 +2463,63 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             }
         }
 
-        if let confirmedMembership = state.confirmedMembership,
-           currentMemberships[confirmedMembership] == nil,
-           state.removalResult == nil {
-            finishProductionDispatchRemoval(state, result: .success(()))
+        if let confirmedMembership = state.confirmedMembership {
+            if currentMemberships[confirmedMembership] != nil {
+                state.observedConfirmedMembershipInTimeline = true
+            } else if state.observedConfirmedMembershipInTimeline, state.removalResult == nil {
+                finishProductionDispatchRemoval(state, result: .success(()))
+            }
         }
+    }
+
+    @MainActor
+    private func reconcileProductionDispatchRoomInfo(_ roomInfo: RoomInfoProxyProtocol, observationID: UUID) {
+        guard let state = productionDispatchObservations[observationID],
+              roomInfo.id == state.roomID else {
+            return
+        }
+
+        let hasLocalParticipant = roomInfo.activeRoomCallParticipants.contains { participant in
+            participantBelongsToUser(participant, userID: state.ownUserID)
+        }
+
+        if !state.roomInfoBaselineEstablished {
+            state.roomInfoBaselineEstablished = true
+            state.baselineLocalParticipantPresent = hasLocalParticipant
+            return
+        }
+
+        if state.confirmedMembership == nil, state.confirmationResult == nil,
+           hasLocalParticipant, !state.baselineLocalParticipantPresent {
+            let identity = Self.productionDispatchRoomInfoMembershipIdentity(ownUserID: state.ownUserID,
+                                                                             ownDeviceID: state.ownDeviceID)
+            state.confirmedMembership = identity
+            state.observedLocalParticipantAfterConfirmation = true
+            let context = SalemXStockElementCallContext(callID: identity.callScope.callID,
+                                                        roomID: state.roomID,
+                                                        callHandle: identity.stateKey)
+            MXLog.info("Production dispatch observed local MatrixRTC participation in room info.")
+            finishProductionDispatchConfirmation(state, result: .success(context))
+        }
+
+        if state.confirmedMembership != nil {
+            if hasLocalParticipant {
+                state.observedLocalParticipantAfterConfirmation = true
+            } else if state.observedLocalParticipantAfterConfirmation, state.removalResult == nil {
+                finishProductionDispatchRemoval(state, result: .success(()))
+            }
+        }
+    }
+
+    private static func productionDispatchRoomInfoMembershipIdentity(ownUserID: String,
+                                                                     ownDeviceID: String) -> MatrixRTCCallMembershipIdentity {
+        let partyID = MatrixRTCCallScope.directRoom.application
+        return .init(callScope: .directRoom,
+                     userID: ownUserID,
+                     deviceID: ownDeviceID,
+                     partyID: partyID,
+                     stateKey: "_\(ownUserID)_\(ownDeviceID)_\(partyID)",
+                     membershipID: partyID)
     }
 
     private static let productionDispatchMembershipTimestampSkewMilliseconds: UInt64 = 15_000
@@ -2497,6 +2564,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private func cancelProductionDispatchObservation(observationID: UUID) {
         guard let state = productionDispatchObservations.removeValue(forKey: observationID) else { return }
         state.observation?.cancel()
+        state.roomInfoCancellable?.cancel()
+        state.roomInfoCancellable = nil
 
         if state.confirmationResult == nil {
             MXLog.info("Production dispatch cancelled before local MatrixRTC membership was confirmed.")
