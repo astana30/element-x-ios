@@ -1058,6 +1058,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private var isCallKitAudioSessionActive = false
     private var pendingLegacyAnswerCallID: CallID?
     private var pendingLegacyAnswerAudioActivationFallbackTask: Task<Void, Never>?
+    private var keptAliveAudioCallKitID: UUID?
     private var ongoingCallID: CallID? {
         didSet {
             ongoingCallRoomIDSubject.send(ongoingCallID?.roomID)
@@ -1379,7 +1380,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     func tearDownCallSession() {
         let shouldEndCallKit = ongoingCallID?.startMode == .audio && activeCallSession?.direction == .incoming
+        let callKitUUIDToEnd = keptAliveAudioCallKitID ?? (shouldEndCallKit ? ongoingCallID?.callKitID : nil)
         tearDownCallSession(sendEndCallAction: shouldEndCallKit)
+        if let callKitUUIDToEnd {
+            reportCallKitEndedIfNeeded(uuid: callKitUUIDToEnd, reason: .remoteEnded)
+        }
     }
     
     func setAudioEnabled(_ enabled: Bool, roomID: String) {
@@ -1659,6 +1664,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         // https://stackoverflow.com/questions/71483732/webrtc-running-from-wkwebview-avaudiosession-development-roadblock
         
         pendingLegacyAnswerCallID = incomingCallID
+        if incomingCallID.startMode == .audio {
+            keptAliveAudioCallKitID = incomingCallID.callKitID
+        }
         action.fulfill()
         if isCallKitAudioSessionActive {
             resumePendingLegacyAnswerAfterAudioActivation(provider: provider)
@@ -2127,7 +2135,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     private func reportEmbeddedMatrixRTCCallEnded(callID: CallID, reason: CXCallEndedReason) {
-        let inserted = salemXEmbeddedReportedEndedCallIDs.insert(callID.callKitID).inserted
+        reportCallKitEndedIfNeeded(uuid: callID.callKitID, reason: reason)
+    }
+
+    private func reportCallKitEndedIfNeeded(uuid: UUID, reason: CXCallEndedReason) {
+        if keptAliveAudioCallKitID == uuid {
+            keptAliveAudioCallKitID = nil
+        }
+        let inserted = salemXEmbeddedReportedEndedCallIDs.insert(uuid).inserted
         #if DEBUG
         Task { @MainActor in
             SalemXStage2FSimulatorSignalingDebug.recordReceiverCallKitEndReport(inserted: inserted)
@@ -2137,7 +2152,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             return
         }
 
-        callProvider.reportCall(with: callID.callKitID, endedAt: nil, reason: reason)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-CALLKIT-END] callkit_id=\(uuid) reason=\(reason)")
+        MXLog.info("Reported CallKit ended after the answered call terminated")
+        callProvider.reportCall(with: uuid, endedAt: nil, reason: reason)
     }
 
     private func callEndedReportReason(for source: SalemXEmbeddedCallEndSource) -> SalemXEmbeddedCallEndedReportReason {
@@ -2236,6 +2253,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         salemXEmbeddedTerminatedCallIDs.insert(knownCallID.callKitID)
+        if keptAliveAudioCallKitID == knownCallID.callKitID {
+            keptAliveAudioCallKitID = nil
+        }
+        salemXEmbeddedReportedEndedCallIDs.insert(knownCallID.callKitID)
         action.fulfill()
     }
     
@@ -2419,8 +2440,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 let context = SalemXStockElementCallContext(callID: candidate.key.callScope.callID,
                                                             roomID: state.roomID,
                                                             callHandle: candidate.key.stateKey)
+                MXLog.info("Production dispatch observed a fresh local MatrixRTC membership.")
                 finishProductionDispatchConfirmation(state, result: .success(context))
             } else if candidates.count > 1 {
+                MXLog.error("Production dispatch observed ambiguous local MatrixRTC memberships.")
                 finishProductionDispatchConfirmation(state, result: .failure(.ambiguousMembership))
             }
         }
@@ -2475,6 +2498,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         guard let state = productionDispatchObservations.removeValue(forKey: observationID) else { return }
         state.observation?.cancel()
 
+        if state.confirmationResult == nil {
+            MXLog.info("Production dispatch cancelled before local MatrixRTC membership was confirmed.")
+        }
         finishProductionDispatchConfirmation(state, result: .failure(.cancelled))
         finishProductionDispatchRemoval(state, result: .failure(.cancelled))
     }
@@ -4026,7 +4052,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                           roomID: incomingCallID.roomID,
                           deduplicationID: deduplicationID)
         clearIncomingCallState()
-        callProvider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: reason)
+        reportCallKitEndedIfNeeded(uuid: incomingCallID.callKitID, reason: reason)
     }
 
     private func clearIncomingCallState(cancelEmbeddedAnswer: Bool = true) {
@@ -4152,7 +4178,18 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             SalemXStage2FSimulatorSignalingDebug.recordCallUIDismissed()
         }
         #endif
+        let callKitUUIDToEnd: UUID?
+        if let keptAliveAudioCallKitID {
+            callKitUUIDToEnd = keptAliveAudioCallKitID
+        } else if ongoingCallID.startMode == .audio, activeCallSession?.direction == .incoming {
+            callKitUUIDToEnd = ongoingCallID.callKitID
+        } else {
+            callKitUUIDToEnd = nil
+        }
         tearDownCallSession(sendEndCallAction: false)
+        if let callKitUUIDToEnd {
+            reportCallKitEndedIfNeeded(uuid: callKitUUIDToEnd, reason: reason)
+        }
     }
 
     private func source(forEmbeddedTerminalReason reason: CXCallEndedReason) -> SalemXEmbeddedCallEndSource {

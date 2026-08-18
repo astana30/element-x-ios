@@ -222,12 +222,15 @@ private final class SalemXProductionDispatchElementCallLifecycle: SalemXProducti
         self.stockCallPresentation = stockCallPresentation
 
         guard case .success(let context) = await lifecycleProvider.awaitMembershipConfirmation(handle) else {
+            MXLog.error("Production dispatch MatrixRTC membership was not confirmed.")
             await requestTerminationIfNeeded()
             _ = await lifecycleProvider.awaitMembershipRemoval(handle)
             lifecycleProvider.cancelObservation(handle)
             finish()
             return .failure(.membershipNotConfirmed)
         }
+
+        MXLog.info("Production dispatch local MatrixRTC membership confirmed.")
 
         let dispatchContext = SalemXProductionDispatchStockCallContext(roomID: context.roomID,
                                                                        callID: context.callID,
@@ -478,6 +481,7 @@ final class SalemXProductionDispatchCoordinator {
                                              generation: Int,
                                              context: SalemXProductionDispatchStockCallContext) async -> SalemXProductionDispatchCoordinatorOutcome {
         state = .preparing
+        MXLog.info("Production dispatch starting prepare.")
 
         let prepareRequest = SalemXProductionDispatchPrepareRequest(recipient: input.admission.recipient,
                                                                     recipientDevice: input.admission.recipientDevice,

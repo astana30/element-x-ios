@@ -1292,6 +1292,77 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
+    func answeredAudioCallReportsCallKitEndedOnRemoteHangupAfterMissingAudioActivation() async throws {
+        let testClock = TestClock()
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          timeProvider: TimeProvider(clock: testClock) { self.currentDate })
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        await testClock.advance(by: .seconds(5))
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
+
+        let remoteUserID = "@alice:example.com"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: Self.roomID,
+                                                              name: "Room",
+                                                              isDirect: true,
+                                                              hasOngoingCall: true,
+                                                              ownUserID: localUserID))
+        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
+            .failure(.missingTransactionID)
+        }
+        let roomInfoSubscription = EmbeddedRoomInfoSubscriptionHarness(initialValue: makeRoomInfo(participants: [localUserID, remoteUserID]))
+        let localMembership = makeMatrixRTCMembershipTimelineItem(eventID: "$local-membership",
+                                                                  roomID: Self.roomID,
+                                                                  userID: localUserID,
+                                                                  deviceID: "LOCAL_DEVICE",
+                                                                  membershipID: "LOCAL_PARTY",
+                                                                  isActive: true)
+        roomInfoSubscription.install(on: room, initialTimelineItems: [
+            localMembership,
+            makeMatrixRTCMembershipTimelineItem(eventID: "$remote-membership",
+                                                roomID: Self.roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                isActive: true)
+        ])
+
+        let clientProxy = ClientProxyMock(.init(userID: localUserID, deviceID: "LOCAL_DEVICE"))
+        clientProxy.roomForIdentifierClosure = { _ in .joined(room) }
+        service.setClientProxy(clientProxy)
+        #expect(await waitUntil { room.subscribeToRoomInfoUpdatesCallsCount == 1 })
+        #expect(await roomInfoSubscription.waitForTimelineSubscription())
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID, remoteUserID])))
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID])))
+        #expect(await waitUntil {
+            self.callProvider.reportCallWithEndedAtReasonCallsCount == 1 &&
+                observedActions.contains { if case .endCall = $0 { true } else { false } } &&
+                self.service.ongoingCallRoomIDPublisher.value == nil
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.uuid == callID)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+    }
+
+    @Test
     func duplicateLegacyAnswerIsFulfilledWithoutDuplicatePresentation() async throws {
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
