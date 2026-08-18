@@ -16,6 +16,14 @@ import Testing
 
 // swiftlint:disable file_length
 
+private final class CallBoundaryRecorder {
+    var events = [SalemXCallBoundaryEvent]()
+
+    func record(_ event: SalemXCallBoundaryEvent) {
+        events.append(event)
+    }
+}
+
 @MainActor
 final class EmbeddedElementCallProductionHandoffTests {
     @Test
@@ -264,6 +272,7 @@ final class ElementCallServiceTests {
     private var pushRegistry: PKPushRegistry!
     private var service: ElementCallService!
     private let clientProxy = ClientProxyMock(.init(userID: "@test:user.net", deviceID: "LOCAL_DEVICE"))
+    private let callBoundaryRecorder = CallBoundaryRecorder()
     private var cancellables = Set<AnyCancellable>()
 
     init() {
@@ -275,9 +284,11 @@ final class ElementCallServiceTests {
         let dateProvider: () -> Date = {
             self.currentDate
         }
+        let callBoundaryRecorder = callBoundaryRecorder
         service = ElementCallService(appSettings: appSettings,
                                      callProvider: callProvider,
-                                     timeProvider: TimeProvider(clock: testClock, now: dateProvider))
+                                     timeProvider: TimeProvider(clock: testClock, now: dateProvider),
+                                     callBoundaryObserver: callBoundaryRecorder.record)
     }
 
     deinit {
@@ -506,6 +517,10 @@ final class ElementCallServiceTests {
         // advance past the timeout
         await testClock.advance(by: .seconds(30))
         #expect(await waitForEndedCall(reason: .unanswered))
+        #expect(callBoundaryRecorder.events.suffix(2) == [
+            .receiverUnansweredWatchdogFired(.incomingRinging),
+            .receiverUnansweredWatchdogCancelled(.incomingStateCleared, .failed)
+        ])
     }
 
     @Test

@@ -12,6 +12,81 @@ import Testing
 @MainActor
 struct SalemXProductionDispatchCoordinatorTests {
     @Test
+    func callBoundaryMarkersOrderMembershipBeforePrepare() async {
+        let lifecycle = LifecycleSpy()
+        let client = DispatchClientSpy()
+        let recorder = CallBoundaryEventRecorder()
+        let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client,
+                                                              stockCallLifecycle: lifecycle,
+                                                              callBoundaryObserver: recorder.record)
+
+        #expect(await coordinator.start(input()) == .sent(client.dispatchID))
+        #expect(recorder.events == [
+            .senderDispatchCoordinatorEntered,
+            .senderMembershipAwaitStarted,
+            .senderMembershipAwaitFinished(.success),
+            .senderPrepareWillStart
+        ])
+    }
+
+    @Test(arguments: [
+        (SalemXProductionDispatchStockCallLifecycleError.membershipNotConfirmed,
+         SalemXCallBoundaryEvent.MembershipResult.timeout),
+        (.unavailable, .unavailable),
+        (.cancelled, .cancelled)
+    ])
+    func membershipFailureMarkerPrecedesNetworkAndUsesExactCategory(error: SalemXProductionDispatchStockCallLifecycleError,
+                                                                    expectedResult: SalemXCallBoundaryEvent.MembershipResult) async {
+        let lifecycle = LifecycleSpy(membershipResult: .failure(error))
+        let client = DispatchClientSpy()
+        let recorder = CallBoundaryEventRecorder()
+        let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client,
+                                                              stockCallLifecycle: lifecycle,
+                                                              callBoundaryObserver: recorder.record)
+
+        #expect(await coordinator.start(input()) == .failed(error == .cancelled ? .cancelled : .lifecycle))
+        #expect(recorder.events == [
+            .senderDispatchCoordinatorEntered,
+            .senderMembershipAwaitStarted,
+            .senderMembershipAwaitFinished(expectedResult)
+        ])
+        #expect(client.events.isEmpty)
+    }
+
+    @Test
+    func callBoundaryMessagesContainOnlyFixedRedactedCategories() {
+        let markers: [SalemXCallBoundaryEvent] = [
+            .senderEligibility(.eligible),
+            .senderEligibility(.recipientUnavailable),
+            .senderDispatchCoordinatorEntered,
+            .senderMembershipAwaitStarted,
+            .senderMembershipAwaitFinished(.timeout),
+            .senderPrepareWillStart,
+            .receiverAnswerEntered(.legacy),
+            .receiverAnswerFulfilled(.embedded),
+            .receiverContinuationScheduled,
+            .receiverContinuationEntered,
+            .receiverRoomLookupStarted,
+            .receiverRoomLookupTimedOut,
+            .receiverRoomLookupFinished(.roomUnavailable),
+            .receiverProviderDidActivate,
+            .receiverStartCallEmitted,
+            .receiverUnansweredWatchdogCancelled(.startCallEmitted, .accepted),
+            .receiverUnansweredWatchdogFired(.incomingRinging)
+        ]
+
+        for marker in markers {
+            let description = marker.description
+            #expect(description.hasPrefix("Stage8F call boundary:"))
+            #expect(!description.contains("@"))
+            #expect(!description.contains("!"))
+            #expect(!description.localizedCaseInsensitiveContains("token"))
+            #expect(!description.localizedCaseInsensitiveContains("identifier"))
+            #expect(!description.localizedCaseInsensitiveContains("room_id"))
+        }
+    }
+
+    @Test
     func membershipIsConfirmedBeforePrepareAndTheSequenceIsExact() async {
         let recorder = Stage5EventRecorder()
         let lifecycle = LifecycleSpy(recorder: recorder)
@@ -459,6 +534,7 @@ private final class LifecycleSpy: SalemXProductionDispatchStockCallLifecycleProt
     private let waitBeforeStart: Bool
     private let waitBeforeMembership: Bool
     private let waitBeforeMembershipRemoval: Bool
+    private let membershipResult: Result<SalemXProductionDispatchStockCallContext, SalemXProductionDispatchStockCallLifecycleError>?
     private let recorder: Stage5EventRecorder?
     private var startRequested = false
     private var startMayContinue = false
@@ -472,10 +548,12 @@ private final class LifecycleSpy: SalemXProductionDispatchStockCallLifecycleProt
     init(waitBeforeStart: Bool = false,
          waitBeforeMembership: Bool = false,
          waitBeforeMembershipRemoval: Bool = false,
+         membershipResult: Result<SalemXProductionDispatchStockCallContext, SalemXProductionDispatchStockCallLifecycleError>? = nil,
          recorder: Stage5EventRecorder? = nil) {
         self.waitBeforeStart = waitBeforeStart
         self.waitBeforeMembership = waitBeforeMembership
         self.waitBeforeMembershipRemoval = waitBeforeMembershipRemoval
+        self.membershipResult = membershipResult
         self.recorder = recorder
     }
 
@@ -506,9 +584,12 @@ private final class LifecycleSpy: SalemXProductionDispatchStockCallLifecycleProt
                 await Task.yield()
             }
         }
-        events.append(.membershipConfirmed)
-        recorder?.events.append("membership")
-        return .success(context)
+        let result = membershipResult ?? .success(context)
+        if case .success = result {
+            events.append(.membershipConfirmed)
+            recorder?.events.append("membership")
+        }
+        return result
     }
 
     func endAudioCall(_ context: SalemXProductionDispatchStockCallContext) async {
@@ -719,6 +800,14 @@ private final class DispatchClientSpy: SalemXProductionDispatchClientProtocol {
 }
 
 @MainActor
+private final class CallBoundaryEventRecorder {
+    private(set) var events = [SalemXCallBoundaryEvent]()
+
+    func record(_ event: SalemXCallBoundaryEvent) {
+        events.append(event)
+    }
+}
+
 private final class Stage5EventRecorder {
     var events = [String]()
 }
