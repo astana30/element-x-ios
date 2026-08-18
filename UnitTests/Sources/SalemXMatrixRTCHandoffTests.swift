@@ -6,6 +6,7 @@
 //
 
 import CallKit
+import Clocks
 import Combine
 @testable import ElementX
 import Foundation
@@ -1261,6 +1262,36 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
+    func answeredAudioCallResumesHandoffIfCallKitAudioActivationNeverArrives() async throws {
+        let testClock = TestClock()
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          timeProvider: TimeProvider(clock: testClock) { self.currentDate })
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        #expect(!observedActions.contains { if case .startCall = $0 { true } else { false } })
+
+        await testClock.advance(by: .seconds(5))
+
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+    }
+
+    @Test
     func duplicateLegacyAnswerIsFulfilledWithoutDuplicatePresentation() async throws {
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
@@ -2000,10 +2031,11 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
                                                                                                             answerTimeout: .seconds(1)),
                                          bootstrapResolver: BootstrapResolverSpy,
                                          answerBridge: AnswerBridgeSpy,
-                                         endBridge: EndBridgeSpy? = nil) -> ElementCallService {
+                                         endBridge: EndBridgeSpy? = nil,
+                                         timeProvider: TimeProvider? = nil) -> ElementCallService {
         ElementCallService(appSettings: appSettings,
                            callProvider: callProvider,
-                           timeProvider: TimeProvider(clock: ContinuousClock()) { self.currentDate },
+                           timeProvider: timeProvider ?? TimeProvider(clock: ContinuousClock()) { self.currentDate },
                            salemXAnswerBridgeConfiguration: configuration,
                            salemXIncomingCallBootstrapResolver: bootstrapResolver,
                            salemXAnswerBridge: answerBridge,
