@@ -86,6 +86,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
     @CancellableTask
     private var timeoutTask: Task<Void, Never>?
+
+    private var lastAudioRouteApply = Date.distantPast
         
     /// Designated initialiser
     /// - Parameters:
@@ -179,14 +181,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             .publisher(for: AVAudioSession.routeChangeNotification)
             .sink { [weak self] _ in
                 self?.applyPreferredAudioRouteIfNeeded()
-                Task { await self?.updateOutputsListOnWeb() }
             }
             .store(in: &cancellables)
         
         setupCall()
         if shouldControlAudioRoute {
-            CallVoiceAudioSession.configure(speakerEnabled: false)
-            schedulePreferredAudioRouteEnforcement()
+            CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()
         }
     }
     
@@ -211,7 +211,6 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             handleSpeakerphoneToggle()
         case .mediaCapturePermissionGranted:
             schedulePreferredAudioRouteEnforcement()
-            Task { await updateOutputsListOnWeb() }
         case .outputDeviceSelected(deviceID: let deviceID):
             handleOutputDeviceSelected(deviceID: deviceID)
         case .widgetAction(let message):
@@ -232,6 +231,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     func stop() {
         timeoutTask = nil
         audioRouteEnforcementTask = nil
+        CallVoiceAudioSession.reset()
         finishPendingMatrixRTCMembershipLeaveResponse(outcome: .failed)
         pendingWidgetHangupRequestID = nil
         pendingMatrixRTCDelayedLeavePrepareRequestIDs.removeAll()
@@ -526,7 +526,6 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                     SalemXStage2FSimulatorSignalingDebug.recordReceiverElementCallReady()
                     #endif
                     state.url = url
-                    schedulePreferredAudioRouteEnforcement()
                 case .failure(let error):
                     guard !Task.isCancelled, !isDismissingAfterLocalHangup else {
                         return
@@ -614,10 +613,15 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         guard shouldControlAudioRoute else {
             return
         }
-        
-        let isEarpiece = deviceID == Self.earpieceID
-        preferredAudioRoute = isEarpiece ? .earpiece : .speaker
-        applyPreferredAudioRouteIfNeeded()
+
+        // WebRTC advertises the current OS output as speaker after getUserMedia.
+        // Honour only the native earpiece id so the widget cannot flip us to speaker.
+        guard deviceID == Self.earpieceID else {
+            return
+        }
+
+        preferredAudioRoute = .earpiece
+        applyPreferredAudioRouteIfNeeded(force: true)
     }
 
     private func handleSpeakerphoneToggle() {
@@ -626,8 +630,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
         
         preferredAudioRoute = state.isSpeakerphoneEnabled ? .earpiece : .speaker
-        applyPreferredAudioRouteIfNeeded()
-        Task { await updateOutputsListOnWeb() }
+        applyPreferredAudioRouteIfNeeded(force: true)
     }
 
     private func toggleMicrophone() async {
@@ -647,14 +650,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         audioRouteEnforcementTask = Task { @MainActor [weak self] in
-            let delays: [Duration] = [.zero,
-                                      .milliseconds(150),
-                                      .milliseconds(400),
-                                      .milliseconds(800),
-                                      .seconds(1.5),
-                                      .seconds(3),
-                                      .seconds(5),
-                                      .seconds(8)]
+            let delays: [Duration] = [.zero, .milliseconds(300), .seconds(1)]
 
             for delay in delays {
                 if delay > .zero {
@@ -665,12 +661,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                     return
                 }
 
-                self.applyPreferredAudioRouteIfNeeded()
+                self.applyPreferredAudioRouteIfNeeded(force: true)
             }
         }
     }
     
-    private func applyPreferredAudioRouteIfNeeded() {
+    private func applyPreferredAudioRouteIfNeeded(force: Bool = false) {
         guard let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first else {
             return
         }
@@ -680,6 +676,11 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             UIDevice.current.isProximityMonitoringEnabled = false
             return
         }
+
+        if !force, Date().timeIntervalSince(lastAudioRouteApply) < 0.5 {
+            return
+        }
+        lastAudioRouteApply = Date()
         
         switch preferredAudioRoute {
         case .systemDefault:
@@ -700,11 +701,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
     
     private func setSpeakerphoneEnabled(_ enabled: Bool) {
-        if enabled {
-            CallVoiceAudioSession.configure(speakerEnabled: true)
-        } else {
-            CallVoiceAudioSession.restoreEarpieceIfNeeded()
-        }
+        CallVoiceAudioSession.applyOutputPort(speakerEnabled: enabled)
 
         state.isSpeakerphoneEnabled = enabled
         UIDevice.current.isProximityMonitoringEnabled = !enabled

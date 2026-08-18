@@ -1204,9 +1204,13 @@ extension CallScreenViewModelTests {
         #expect(session.contains("overrideOutputAudioPort"))
         #expect(session.contains(".allowBluetoothHFP"))
         #expect(!session.contains("defaultToSpeaker"))
+        #expect(!session.contains("setActive("))
         #expect(callScreen.contains("CallVoiceAudioSession.restoreEarpieceIfNeeded()"))
-        #expect(callScreen.contains("CallVoiceAudioSession.configure(speakerEnabled: true)"))
-        #expect(callScreen.contains(".seconds(8)"))
+        #expect(callScreen.contains("CallVoiceAudioSession.applyOutputPort(speakerEnabled:"))
+        #expect(!callScreen.contains("CallVoiceAudioSession.configure"))
+        #expect(callScreen.contains("guard deviceID == Self.earpieceID else"))
+        #expect(callScreen.contains(".milliseconds(300)"))
+        #expect(!callScreen.contains(".seconds(8)"))
         #expect(!callScreen.contains("Failed updating call audio route with error"))
     }
 
