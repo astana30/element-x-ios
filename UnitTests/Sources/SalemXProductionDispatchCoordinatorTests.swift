@@ -323,6 +323,27 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(lifecycleProvider.armCount == 2)
     }
 
+    @Test
+    func hangupDuringMembershipWaitAllowsASecondOutgoingAttempt() async {
+        let lifecycleProvider = StockLifecycleProviderSpy(recorder: .init(), waitBeforeMembership: true)
+        let client = DispatchClientSpy(dispatchIDs: [UUID(), UUID()])
+        let session = SalemXProductionDispatchSession(dispatchClient: client,
+                                                      appSessionGeneration: "session-generation",
+                                                      elementCallService: ElementCallServiceMock(),
+                                                      lifecycleProvider: lifecycleProvider)
+
+        let first = Task {
+            await session.startEligibleAudio(input: input(), roomID: "room") { .init { true } }
+        }
+        await lifecycleProvider.waitUntilConfirmationIsWaiting()
+        session.stockCallDidEnd()
+        #expect(await first.value == .failed(.cancelled))
+
+        lifecycleProvider.prepareForNextAttempt()
+        #expect(await session.startEligibleAudio(input: input(), roomID: "room") { .init { true } }.isSent)
+        #expect(lifecycleProvider.armCount == 2)
+    }
+
     @Test(arguments: [
         (false, ElementCallStartMode.audio, true, true, true, 2, ["self", "other"]),
         (true, .video, true, true, true, 2, ["self", "other"]),
@@ -475,12 +496,17 @@ private final class StockLifecycleProviderSpy: SalemXStockElementCallLifecyclePr
     private let recorder: Stage5EventRecorder
     private(set) var armCount = 0
     private(set) var removalCount = 0
+    var waitBeforeMembership: Bool
+    private var cancelled = false
+    private var confirmationWaiting = false
+    private var confirmationContinuations = [CheckedContinuation<Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>, Never>]()
     private let handle = SalemXStockElementCallObservationHandle(observationID: UUID(),
                                                                  appSessionGeneration: "session-generation",
                                                                  attemptGeneration: 1)
 
-    init(recorder: Stage5EventRecorder) {
+    init(recorder: Stage5EventRecorder, waitBeforeMembership: Bool = false) {
         self.recorder = recorder
+        self.waitBeforeMembership = waitBeforeMembership
     }
 
     func beginOutgoingObservation(roomID: String,
@@ -494,6 +520,16 @@ private final class StockLifecycleProviderSpy: SalemXStockElementCallLifecyclePr
 
     func awaitMembershipConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError> {
+        if waitBeforeMembership {
+            return await withCheckedContinuation { continuation in
+                if cancelled {
+                    continuation.resume(returning: .failure(.cancelled))
+                    return
+                }
+                confirmationWaiting = true
+                confirmationContinuations.append(continuation)
+            }
+        }
         recorder.events.append("membership")
         return .success(.init(callID: "call", roomID: "room", callHandle: "handle"))
     }
@@ -501,10 +537,32 @@ private final class StockLifecycleProviderSpy: SalemXStockElementCallLifecyclePr
     func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<Void, SalemXStockElementCallLifecycleError> {
         removalCount += 1
+        if cancelled {
+            return .failure(.cancelled)
+        }
         return .success(())
     }
 
-    func cancelObservation(_ handle: SalemXStockElementCallObservationHandle) { }
+    func cancelObservation(_ handle: SalemXStockElementCallObservationHandle) {
+        cancelled = true
+        confirmationWaiting = false
+        let continuations = confirmationContinuations
+        confirmationContinuations.removeAll()
+        continuations.forEach { $0.resume(returning: .failure(.cancelled)) }
+    }
+
+    func waitUntilConfirmationIsWaiting() async {
+        while !confirmationWaiting, !cancelled {
+            await Task.yield()
+        }
+    }
+
+    func prepareForNextAttempt() {
+        cancelled = false
+        waitBeforeMembership = false
+        confirmationWaiting = false
+        confirmationContinuations.removeAll()
+    }
 }
 
 private extension SalemXProductionDispatchCoordinatorOutcome {

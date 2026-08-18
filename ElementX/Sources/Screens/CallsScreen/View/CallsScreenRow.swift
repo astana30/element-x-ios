@@ -131,23 +131,13 @@ struct CallsScreenRow: View {
     }
 
     private var callActions: some View {
-        HStack(spacing: 8) {
-            Button {
-                context.send(viewAction: .startCall(roomID: room.id, startMode: .audio))
-            } label: {
-                CompoundIcon(\.voiceCall, size: .small, relativeTo: .compound.bodyLG)
-            }
-            .buttonStyle(.compound(.super, size: .toolbarIcon))
-            .accessibilityLabel(L10n.a11yStartVoiceCall)
-
-            Button {
-                context.send(viewAction: .startCall(roomID: room.id, startMode: .video))
-            } label: {
-                CompoundIcon(\.videoCall, size: .small, relativeTo: .compound.bodyLG)
-            }
-            .buttonStyle(.compound(.super, size: .toolbarIcon))
-            .accessibilityLabel(L10n.a11yStartCall)
+        Button {
+            context.send(viewAction: .startCall(roomID: room.id, startMode: .audio))
+        } label: {
+            CompoundIcon(\.voiceCall, size: .small, relativeTo: .compound.bodyLG)
         }
+        .buttonStyle(.compound(.super, size: .toolbarIcon))
+        .accessibilityLabel(L10n.a11yStartVoiceCall)
     }
 
     private var isHighlighted: Bool {

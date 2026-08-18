@@ -3259,6 +3259,31 @@ final class ElementCallServiceTests {
     }
 
     @Test
+    func productionDispatchObservationTaskCancellationResumesMembershipWait() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!cancel-task:test"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true))
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 9).get()
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        await Task.yield()
+        confirmationTask.cancel()
+
+        #expect(await confirmationTask.value == .failure(.cancelled))
+        #expect(await service.awaitMembershipConfirmation(handle) == .failure(.invalidHandle))
+    }
+
+    @Test
     func productionDispatchObservationConfirmsLocalParticipationFromRoomInfoWhenTimelineIsSilent() async throws {
         await service.declineIncomingCall()
         let roomID = "!outgoing-room-info:test"

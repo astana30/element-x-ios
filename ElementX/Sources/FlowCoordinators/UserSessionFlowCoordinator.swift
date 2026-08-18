@@ -749,7 +749,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     }
     
     private func presentCallScreen(roomID: String,
-                                   startMode: ElementCallStartMode = .video,
+                                   startMode: ElementCallStartMode = .audio,
                                    prefersOutgoingProductionDispatch: Bool = true) async {
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-BY-ID] room_id=\(roomID) start_mode=\(startMode)")
         guard case let .joined(roomProxy) = await userSession.clientProxy.roomForIdentifier(roomID) else {
@@ -762,7 +762,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     }
     
     private func presentCallScreen(roomProxy: JoinedRoomProxyProtocol,
-                                   startMode: ElementCallStartMode = .video,
+                                   startMode: ElementCallStartMode = .audio,
                                    prefersOutgoingProductionDispatch: Bool = true) {
         let featureEnabled = flowParameters.appSettings.salemxProductionDispatchV1Enabled
         let hasSession = flowParameters.productionDispatchSession != nil
@@ -783,7 +783,14 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
             return
         }
 
-        guard !isProductionDispatchCallPresentationInFlight else { return }
+        if isProductionDispatchCallPresentationInFlight {
+            if navigationTabCoordinator.overlayCoordinator is CallScreenCoordinator {
+                return
+            }
+            MXLog.info("Clearing a stale production dispatch presentation lock.")
+            flowParameters.productionDispatchSession?.stockCallDidEnd()
+            isProductionDispatchCallPresentationInFlight = false
+        }
         isProductionDispatchCallPresentationInFlight = true
         Task { [weak self] in
             guard let self else { return }
@@ -795,11 +802,16 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private var callScreenPictureInPictureController: AVPictureInPictureController?
     @discardableResult
     private func presentStockCallScreen(configuration: ElementCallConfiguration) -> CallScreenCoordinator? {
-        guard flowParameters.ongoingCallRoomIDPublisher.value != configuration.callRoomID else {
-            MXLog.info("Returning to existing call.")
-            callScreenPictureInPictureController?.stopPictureInPicture()
-            navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
-            return nil
+        if flowParameters.ongoingCallRoomIDPublisher.value == configuration.callRoomID {
+            if navigationTabCoordinator.overlayCoordinator is CallScreenCoordinator {
+                MXLog.info("Returning to existing call.")
+                callScreenPictureInPictureController?.stopPictureInPicture()
+                navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
+                return nil
+            }
+
+            MXLog.info("Clearing leftover call session after the call screen was dismissed.")
+            flowParameters.elementCallService.tearDownCallSession()
         }
 
         activeCallStartMode = configuration.startMode
@@ -823,6 +835,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                 case .pictureInPictureStopped:
                     navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
                 case .dismiss:
+                    isProductionDispatchCallPresentationInFlight = false
                     flowParameters.productionDispatchSession?.stockCallDidEnd()
                     activeCallStartMode = nil
                     callScreenPictureInPictureController = nil

@@ -64,46 +64,27 @@ struct CallScreen: View {
             }
 
             if let directRoomCallDetails = context.viewState.directRoomCallDetails {
-                if directRoomCallDetails.startMode == .audio {
-                    VStack(spacing: 0) {
-                        DirectRoomCallHeader(details: directRoomCallDetails,
-                                             mediaProvider: context.mediaProvider) {
-                            context.send(viewAction: .navigateBack)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-
-                        DirectRoomAudioCallChrome(details: directRoomCallDetails,
-                                                  mediaProvider: context.mediaProvider,
-                                                  isMicrophoneEnabled: context.viewState.isMicrophoneEnabled,
-                                                  isSpeakerphoneEnabled: context.viewState.isSpeakerphoneEnabled,
-                                                  isConnecting: context.viewState.url == nil,
-                                                  toggleMicrophoneAction: {
-                                                      context.send(viewAction: .toggleMicrophone)
-                                                  },
-                                                  toggleSpeakerphoneAction: {
-                                                      context.send(viewAction: .toggleSpeakerphone)
-                                                  },
-                                                  endCallAction: {
-                                                      endCall()
-                                                  })
+                VStack(spacing: 0) {
+                    DirectRoomCallHeader(details: directRoomCallDetails,
+                                         mediaProvider: context.mediaProvider) {
+                        context.send(viewAction: .navigateBack)
                     }
-                } else {
-                    DirectRoomVideoCallChrome(details: directRoomCallDetails,
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
+                    DirectRoomAudioCallChrome(details: directRoomCallDetails,
+                                              mediaProvider: context.mediaProvider,
                                               isMicrophoneEnabled: context.viewState.isMicrophoneEnabled,
-                                              isVideoEnabled: context.viewState.isVideoEnabled,
+                                              isSpeakerphoneEnabled: context.viewState.isSpeakerphoneEnabled,
                                               isConnecting: context.viewState.url == nil,
                                               toggleMicrophoneAction: {
                                                   context.send(viewAction: .toggleMicrophone)
                                               },
-                                              toggleVideoAction: {
-                                                  context.send(viewAction: .toggleVideo)
+                                              toggleSpeakerphoneAction: {
+                                                  context.send(viewAction: .toggleSpeakerphone)
                                               },
                                               endCallAction: {
                                                   endCall()
-                                              },
-                                              dismissAction: {
-                                                  context.send(viewAction: .navigateBack)
                                               })
                 }
             }
@@ -111,11 +92,11 @@ struct CallScreen: View {
     }
 
     private var showsNativeDirectAudioChrome: Bool {
-        context.viewState.directRoomCallDetails?.startMode == .audio
+        context.viewState.directRoomCallDetails != nil
     }
 
     private var showsNativeDirectVideoChrome: Bool {
-        context.viewState.directRoomCallDetails?.startMode == .video
+        false
     }
 
     private var hidesEmbeddedCallView: Bool {
@@ -181,7 +162,7 @@ private struct DirectRoomCallHeader: View {
 
                     Spacer(minLength: 8)
 
-                    DirectRoomCallKindBadge(startMode: details.startMode)
+                    DirectRoomCallKindBadge(startMode: .audio)
                 }
 
                 if let subtitle = details.subtitle {

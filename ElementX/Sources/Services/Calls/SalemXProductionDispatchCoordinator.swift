@@ -88,7 +88,7 @@ final class SalemXProductionDispatchSession {
 
     func stockCallDidEnd() {
         guard let activeStockCallLifecycle else { return }
-        activeStockCallLifecycle.markExternalTermination()
+        activeStockCallLifecycle.abortImmediately()
         Task { [weak self, weak activeStockCallLifecycle] in
             guard let self, let activeStockCallLifecycle else { return }
             await coordinator.cancelActiveAttempt()
@@ -221,22 +221,24 @@ private final class SalemXProductionDispatchElementCallLifecycle: SalemXProducti
         }
         self.stockCallPresentation = stockCallPresentation
 
-        guard case .success(let context) = await lifecycleProvider.awaitMembershipConfirmation(handle) else {
-            MXLog.error("Production dispatch MatrixRTC membership was not confirmed.")
-            await requestTerminationIfNeeded()
-            _ = await lifecycleProvider.awaitMembershipRemoval(handle)
+        switch await lifecycleProvider.awaitMembershipConfirmation(handle) {
+        case .success(let context):
+            MXLog.info("Production dispatch local MatrixRTC membership confirmed.")
+            let dispatchContext = SalemXProductionDispatchStockCallContext(roomID: context.roomID,
+                                                                           callID: context.callID,
+                                                                           callHandle: context.callHandle)
+            callContext = dispatchContext
+            return .success(dispatchContext)
+        case .failure(let error):
+            if error != .cancelled, !externalTermination {
+                MXLog.error("Production dispatch MatrixRTC membership was not confirmed.")
+                await requestTerminationIfNeeded()
+                _ = await lifecycleProvider.awaitMembershipRemoval(handle)
+            }
             lifecycleProvider.cancelObservation(handle)
             finish()
-            return .failure(.membershipNotConfirmed)
+            return .failure(error == .cancelled || Task.isCancelled || externalTermination ? .cancelled : .membershipNotConfirmed)
         }
-
-        MXLog.info("Production dispatch local MatrixRTC membership confirmed.")
-
-        let dispatchContext = SalemXProductionDispatchStockCallContext(roomID: context.roomID,
-                                                                       callID: context.callID,
-                                                                       callHandle: context.callHandle)
-        callContext = dispatchContext
-        return .success(dispatchContext)
     }
 
     func awaitConfirmedLocalMembership(for context: SalemXProductionDispatchStockCallContext) async
@@ -257,8 +259,11 @@ private final class SalemXProductionDispatchElementCallLifecycle: SalemXProducti
         finish()
     }
 
-    func markExternalTermination() {
+    func abortImmediately() {
         externalTermination = true
+        if let observationHandle {
+            lifecycleProvider.cancelObservation(observationHandle)
+        }
     }
 
     func completeExternalTermination() async {
@@ -266,7 +271,9 @@ private final class SalemXProductionDispatchElementCallLifecycle: SalemXProducti
             finish()
             return
         }
-        _ = await lifecycleProvider.awaitMembershipRemoval(observationHandle)
+        if !externalTermination {
+            _ = await lifecycleProvider.awaitMembershipRemoval(observationHandle)
+        }
         lifecycleProvider.cancelObservation(observationHandle)
         finish()
     }
@@ -404,6 +411,19 @@ final class SalemXProductionDispatchCoordinator {
             return .failed(.staleGeneration)
         }
         if let activeAttempt {
+            if activeAttempt.cancellationRequested {
+                let generation = activeAttempt.generation
+                _ = await activeAttempt.task.value
+                if self.activeAttempt?.generation == generation {
+                    self.activeAttempt = nil
+                    state = .idle
+                }
+            } else {
+                return await activeAttempt.task.value
+            }
+        }
+
+        if let activeAttempt, !activeAttempt.cancellationRequested {
             return await activeAttempt.task.value
         }
 
@@ -454,8 +474,8 @@ final class SalemXProductionDispatchCoordinator {
         switch await stockCallLifecycle.startAudioCall() {
         case .success(let startedContext):
             context = startedContext
-        case .failure:
-            return .failed(Task.isCancelled ? .cancelled : .lifecycle)
+        case .failure(let error):
+            return .failed(Task.isCancelled || error == .cancelled ? .cancelled : .lifecycle)
         }
 
         guard updateCurrentAttempt(generation, context: context) else { return .failed(.staleGeneration) }
@@ -542,7 +562,7 @@ final class SalemXProductionDispatchCoordinator {
                                  outcome: SalemXProductionDispatchCoordinatorOutcome) async {
         guard let attempt = activeAttempt, attempt.generation == generation else { return }
 
-        if case .failed = outcome {
+        if case .failed(let error) = outcome {
             let cleanupTask = Task { [weak self] in
                 guard let self else { return }
                 if let preparedRecord = attempt.preparedRecord {
@@ -551,7 +571,7 @@ final class SalemXProductionDispatchCoordinator {
                                                                            appSessionGeneration: attempt.appSessionGeneration)
                     _ = await dispatchClient.cancelPrepared(request)
                 }
-                if let context = attempt.context {
+                if error != .cancelled, let context = attempt.context {
                     await endAndAwaitMembershipRemoval(context)
                 }
             }

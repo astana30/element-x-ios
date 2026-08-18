@@ -25,7 +25,7 @@ struct JoinCallButton: View {
             // Use an HStack on iOS 26 as .labelStyle(.titleAndIcon) doesn't
             // seem to have any effect on a label in the navigation bar 🤷‍♂️
             HStack(spacing: 6) {
-                CompoundIcon(\.videoCallSolid)
+                CompoundIcon(\.voiceCallSolid)
                 Text(L10n.actionJoin)
                     .padding(.trailing, 4)
             }
@@ -39,7 +39,7 @@ struct JoinCallButton: View {
     
     var customButton: some View {
         Button(action: action) {
-            Label(L10n.actionJoin, icon: \.videoCallSolid)
+            Label(L10n.actionJoin, icon: \.voiceCallSolid)
                 .labelStyle(.titleAndIcon)
         }
         .buttonStyle(CustomStyle())

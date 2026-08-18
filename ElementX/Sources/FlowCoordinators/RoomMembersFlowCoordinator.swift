@@ -236,7 +236,7 @@ final class RoomMembersFlowCoordinator: FlowCoordinatorProtocol {
             case .openDirectChat(let roomID):
                 stateMachine.tryEvent(.startRoomFlow(roomID: roomID, via: [], eventID: nil))
             case .startCall(let roomProxy):
-                actionsSubject.send(.presentCallScreen(roomProxy: roomProxy, startMode: .video))
+                actionsSubject.send(.presentCallScreen(roomProxy: roomProxy, startMode: .audio))
             case .verifyUser(let userID):
                 actionsSubject.send(.verifyUser(userID: userID))
             }
@@ -295,7 +295,7 @@ final class RoomMembersFlowCoordinator: FlowCoordinatorProtocol {
             case .openDirectChat(let roomID):
                 stateMachine.tryEvent(.startRoomFlow(roomID: roomID, via: [], eventID: nil))
             case .startCall(let roomProxy):
-                actionsSubject.send(.presentCallScreen(roomProxy: roomProxy, startMode: .video))
+                actionsSubject.send(.presentCallScreen(roomProxy: roomProxy, startMode: .audio))
             case .dismiss:
                 break // Not supported when pushed.
             }

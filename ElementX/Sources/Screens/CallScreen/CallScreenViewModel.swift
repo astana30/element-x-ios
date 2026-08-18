@@ -130,7 +130,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                                                          directRoomCallDetails: directRoomCallDetails,
                                                          webViewSessionIdentity: webViewSessionIdentity,
                                                          isMicrophoneEnabled: true,
-                                                         isVideoEnabled: configuration.startMode == .video,
+                                                         isVideoEnabled: false,
                                                          isSpeakerphoneEnabled: preferredAudioRoute == .speaker,
                                                          certificateValidator: appHooks.certificateValidatorHook),
                    mediaProvider: mediaProvider)
@@ -167,9 +167,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 case .callEnded(reason: let reason):
                     let sendHangupMessage = reason == .hangup
                     requestLocalCallTermination(sendHangupMessage: sendHangupMessage)
-                case .mediaStateChanged(let audioEnabled, let videoEnabled):
+                case .mediaStateChanged(let audioEnabled, _):
                     state.isMicrophoneEnabled = audioEnabled
-                    state.isVideoEnabled = videoEnabled
+                    state.isVideoEnabled = false
                     elementCallService.setAudioEnabled(audioEnabled, roomID: configuration.callRoomID)
                 }
             }
@@ -627,13 +627,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private func toggleMicrophone() async {
         let isMicrophoneEnabled = !state.isMicrophoneEnabled
         state.isMicrophoneEnabled = isMicrophoneEnabled
-        await setMediaState(audioEnabled: isMicrophoneEnabled, videoEnabled: state.isVideoEnabled)
+        await setMediaState(audioEnabled: isMicrophoneEnabled, videoEnabled: false)
     }
 
     private func toggleVideo() async {
-        let isVideoEnabled = !state.isVideoEnabled
-        state.isVideoEnabled = isVideoEnabled
-        await setMediaState(audioEnabled: state.isMicrophoneEnabled, videoEnabled: isVideoEnabled)
+        state.isVideoEnabled = false
+        await setMediaState(audioEnabled: state.isMicrophoneEnabled, videoEnabled: false)
     }
 
     private func schedulePreferredAudioRouteEnforcement() {
@@ -968,10 +967,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             await forwardWidgetJoinRequestToDriver(message)
         case .mediaState:
             let audioEnabled = request.data?.audioEnabled ?? state.isMicrophoneEnabled
-            let videoEnabled = request.data?.videoEnabled ?? state.isVideoEnabled
+            let videoEnabled = false
 
             state.isMicrophoneEnabled = audioEnabled
-            state.isVideoEnabled = videoEnabled
+            state.isVideoEnabled = false
             MXLog.info("Element Call media diagnostics: media_state audio_enabled=\(audioEnabled) video_enabled=\(videoEnabled)")
             elementCallService.setAudioEnabled(audioEnabled, roomID: configuration.callRoomID)
             await acknowledgeWidgetRequest(requestPayload,

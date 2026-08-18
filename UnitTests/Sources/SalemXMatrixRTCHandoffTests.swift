@@ -1262,6 +1262,39 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
+    func publicTearDownEndsKeptAliveAudioCallKitSession() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+        service.handleCallProviderAudioSessionActivation()
+
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.tearDownCallSession()
+
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.uuid == callID)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+        #expect(service.ongoingCallRoomIDPublisher.value == nil)
+    }
+
+    @Test
     func answeredAudioCallResumesHandoffIfCallKitAudioActivationNeverArrives() async throws {
         let testClock = TestClock()
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)

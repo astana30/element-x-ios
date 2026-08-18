@@ -1235,6 +1235,40 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     @MainActor
     func awaitMembershipConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError> {
+        await withTaskCancellationHandler {
+            await waitForProductionDispatchConfirmation(handle)
+        } onCancel: {
+            Task { @MainActor in
+                self.cancelObservation(handle)
+            }
+        }
+    }
+
+    @MainActor
+    func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
+        -> Result<Void, SalemXStockElementCallLifecycleError> {
+        await withTaskCancellationHandler {
+            await waitForProductionDispatchRemoval(handle)
+        } onCancel: {
+            Task { @MainActor in
+                self.cancelObservation(handle)
+            }
+        }
+    }
+
+    @MainActor
+    func cancelObservation(_ handle: SalemXStockElementCallObservationHandle) {
+        guard productionDispatchObservation(matching: handle) != nil else { return }
+        cancelProductionDispatchObservation(observationID: handle.observationID)
+    }
+
+    @MainActor
+    private func waitForProductionDispatchConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
+        -> Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError> {
+        if Task.isCancelled {
+            cancelObservation(handle)
+            return .failure(.cancelled)
+        }
         guard let state = productionDispatchObservation(matching: handle) else {
             return .failure(.invalidHandle)
         }
@@ -1243,13 +1277,33 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         return await withCheckedContinuation { continuation in
+            if Task.isCancelled {
+                continuation.resume(returning: .failure(.cancelled))
+                self.cancelObservation(handle)
+                return
+            }
+            guard let state = self.productionDispatchObservation(matching: handle) else {
+                continuation.resume(returning: .failure(.invalidHandle))
+                return
+            }
+            if let result = state.confirmationResult {
+                continuation.resume(returning: result)
+                return
+            }
             state.confirmationContinuations.append(continuation)
+            if Task.isCancelled {
+                self.cancelObservation(handle)
+            }
         }
     }
 
     @MainActor
-    func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
+    private func waitForProductionDispatchRemoval(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<Void, SalemXStockElementCallLifecycleError> {
+        if Task.isCancelled {
+            cancelObservation(handle)
+            return .failure(.cancelled)
+        }
         guard let state = productionDispatchObservation(matching: handle) else {
             return .failure(.invalidHandle)
         }
@@ -1258,14 +1312,24 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         return await withCheckedContinuation { continuation in
+            if Task.isCancelled {
+                continuation.resume(returning: .failure(.cancelled))
+                self.cancelObservation(handle)
+                return
+            }
+            guard let state = self.productionDispatchObservation(matching: handle) else {
+                continuation.resume(returning: .failure(.invalidHandle))
+                return
+            }
+            if let result = state.removalResult {
+                continuation.resume(returning: result)
+                return
+            }
             state.removalContinuations.append(continuation)
+            if Task.isCancelled {
+                self.cancelObservation(handle)
+            }
         }
-    }
-
-    @MainActor
-    func cancelObservation(_ handle: SalemXStockElementCallObservationHandle) {
-        guard productionDispatchObservation(matching: handle) != nil else { return }
-        cancelProductionDispatchObservation(observationID: handle.observationID)
     }
 
     #if DEBUG
@@ -1295,6 +1359,13 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     func setupCallSession(roomID: String, roomDisplayName: String, startMode: ElementCallStartMode) async {
         if ongoingCallID?.roomID == roomID {
+            return
+        }
+
+        if let incomingCallID, incomingCallID.roomID == roomID,
+           let activeCallSession, activeCallSession.roomID == roomID,
+           activeCallSession.callKitID == incomingCallID.callKitID {
+            adoptIncomingCallKitSession(incomingCallID)
             return
         }
 
@@ -1350,6 +1421,22 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         //     MXLog.error("Failed requesting start call action with error: \(error)")
         // }
     }
+
+    private func adoptIncomingCallKitSession(_ callID: CallID) {
+        incomingCallID = nil
+        ongoingCallID = callID
+        recentlyEndedCallID = nil
+        if let rtcNotificationID = callID.rtcNotificationID {
+            cacheRTCNotificationID(rtcNotificationID, for: callID.roomID)
+        }
+        if let remoteCallID = callID.remoteCallID {
+            cacheRemoteCallID(remoteCallID, for: callID.roomID)
+        }
+        if let activeCallSession, !activeCallSession.state.isTerminal,
+           activeCallSession.state != .accepted, activeCallSession.state != .connected {
+            applySessionEvent(type: .accept, roomID: callID.roomID)
+        }
+    }
     
     func declineIncomingCall() async {
         if let incomingCallID {
@@ -1394,11 +1481,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     func tearDownCallSession() {
         let shouldEndCallKit = ongoingCallID?.startMode == .audio && activeCallSession?.direction == .incoming
-        let callKitUUIDToEnd = keptAliveAudioCallKitID ?? (shouldEndCallKit ? ongoingCallID?.callKitID : nil)
-        tearDownCallSession(sendEndCallAction: shouldEndCallKit)
-        if let callKitUUIDToEnd {
-            reportCallKitEndedIfNeeded(uuid: callKitUUIDToEnd, reason: .remoteEnded)
-        }
+        tearDownCallSession(sendEndCallAction: shouldEndCallKit, callKitEndReason: .remoteEnded)
     }
     
     func setAudioEnabled(_ enabled: Bool, roomID: String) {
@@ -2156,6 +2239,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         if keptAliveAudioCallKitID == uuid {
             keptAliveAudioCallKitID = nil
         }
+        salemXEmbeddedTerminatedCallIDs.insert(uuid)
         let inserted = salemXEmbeddedReportedEndedCallIDs.insert(uuid).inserted
         #if DEBUG
         Task { @MainActor in
@@ -2226,6 +2310,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     private func handleLegacyEndCallAction(_ action: any SalemXCallKitEndActionCompleting, knownCallID: CallID) {
+        salemXEmbeddedTerminatedCallIDs.insert(knownCallID.callKitID)
+        salemXEmbeddedReportedEndedCallIDs.insert(knownCallID.callKitID)
+        if keptAliveAudioCallKitID == knownCallID.callKitID {
+            keptAliveAudioCallKitID = nil
+        }
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-ENTRY] " +
             "ongoing_room_id=\(ongoingCallID?.roomID ?? "nil") " +
             "ongoing_callkit_id=\(ongoingCallID?.callKitID.uuidString ?? "nil") " +
@@ -2266,18 +2355,22 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             }
         }
 
-        salemXEmbeddedTerminatedCallIDs.insert(knownCallID.callKitID)
-        if keptAliveAudioCallKitID == knownCallID.callKitID {
-            keptAliveAudioCallKitID = nil
-        }
-        salemXEmbeddedReportedEndedCallIDs.insert(knownCallID.callKitID)
         action.fulfill()
     }
     
     // MARK: - Private
     
-    private func tearDownCallSession(sendEndCallAction: Bool = true) {
+    private func tearDownCallSession(sendEndCallAction: Bool = true,
+                                     callKitEndReason: CXCallEndedReason = .remoteEnded) {
         let terminatingCallID = ongoingCallID
+        let callKitUUIDToEnd: UUID?
+        if let keptAliveAudioCallKitID {
+            callKitUUIDToEnd = keptAliveAudioCallKitID
+        } else if terminatingCallID?.startMode == .audio, activeCallSession?.direction == .incoming {
+            callKitUUIDToEnd = terminatingCallID?.callKitID
+        } else {
+            callKitUUIDToEnd = nil
+        }
 
         #if !targetEnvironment(simulator)
         if sendEndCallAction, let terminatingCallID {
@@ -2311,6 +2404,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         finishResolvingOngoingDeclines()
         ongoingCallID = nil
         ongoingCallTimelineCancellable = nil
+
+        if let callKitUUIDToEnd {
+            reportCallKitEndedIfNeeded(uuid: callKitUUIDToEnd, reason: callKitEndReason)
+        }
     }
     
     @MainActor
@@ -4247,18 +4344,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             SalemXStage2FSimulatorSignalingDebug.recordCallUIDismissed()
         }
         #endif
-        let callKitUUIDToEnd: UUID?
-        if let keptAliveAudioCallKitID {
-            callKitUUIDToEnd = keptAliveAudioCallKitID
-        } else if ongoingCallID.startMode == .audio, activeCallSession?.direction == .incoming {
-            callKitUUIDToEnd = ongoingCallID.callKitID
-        } else {
-            callKitUUIDToEnd = nil
-        }
-        tearDownCallSession(sendEndCallAction: false)
-        if let callKitUUIDToEnd {
-            reportCallKitEndedIfNeeded(uuid: callKitUUIDToEnd, reason: reason)
-        }
+        tearDownCallSession(sendEndCallAction: false, callKitEndReason: reason)
     }
 
     private func source(forEmbeddedTerminalReason reason: CXCallEndedReason) -> SalemXEmbeddedCallEndSource {

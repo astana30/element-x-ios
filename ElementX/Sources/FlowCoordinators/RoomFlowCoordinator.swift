@@ -1625,7 +1625,7 @@ class RoomFlowCoordinator: FlowCoordinatorProtocol {
             case .presentRolesAndPermissionsScreen:
                 stateMachine.tryEvent(.presentRolesAndPermissionsScreen)
             case .presentCall:
-                actionsSubject.send(.presentCallScreen(roomProxy: roomProxy, startMode: .video))
+                actionsSubject.send(.presentCallScreen(roomProxy: roomProxy, startMode: .audio))
             case .presentPinnedEventsTimeline:
                 stateMachine.tryEvent(.presentPinnedEventsTimeline)
             case .presentKnockingRequestsListScreen:
