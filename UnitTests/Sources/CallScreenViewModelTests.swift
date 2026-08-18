@@ -1183,6 +1183,46 @@ extension CallScreenViewModelTests {
         harness.viewModel.stop()
     }
 
+    @Test
+    func roomScreenDoesNotExposeAVideoCallButton() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Screens/RoomScreen/View/RoomScreen.swift")
+        #expect(!source.contains("videoCallSolid"))
+        #expect(!source.contains("startMode: .video"))
+        #expect(!source.contains("A11yIdentifiers.roomScreen.videoCall"))
+    }
+
+    @Test
+    func homeScreenDoesNotExposeAVideoCallButton() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Screens/HomeScreen/View/HomeScreenRoomCell.swift")
+        #expect(!source.contains("videoCallSolid"))
+    }
+
+    @Test
+    func callsTabDoesNotExposeAVideoCallButton() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Screens/CallsScreen/View/CallsScreenRow.swift")
+        #expect(!source.contains("videoCallSolid"))
+        #expect(!source.contains("startMode: .video"))
+    }
+
+    @Test
+    func callHistoryDoesNotExposeAVideoCallIcon() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Services/Calls/RoomCallEvent.swift")
+        #expect(!source.contains("videoCallSolid"))
+        #expect(!source.contains("videoCallOutgoingSolid"))
+        #expect(!source.contains("videoCallMissedSolid"))
+        #expect(!source.contains("videoCallDeclinedSolid"))
+        #expect(!source.contains("L10n.commonVideo"))
+    }
+
+    @Test
+    func callScreenDoesNotExposeAVideoCallButton() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/View/CallScreen.swift")
+        #expect(!source.contains("video.fill"))
+        #expect(!source.contains("video.slash.fill"))
+        #expect(!source.contains("DirectRoomVideoCallChrome"))
+        #expect(!source.contains("startMode: .video"))
+    }
+
     private struct CallScreenHarness {
         let viewModel: CallScreenViewModel
         let elementCallService: ElementCallServiceMock
@@ -1364,6 +1404,14 @@ extension CallScreenViewModelTests {
         """
         {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"\(requestID)","response":{}}
         """
+    }
+
+    private func repositorySource(named path: String) throws -> String {
+        let repositoryRootURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return try String(contentsOf: repositoryRootURL.appendingPathComponent(path), encoding: .utf8)
     }
 
     private func stage2FSimulatorProofText() throws -> String {

@@ -258,8 +258,8 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     }
 
     func startCall(roomID: String, startMode: ElementCallStartMode) {
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-START-CALL] room_id=\(roomID) start_mode=\(startMode)")
-        Task { await presentCallScreen(roomID: roomID, startMode: startMode, prefersOutgoingProductionDispatch: false) }
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-START-CALL] room_id=\(roomID) start_mode=\(startMode) resolved_start_mode=audio")
+        Task { await presentCallScreen(roomID: roomID, startMode: .audio, prefersOutgoingProductionDispatch: false) }
     }
     
     /// Clearing routes is more complicated than it first seems. When passing routes
@@ -767,6 +767,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         let featureEnabled = flowParameters.appSettings.salemxProductionDispatchV1Enabled
         let hasSession = flowParameters.productionDispatchSession != nil
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=\(roomProxy.id) start_mode=\(startMode) prefers_outgoing_dispatch=\(prefersOutgoingProductionDispatch) feature=\(featureEnabled) has_session=\(hasSession)")
+        let resolvedStartMode: ElementCallStartMode = .audio
         let colorScheme: ColorScheme = flowParameters.windowManager.mainWindow.traitCollection.userInterfaceStyle == .light ? .light : .dark
         let configuration = ElementCallConfiguration(roomProxy: roomProxy,
                                                      clientProxy: userSession.clientProxy,
@@ -774,10 +775,10 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                      elementCallBaseURL: flowParameters.appSettings.elementCallBaseURL,
                                                      elementCallBaseURLOverride: flowParameters.appSettings.elementCallBaseURLOverride,
                                                      colorScheme: colorScheme,
-                                                     startMode: startMode)
+                                                     startMode: resolvedStartMode)
         guard SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: prefersOutgoingProductionDispatch,
                                                                          featureEnabled: featureEnabled,
-                                                                         startMode: startMode,
+                                                                         startMode: resolvedStartMode,
                                                                          hasSession: hasSession) else {
             presentStockCallScreen(configuration: configuration)
             return
@@ -999,6 +1000,6 @@ extension UserSessionFlowCoordinator: EmbeddedElementCallRoomCallPresenting {
         #if DEBUG
         SalemXStage2FSimulatorSignalingDebug.recordReceiverJoinExistingCallRequested()
         #endif
-        await presentCallScreen(roomID: roomID, startMode: startMode, prefersOutgoingProductionDispatch: false)
+        await presentCallScreen(roomID: roomID, startMode: .audio, prefersOutgoingProductionDispatch: false)
     }
 }

@@ -34,19 +34,6 @@ struct CallScreen: View {
         ZStack {
             if showsNativeDirectAudioChrome {
                 DirectRoomAudioCallBackground()
-            } else if showsNativeDirectVideoChrome {
-                VStack(spacing: 0) {
-                    LinearGradient(colors: [Color.compound.bgCanvasDefault,
-                                            Color.compound.bgCanvasDefault.opacity(0.92),
-                                            .clear],
-                                   startPoint: .top,
-                                   endPoint: .bottom)
-                        .frame(height: 132)
-                        .ignoresSafeArea(edges: .top)
-                        .allowsHitTesting(false)
-
-                    Spacer()
-                }
             }
 
             if context.viewState.url == nil {
@@ -93,10 +80,6 @@ struct CallScreen: View {
 
     private var showsNativeDirectAudioChrome: Bool {
         context.viewState.directRoomCallDetails != nil
-    }
-
-    private var showsNativeDirectVideoChrome: Bool {
-        false
     }
 
     private var hidesEmbeddedCallView: Bool {
@@ -162,7 +145,7 @@ private struct DirectRoomCallHeader: View {
 
                     Spacer(minLength: 8)
 
-                    DirectRoomCallKindBadge(startMode: .audio)
+                    DirectRoomCallKindBadge()
                 }
 
                 if let subtitle = details.subtitle {
@@ -194,125 +177,16 @@ private struct DirectRoomCallHeader: View {
 }
 
 private struct DirectRoomCallKindBadge: View {
-    let startMode: ElementCallStartMode
-
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemSymbol: startMode == .audio ? .phoneFill : .videoFill)
-            Text(startMode == .audio ? L10n.commonAudio : L10n.commonVideo)
+            Image(systemSymbol: .phoneFill)
+            Text(L10n.commonAudio)
         }
         .font(.compound.bodySM)
         .foregroundStyle(.compound.textPrimary)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(Capsule().fill(.compound.bgBadgeDefault))
-    }
-}
-
-private struct DirectRoomVideoCallChrome: View {
-    let details: DirectRoomCallDetails
-    let isMicrophoneEnabled: Bool
-    let isVideoEnabled: Bool
-    let isConnecting: Bool
-    let toggleMicrophoneAction: () -> Void
-    let toggleVideoAction: () -> Void
-    let endCallAction: () -> Void
-    let dismissAction: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            DirectRoomVideoCallHeader(details: details, dismissAction: dismissAction)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
-            if isConnecting {
-                HStack(spacing: 10) {
-                    ProgressView()
-                        .controlSize(.small)
-                    DirectRoomCallKindBadge(startMode: details.startMode)
-                }
-                .padding(.top, 18)
-            }
-
-            Spacer()
-
-            VStack(spacing: 0) {
-                LinearGradient(colors: [.clear,
-                                        Color.black.opacity(0.12),
-                                        Color.black.opacity(0.4)],
-                               startPoint: .top,
-                               endPoint: .bottom)
-                    .frame(height: 140)
-                    .overlay(alignment: .bottom) {
-                        HStack(spacing: 24) {
-                            DirectRoomCallControlButton(symbolName: isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill",
-                                                        isHighlighted: !isMicrophoneEnabled,
-                                                        accessibilityLabel: isMicrophoneEnabled ? L10n.commonMute : L10n.commonUnmute,
-                                                        accessibilityIdentifier: A11yIdentifiers.callScreen.mute,
-                                                        action: toggleMicrophoneAction)
-
-                            DirectRoomCallControlButton(symbolName: isVideoEnabled ? "video.fill" : "video.slash.fill",
-                                                        isHighlighted: !isVideoEnabled,
-                                                        accessibilityLabel: L10n.screenRoomAttachmentSourceCamera,
-                                                        accessibilityIdentifier: A11yIdentifiers.callScreen.camera,
-                                                        action: toggleVideoAction)
-
-                            DirectRoomCallControlButton(symbolName: "phone.down.fill",
-                                                        style: .destructive,
-                                                        accessibilityLabel: UntranslatedL10n.actionEndCall,
-                                                        accessibilityIdentifier: A11yIdentifiers.callScreen.endCall,
-                                                        action: endCallAction)
-                        }
-                        .padding(.bottom, 34)
-                    }
-            }
-        }
-    }
-}
-
-private struct DirectRoomVideoCallHeader: View {
-    let details: DirectRoomCallDetails
-    let dismissAction: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            circularButton(symbolName: "chevron.down", action: dismissAction)
-
-            Spacer(minLength: 0)
-
-            VStack(spacing: 6) {
-                Text(details.title)
-                    .font(.compound.bodyLGSemibold)
-                    .foregroundStyle(Color.white)
-                    .lineLimit(1)
-
-                if let subtitle = details.subtitle {
-                    Text(subtitle)
-                        .font(.compound.bodySM)
-                        .foregroundStyle(Color.white.opacity(0.8))
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(Capsule().fill(Color.black.opacity(0.28)))
-
-            Spacer(minLength: 0)
-
-            circularButton(symbolName: "video.fill") { }
-                .hidden()
-        }
-    }
-
-    private func circularButton(symbolName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbolName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.black.opacity(0.28)))
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -532,7 +406,7 @@ struct CallView: UIViewRepresentable {
             self.viewModelContext = viewModelContext
             certificateValidator = viewModelContext.viewState.certificateValidator
             sessionIdentity = viewModelContext.viewState.webViewSessionIdentity
-            allowsPictureInPicture = viewModelContext.viewState.isGenericCallLink || viewModelContext.viewState.directRoomCallDetails?.startMode == .video
+            allowsPictureInPicture = viewModelContext.viewState.isGenericCallLink
             pictureInPictureViewController = AVPictureInPictureVideoCallViewController()
             pictureInPictureViewController.preferredContentSize = CGSize(width: 1920, height: 1080)
             self.registrationScheduler = registrationScheduler
@@ -903,15 +777,11 @@ struct CallScreen_Previews: PreviewProvider, TestablePreview {
     }()
 
     static let directAudioViewModel = makeRoomCallViewModel(startMode: .audio)
-    static let directVideoViewModel = makeRoomCallViewModel(startMode: .video)
     
     static var previews: some View {
         Group {
             CallScreen(context: directAudioViewModel.context)
                 .previewDisplayName("Direct Audio")
-
-            CallScreen(context: directVideoViewModel.context)
-                .previewDisplayName("Direct Video")
 
             CallScreen(context: roomCallViewModel.context)
                 .previewDisplayName("Room Call")

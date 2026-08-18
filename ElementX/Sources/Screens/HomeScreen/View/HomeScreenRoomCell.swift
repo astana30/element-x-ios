@@ -106,7 +106,7 @@ struct HomeScreenRoomCell: View {
             
             HStack(spacing: 8) {
                 if room.badges.isCallShown {
-                    CompoundIcon(room.lastCallEvent?.intent == .video ? \.videoCallSolid : \.voiceCallSolid,
+                    CompoundIcon(\.voiceCallSolid,
                                  size: .xSmall,
                                  relativeTo: .compound.bodySM)
                         .accessibilityLabel(L10n.a11yNotificationsOngoingCall)

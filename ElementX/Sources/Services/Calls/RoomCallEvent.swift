@@ -67,10 +67,8 @@ struct RoomCallEvent: Equatable {
 
     var kindLabel: String? {
         switch intent {
-        case .audio:
+        case .audio, .video:
             L10n.commonAudio
-        case .video:
-            L10n.commonVideo
         case .unknown:
             nil
         }
@@ -78,10 +76,8 @@ struct RoomCallEvent: Equatable {
 
     var kindCompoundIcon: KeyPath<CompoundIcons, Image>? {
         switch intent {
-        case .audio:
+        case .audio, .video:
             \.voiceCallSolid
-        case .video:
-            \.videoCallSolid
         case .unknown:
             nil
         }
@@ -489,39 +485,19 @@ extension RoomCallEvent {
 
 private extension RoomCallEvent.Intent {
     var compoundDefaultIcon: KeyPath<CompoundIcons, Image> {
-        switch self {
-        case .video:
-            \.videoCallSolid
-        case .audio, .unknown:
-            \.voiceCallSolid
-        }
+        \.voiceCallSolid
     }
 
     var compoundOutgoingIcon: KeyPath<CompoundIcons, Image> {
-        switch self {
-        case .video:
-            \.videoCallOutgoingSolid
-        case .audio, .unknown:
-            \.voiceCallOutgoingSolid
-        }
+        \.voiceCallOutgoingSolid
     }
 
     var compoundMissedIcon: KeyPath<CompoundIcons, Image> {
-        switch self {
-        case .video:
-            \.videoCallMissedSolid
-        case .audio, .unknown:
-            \.voiceCallMissedSolid
-        }
+        \.voiceCallMissedSolid
     }
 
     var compoundDeclinedIcon: KeyPath<CompoundIcons, Image> {
-        switch self {
-        case .video:
-            \.videoCallDeclinedSolid
-        case .audio, .unknown:
-            \.voiceCallDeclinedSolid
-        }
+        \.voiceCallDeclinedSolid
     }
 }
 #endif

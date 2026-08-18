@@ -76,27 +76,26 @@ struct CallsScreenRow: View {
     @ViewBuilder @MainActor
     private var statusLine: some View {
         switch room.status {
-        case .ongoing(let intent):
+        case .ongoing:
             HStack(spacing: 8) {
                 callBadge(title: UntranslatedL10n.commonOngoingCall,
-                          icon: intent == .video ? \.videoCallSolid : \.voiceCallSolid,
+                          icon: \.voiceCallSolid,
                           tint: .compound.iconAccentTertiary,
                           background: .compound.bgSubtleSecondary)
 
-                if let intent {
-                    callKindBadge(title: intent == .video ? L10n.commonVideo : L10n.commonAudio,
-                                  icon: intent == .video ? \.videoCallSolid : \.voiceCallSolid)
-                }
+                callKindBadge(title: L10n.commonAudio,
+                              icon: \.voiceCallSolid)
             }
         case .call(let event):
             HStack(spacing: 8) {
                 callBadge(title: event.statusTitle,
-                          icon: event.compoundIcon,
+                          icon: \.voiceCallSolid,
                           tint: event.compoundTintColor,
                           background: event.cardAccentColor.opacity(0.12))
 
-                if event.kindLabel != nil, event.kindCompoundIcon != nil {
-                    callKindBadge(for: event)
+                if let kindLabel = event.kindLabel {
+                    callKindBadge(title: kindLabel,
+                                  icon: \.voiceCallSolid)
                 }
             }
         }
@@ -113,11 +112,6 @@ struct CallsScreenRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(Capsule(style: .continuous).fill(background))
-    }
-
-    private func callKindBadge(for event: RoomCallEvent) -> some View {
-        callKindBadge(title: event.kindLabel ?? "",
-                      icon: event.kindCompoundIcon ?? \.voiceCallSolid)
     }
 
     private func callKindBadge(title: String, icon: KeyPath<CompoundIcons, Image>) -> some View {

@@ -130,8 +130,8 @@ class RoomScreenViewModel: RoomScreenViewModelType, RoomScreenViewModelProtocol 
             actionsSubject.send(.displayPinnedEventsTimeline)
         case .displayRoomDetails:
             actionsSubject.send(.displayRoomDetails)
-        case .displayCall(let startMode):
-            actionsSubject.send(.displayCall(startMode: startMode))
+        case .displayCall:
+            actionsSubject.send(.displayCall(startMode: .audio))
             actionsSubject.send(.removeComposerFocus)
             analyticsService.trackInteraction(name: .MobileRoomCallButton)
         case .nativeDirectCallRoomCardAppeared:

@@ -183,8 +183,8 @@ final class RoomScreenCoordinator: CoordinatorProtocol {
                     actionsSubject.send(.presentPinnedEventsTimeline)
                 case .displayRoomDetails:
                     actionsSubject.send(.presentRoomDetails)
-                case .displayCall(let startMode):
-                    actionsSubject.send(.presentCallScreen(startMode: startMode))
+                case .displayCall:
+                    actionsSubject.send(.presentCallScreen(startMode: .audio))
                 case .removeComposerFocus:
                     composerViewModel.process(timelineAction: .removeFocus)
                 case .displayKnockRequests:
