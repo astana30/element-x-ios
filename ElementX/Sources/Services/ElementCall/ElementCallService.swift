@@ -1054,6 +1054,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private var activeCallSession: CallSession?
     private var recentCallSessionByRoomID: [String: CallSession] = [:]
     private var callSessionSequence: UInt64 = 0
+    private var isCallKitAudioSessionActive = false
+    private var pendingLegacyAnswerCallID: CallID?
     private var ongoingCallID: CallID? {
         didSet {
             ongoingCallRoomIDSubject.send(ongoingCallID?.roomID)
@@ -1374,10 +1376,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     func tearDownCallSession() {
-        // The embedded call UI doesn't keep an active CallKit call around once it
-        // takes over media, so ending our local session shouldn't emit a new
-        // CXEndCallAction for a call that no longer exists.
-        tearDownCallSession(sendEndCallAction: false)
+        let shouldEndCallKit = ongoingCallID?.startMode == .audio && activeCallSession?.direction == .incoming
+        tearDownCallSession(sendEndCallAction: shouldEndCallKit)
     }
     
     func setAudioEnabled(_ enabled: Bool, roomID: String) {
@@ -1487,6 +1487,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                             remoteCallID: nil,
                             startMode: incomingStartMode,
                             startedAt: nowDate)
+        isCallKitAudioSessionActive = false
+        pendingLegacyAnswerCallID = nil
         incomingCallID = callID
         if let rtcNotificationID {
             cacheRTCNotificationID(rtcNotificationID, for: roomID, isOwnEvent: false)
@@ -1584,10 +1586,17 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         MXLog.info("Call provider did activate audio session")
+        handleCallProviderAudioSessionActivation()
     }
     
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         MXLog.info("Call provider did deactivate audio session")
+        isCallKitAudioSessionActive = false
+    }
+
+    func handleCallProviderAudioSessionActivation() {
+        isCallKitAudioSessionActive = true
+        resumePendingLegacyAnswerAfterAudioActivation()
     }
     
     func providerDidReset(_ provider: CXProvider) {
@@ -1615,11 +1624,20 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private func handleLegacyAnswerCallAction(_ action: any SalemXCallKitAnswerActionCompleting, provider: any CXProviderProtocol) {
         guard let incomingCallID else {
             MXLog.error("Failed answering incoming call, missing incomingCallID")
+            action.fail()
+            return
+        }
+
+        guard incomingCallID.callKitID == action.callUUID else {
+            action.fail()
             return
         }
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER] room_id=\(incomingCallID.roomID) callkit_id=\(incomingCallID.callKitID) start_mode=\(incomingCallID.startMode)")
         
-        applySessionEvent(type: .accept, roomID: incomingCallID.roomID)
+        guard applySessionEvent(type: .accept, roomID: incomingCallID.roomID) else {
+            action.fulfill()
+            return
+        }
         
         // Fixes broken videos on EC web when a CallKit session is established.
         //
@@ -1627,8 +1645,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         // or `reportOutgoingCall:connectedAt:` will give exclusive access for media to the
         // ongoing process, which is different than the WKWebKit is running on, making EC
         // unable to aquire media streams.
-        // Reporting the call as ended imediately after answering it works around that
-        // as EC gets access to media again and EX builds the right UI in `setupCallSession`
+        // Reporting a video call as ended after answering it works around that as EC
+        // gets access to media again and EX builds the right UI in `setupCallSession`.
+        // Audio calls retain their CallKit session until the real call terminates.
         //
         // https://developer.apple.com/forums//thread/767949?answerId=812951022#812951022
         //
@@ -1636,36 +1655,43 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         // https://forums.developer.apple.com/forums/thread/685268
         // https://stackoverflow.com/questions/71483732/webrtc-running-from-wkwebview-avaudiosession-development-roadblock
         
-        // First fullfill the action
+        pendingLegacyAnswerCallID = incomingCallID
         action.fulfill()
-        
-        // And delay ending the call so that the app has enough time
-        // to get deeplinked into
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            Task { @MainActor in
-                guard self.incomingCallID?.callKitID == incomingCallID.callKitID else {
-                    return
-                }
+        if isCallKitAudioSessionActive {
+            resumePendingLegacyAnswerAfterAudioActivation(provider: provider)
+        }
+    }
 
-                let isIncomingCallAlive = await self.isIncomingCallStillAliveBeforeAnswer(incomingCallID)
-                guard self.incomingCallID?.callKitID == incomingCallID.callKitID else {
-                    return
-                }
+    private func resumePendingLegacyAnswerAfterAudioActivation(provider: (any CXProviderProtocol)? = nil) {
+        guard let pendingLegacyAnswerCallID else {
+            return
+        }
 
-                guard isIncomingCallAlive else {
-                    self.reportEndedCall(incomingCallID: incomingCallID,
-                                         reason: .remoteEnded,
-                                         deduplicationID: "stale-answer:\(incomingCallID.callKitID.uuidString)")
-                    return
-                }
-
-                // Then end the and call rely on `setupCallSession` to create a new one
-                provider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: .remoteEnded)
-
-                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-START-CALL-SEND] room_id=\(incomingCallID.roomID) start_mode=\(incomingCallID.startMode)")
-                self.actionsSubject.send(.startCall(roomID: incomingCallID.roomID, startMode: incomingCallID.startMode))
-                self.endUnansweredCallTask?.cancel()
+        self.pendingLegacyAnswerCallID = nil
+        Task { @MainActor in
+            guard self.incomingCallID?.callKitID == pendingLegacyAnswerCallID.callKitID else {
+                return
             }
+
+            let isIncomingCallAlive = await self.isIncomingCallStillAliveBeforeAnswer(pendingLegacyAnswerCallID)
+            guard self.incomingCallID?.callKitID == pendingLegacyAnswerCallID.callKitID else {
+                return
+            }
+
+            guard isIncomingCallAlive else {
+                self.reportEndedCall(incomingCallID: pendingLegacyAnswerCallID,
+                                     reason: .remoteEnded,
+                                     deduplicationID: "stale-answer:\(pendingLegacyAnswerCallID.callKitID.uuidString)")
+                return
+            }
+
+            if pendingLegacyAnswerCallID.startMode == .video {
+                (provider ?? self.callProvider).reportCall(with: pendingLegacyAnswerCallID.callKitID, endedAt: nil, reason: .remoteEnded)
+            }
+
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-START-CALL-SEND] room_id=\(pendingLegacyAnswerCallID.roomID) start_mode=\(pendingLegacyAnswerCallID.startMode)")
+            self.actionsSubject.send(.startCall(roomID: pendingLegacyAnswerCallID.roomID, startMode: pendingLegacyAnswerCallID.startMode))
+            self.endUnansweredCallTask?.cancel()
         }
     }
 
@@ -2916,10 +2942,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         logCallSessionTransition(session: session, event: event, transition: transition)
     }
 
+    @discardableResult
     private func applySessionEvent(type: CallSessionEventType,
                                    roomID: String,
                                    direction: CallSessionDirection? = nil,
-                                   deduplicationID: String? = nil) {
+                                   deduplicationID: String? = nil) -> Bool {
         let existingSession: CallSession? = if let activeCallSession, activeCallSession.roomID == roomID {
             activeCallSession
         } else {
@@ -2927,7 +2954,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         guard var session = existingSession else {
-            return
+            return false
         }
 
         let event = CallSessionEvent(type: type,
@@ -2941,6 +2968,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             activeCallSession = session
         }
         recentCallSessionByRoomID[roomID] = session
+        return transition.isApplied
     }
 
     private func logCallSessionTransition(session: CallSession, event: CallSessionEvent, transition: CallSessionTransitionResult) {
@@ -3976,6 +4004,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         declineListenerHandle = nil
         endUnansweredCallTask?.cancel()
         endUnansweredCallTask = nil
+        if pendingLegacyAnswerCallID?.callKitID == incomingCallID?.callKitID {
+            pendingLegacyAnswerCallID = nil
+        }
         incomingCallID = nil
     }
 

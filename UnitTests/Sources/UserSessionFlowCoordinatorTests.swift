@@ -18,6 +18,7 @@ struct UserSessionFlowCoordinatorTests {
     private var rootCoordinator: NavigationRootCoordinator!
     private var userIndicatorController: UserIndicatorControllerMock!
     private var flowParameters: CommonFlowParameters!
+    private var clientProxy: ClientProxyMock!
     private let stateMachineFactory = PublishedStateMachineFactory()
     
     private let networkReachabilitySubject: CurrentValueSubject<NetworkMonitorReachability, Never> = .init(.reachable)
@@ -48,9 +49,9 @@ struct UserSessionFlowCoordinatorTests {
     init() async throws {
         rootCoordinator = NavigationRootCoordinator()
         
-        let clientProxy = ClientProxyMock(.init(userID: "hi@bob",
-                                                deviceID: "TEST_DEVICE",
-                                                roomSummaryProvider: RoomSummaryProviderMock(.init(state: .loaded(.mockRooms)))))
+        clientProxy = ClientProxyMock(.init(userID: "hi@bob",
+                                            deviceID: "TEST_DEVICE",
+                                            roomSummaryProvider: RoomSummaryProviderMock(.init(state: .loaded(.mockRooms)))))
         clientProxy.homeserverReachabilityPublisher = homeserverReachabilitySubject.asCurrentValuePublisher()
         
         let networkMonitor = NetworkMonitorMock.default
@@ -142,6 +143,24 @@ struct UserSessionFlowCoordinatorTests {
         await userSessionFlowCoordinator.presentEmbeddedElementCall(roomID: "1", startMode: .audio)
 
         #expect(tabCoordinator?.overlayCoordinator is CallScreenCoordinator)
+    }
+
+    @Test
+    func applicationActivationRoutesOnceToExistingActiveCall() async throws {
+        await userSessionFlowCoordinator.presentEmbeddedElementCall(roomID: "1", startMode: .audio)
+        let existingCallScreen = try #require(tabCoordinator?.overlayCoordinator as? CallScreenCoordinator)
+        let elementCallService = try #require(flowParameters.elementCallService as? ElementCallServiceMock)
+        elementCallService.underlyingOngoingCallRoomIDPublisher = .init(.init("1"))
+        let roomLookupCount = clientProxy.roomForIdentifierCallsCount
+
+        NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+
+        for _ in 0..<50 where clientProxy.roomForIdentifierCallsCount != roomLookupCount + 1 {
+            await Task.yield()
+        }
+        #expect(clientProxy.roomForIdentifierCallsCount == roomLookupCount + 1)
+        #expect(tabCoordinator?.overlayCoordinator === existingCallScreen)
     }
 
     @Test

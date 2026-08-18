@@ -1185,7 +1185,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
-    func defaultRouteRemainsUnchangedWhenBridgeIsConfiguredButDisabled() async throws {
+    func foregroundVideoAnswerRetainsLegacyRoute() async throws {
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
         service = makeAnswerBridgeService(configuration: .init(),
@@ -1204,6 +1204,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         service.handleAnswerCallAction(action, provider: callProvider)
 
         #expect(await waitUntil { action.fulfillCount == 1 })
+        service.handleCallProviderAudioSessionActivation()
         #expect(action.failCount == 0)
         #expect(answerBridge.calls.isEmpty)
         #expect(await waitUntil { observedActions.contains { action in
@@ -1212,6 +1213,97 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
             }
             return roomID == Self.roomID && startMode == .video
         } })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+    }
+
+    @Test
+    func lockedAudioAnswerWaitsForAudioActivationAndKeepsCallKitActive() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        #expect(action.failCount == 0)
+        #expect(!observedActions.contains { if case .startCall = $0 { true } else { false } })
+
+        service.handleCallProviderAudioSessionActivation()
+        service.handleCallProviderAudioSessionActivation()
+
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
+
+        let firstEndAction = EndActionSpy(callUUID: callID)
+        let duplicateEndAction = EndActionSpy(callUUID: callID)
+        service.handleEndCallAction(firstEndAction, provider: callProvider)
+        service.handleEndCallAction(duplicateEndAction, provider: callProvider)
+
+        #expect(firstEndAction.fulfillCount == 1)
+        #expect(duplicateEndAction.fulfillCount == 1)
+        #expect(observedActions.filter { if case .requestCallTermination = $0 { true } else { false } }.count == 1)
+        #expect(service.ongoingCallRoomIDPublisher.value == nil)
+    }
+
+    @Test
+    func duplicateLegacyAnswerIsFulfilledWithoutDuplicatePresentation() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge)
+
+        var startCallCount = 0
+        service.actions
+            .sink { action in
+                if case .startCall = action {
+                    startCallCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let firstAction = AnswerActionSpy(callUUID: callID)
+        let duplicateAction = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(firstAction, provider: callProvider)
+        service.handleAnswerCallAction(duplicateAction, provider: callProvider)
+        service.handleCallProviderAudioSessionActivation()
+
+        #expect(await waitUntil { startCallCount == 1 })
+        #expect(firstAction.fulfillCount == 1)
+        #expect(duplicateAction.fulfillCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+    }
+
+    @Test
+    func missingIncomingCallFailsAnswerActionOnce() {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge)
+
+        let action = AnswerActionSpy(callUUID: UUID())
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.failCount == 1)
+        #expect(action.fulfillCount == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
     }
 
     @Test
@@ -1936,8 +2028,11 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         return callID
     }
 
-    private func reportIncomingCall() async throws -> UUID {
+    private func reportIncomingCall(startMode: ElementCallStartMode = .video) async throws -> UUID {
         let payload = Stage2DPKPushPayloadMock().updatingExpiration(currentDate, lifetime: 30)
+        if startMode == .audio {
+            payload.settingCallIntent("audio")
+        }
         await confirmation { confirmation in
             service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) {
                 confirmation()
@@ -2102,6 +2197,10 @@ private class Stage2DPKPushPayloadMock: PKPushPayload {
     func updatingExpiration(_ from: Date, lifetime: TimeInterval) -> Self {
         dict[ElementCallServiceNotificationKey.expirationDate.rawValue] = from.addingTimeInterval(lifetime)
         return self
+    }
+
+    func settingCallIntent(_ callIntent: String) {
+        dict[ElementCallServiceNotificationKey.callIntent.rawValue] = callIntent
     }
 }
 

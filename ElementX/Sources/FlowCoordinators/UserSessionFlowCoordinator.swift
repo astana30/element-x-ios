@@ -98,6 +98,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private var cancellables: Set<AnyCancellable> = []
     private var activeCallStartMode: ElementCallStartMode?
     private var isProductionDispatchCallPresentationInFlight = false
+    private var isRestoringActiveCallPresentation = false
     
     private let actionsSubject: PassthroughSubject<UserSessionFlowCoordinatorAction, Never> = .init()
     private var hasHandledInitialSecurityGate = false
@@ -417,6 +418,13 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     }
     
     private func setupObservers() {
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.restoreActiveCallPresentationIfNeeded()
+            }
+            .store(in: &cancellables)
+
         chatsTabFlowCoordinator.actionsPublisher
             .sink { [weak self] action in
                 guard let self else { return }
@@ -705,6 +713,21 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         }
         
         presentCallScreen(roomProxy: roomProxy, startMode: startMode)
+    }
+
+    private func restoreActiveCallPresentationIfNeeded() {
+        guard !isRestoringActiveCallPresentation,
+              let roomID = flowParameters.ongoingCallRoomIDPublisher.value,
+              let startMode = activeCallStartMode else {
+            return
+        }
+
+        isRestoringActiveCallPresentation = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { isRestoringActiveCallPresentation = false }
+            await presentCallScreen(roomID: roomID, startMode: startMode)
+        }
     }
     
     private func presentCallScreen(roomProxy: JoinedRoomProxyProtocol, startMode: ElementCallStartMode = .video) {
