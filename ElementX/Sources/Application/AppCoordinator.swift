@@ -748,11 +748,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             directCallEngineSignalBridge = nil
         }
 
-        AppSettings.applyProductionDispatchActivationOverride(to: appSettings)
-        let productionDispatchSession = SalemXProductionDispatchSession.makeIfEnabled(appSettings: appSettings,
-                                                                                      userSession: userSession,
-                                                                                      elementCallService: elementCallService)
-        MXLog.info("Production dispatch session \(productionDispatchSession == nil ? "unavailable" : "ready") activation_build=\(AppSettings.salemxProductionDispatchV1ActivationBuild) feature=\(appSettings.salemxProductionDispatchV1Enabled)")
+        let productionDispatchSession = makeProductionDispatchSession(userSession: userSession)
 
         var flowParameters = CommonFlowParameters(userSession: userSession,
                                                   bugReportService: bugReportService,
@@ -1320,6 +1316,15 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
 }
 
 extension AppCoordinator {
+    private func makeProductionDispatchSession(userSession: UserSessionProtocol) -> SalemXProductionDispatchSession? {
+        AppSettings.applyProductionDispatchActivationOverride(to: appSettings)
+        let session = SalemXProductionDispatchSession.makeIfEnabled(appSettings: appSettings,
+                                                                    userSession: userSession,
+                                                                    elementCallService: elementCallService)
+        MXLog.info("Production dispatch session \(session == nil ? "unavailable" : "ready") activation_build=\(AppSettings.salemxProductionDispatchV1ActivationBuild) feature=\(appSettings.salemxProductionDispatchV1Enabled)")
+        return session
+    }
+
     private func makeUserSessionFlowCoordinator(isNewLogin: Bool,
                                                 flowParameters: CommonFlowParameters) -> UserSessionFlowCoordinator {
         #if DEBUG
