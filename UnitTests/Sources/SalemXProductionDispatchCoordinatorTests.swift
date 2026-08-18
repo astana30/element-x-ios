@@ -5,7 +5,6 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-import Combine
 @testable import ElementX
 import Foundation
 import Testing
@@ -393,9 +392,9 @@ struct SalemXProductionDispatchCoordinatorTests {
 
     @Test
     func memberResolutionUsesDirectRoomHeroWhenMemberListIsIncomplete() async {
-        let room = JoinedRoomProxyMock(.init(members: [.mockMe],
-                                             heroes: [.mockAlice],
-                                             isDirect: true))
+        let room = JoinedRoomProxyMock(.init(isDirect: true,
+                                             members: [.mockMe],
+                                             heroes: [.mockAlice]))
         (room.infoPublisher.value as? RoomInfoProxyMock)?.joinedMembersCount = 2
 
         let result = await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: room,
@@ -408,13 +407,13 @@ struct SalemXProductionDispatchCoordinatorTests {
 
     @Test
     func memberResolutionWaitsForASecondJoinedMemberInsteadOfFailingOpen() async {
-        let room = JoinedRoomProxyMock(.init(members: [.mockMe], isDirect: true))
+        let room = JoinedRoomProxyMock(.init(isDirect: true, members: [.mockMe]))
         (room.infoPublisher.value as? RoomInfoProxyMock)?.joinedMembersCount = 2
         var refreshCount = 0
         room.updateMembersClosure = {
             refreshCount += 1
             if refreshCount >= 2 {
-                room.membersPublisher = CurrentValueSubject([RoomMemberProxyMock.mockMe, RoomMemberProxyMock.mockAlice]).asCurrentValuePublisher()
+                room.membersPublisher = CurrentValuePublisher<[RoomMemberProxyProtocol], Never>([RoomMemberProxyMock.mockMe, RoomMemberProxyMock.mockAlice])
             }
         }
 
