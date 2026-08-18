@@ -748,9 +748,11 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             directCallEngineSignalBridge = nil
         }
 
+        AppSettings.applyProductionDispatchActivationOverride(to: appSettings)
         let productionDispatchSession = SalemXProductionDispatchSession.makeIfEnabled(appSettings: appSettings,
                                                                                       userSession: userSession,
                                                                                       elementCallService: elementCallService)
+        MXLog.info("Production dispatch session \(productionDispatchSession == nil ? "unavailable" : "ready") activation_build=\(AppSettings.salemxProductionDispatchV1ActivationBuild) feature=\(appSettings.salemxProductionDispatchV1Enabled)")
 
         var flowParameters = CommonFlowParameters(userSession: userSession,
                                                   bugReportService: bugReportService,

@@ -259,7 +259,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
 
     func startCall(roomID: String, startMode: ElementCallStartMode) {
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-START-CALL] room_id=\(roomID) start_mode=\(startMode)")
-        Task { await presentCallScreen(roomID: roomID, startMode: startMode) }
+        Task { await presentCallScreen(roomID: roomID, startMode: startMode, prefersOutgoingProductionDispatch: false) }
     }
     
     /// Clearing routes is more complicated than it first seems. When passing routes
@@ -733,15 +733,6 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         presentStockCallScreen(configuration: .init(genericCallLink: url))
     }
     
-    private func presentCallScreen(roomID: String, startMode: ElementCallStartMode = .video) async {
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-BY-ID] room_id=\(roomID) start_mode=\(startMode)")
-        guard case let .joined(roomProxy) = await userSession.clientProxy.roomForIdentifier(roomID) else {
-            return
-        }
-        
-        presentCallScreen(roomProxy: roomProxy, startMode: startMode)
-    }
-
     private func restoreActiveCallPresentationIfNeeded() {
         guard !isRestoringActiveCallPresentation,
               let roomID = flowParameters.ongoingCallRoomIDPublisher.value,
@@ -753,12 +744,29 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         Task { [weak self] in
             guard let self else { return }
             defer { isRestoringActiveCallPresentation = false }
-            await presentCallScreen(roomID: roomID, startMode: startMode)
+            await presentCallScreen(roomID: roomID, startMode: startMode, prefersOutgoingProductionDispatch: false)
         }
     }
     
-    private func presentCallScreen(roomProxy: JoinedRoomProxyProtocol, startMode: ElementCallStartMode = .video) {
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=\(roomProxy.id) start_mode=\(startMode)")
+    private func presentCallScreen(roomID: String,
+                                   startMode: ElementCallStartMode = .video,
+                                   prefersOutgoingProductionDispatch: Bool = true) async {
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-BY-ID] room_id=\(roomID) start_mode=\(startMode)")
+        guard case let .joined(roomProxy) = await userSession.clientProxy.roomForIdentifier(roomID) else {
+            return
+        }
+        
+        presentCallScreen(roomProxy: roomProxy,
+                          startMode: startMode,
+                          prefersOutgoingProductionDispatch: prefersOutgoingProductionDispatch)
+    }
+    
+    private func presentCallScreen(roomProxy: JoinedRoomProxyProtocol,
+                                   startMode: ElementCallStartMode = .video,
+                                   prefersOutgoingProductionDispatch: Bool = true) {
+        let featureEnabled = flowParameters.appSettings.salemxProductionDispatchV1Enabled
+        let hasSession = flowParameters.productionDispatchSession != nil
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=\(roomProxy.id) start_mode=\(startMode) prefers_outgoing_dispatch=\(prefersOutgoingProductionDispatch) feature=\(featureEnabled) has_session=\(hasSession)")
         let colorScheme: ColorScheme = flowParameters.windowManager.mainWindow.traitCollection.userInterfaceStyle == .light ? .light : .dark
         let configuration = ElementCallConfiguration(roomProxy: roomProxy,
                                                      clientProxy: userSession.clientProxy,
@@ -767,9 +775,10 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                      elementCallBaseURLOverride: flowParameters.appSettings.elementCallBaseURLOverride,
                                                      colorScheme: colorScheme,
                                                      startMode: startMode)
-        guard flowParameters.appSettings.salemxProductionDispatchV1Enabled,
-              startMode == .audio,
-              flowParameters.productionDispatchSession != nil else {
+        guard SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: prefersOutgoingProductionDispatch,
+                                                                         featureEnabled: featureEnabled,
+                                                                         startMode: startMode,
+                                                                         hasSession: hasSession) else {
             presentStockCallScreen(configuration: configuration)
             return
         }
@@ -977,6 +986,6 @@ extension UserSessionFlowCoordinator: EmbeddedElementCallRoomCallPresenting {
         #if DEBUG
         SalemXStage2FSimulatorSignalingDebug.recordReceiverJoinExistingCallRequested()
         #endif
-        await presentCallScreen(roomID: roomID, startMode: startMode)
+        await presentCallScreen(roomID: roomID, startMode: startMode, prefersOutgoingProductionDispatch: false)
     }
 }

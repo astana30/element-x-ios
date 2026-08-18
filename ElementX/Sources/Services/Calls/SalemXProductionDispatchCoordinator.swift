@@ -102,6 +102,18 @@ struct SalemXProductionDispatchStockCallPresentation {
     let requestTermination: @MainActor () async -> Bool
 }
 
+enum SalemXOutgoingProductionDispatchPresentation {
+    static func shouldPrepare(prefersOutgoingProductionDispatch: Bool,
+                              featureEnabled: Bool,
+                              startMode: ElementCallStartMode,
+                              hasSession: Bool) -> Bool {
+        prefersOutgoingProductionDispatch
+            && featureEnabled
+            && startMode == .audio
+            && hasSession
+    }
+}
+
 enum SalemXProductionDispatchEligibility {
     static func recipient(featureEnabled: Bool,
                           startMode: ElementCallStartMode,

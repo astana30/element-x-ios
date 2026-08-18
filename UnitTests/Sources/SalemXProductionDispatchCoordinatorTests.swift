@@ -362,6 +362,38 @@ struct SalemXProductionDispatchCoordinatorTests {
     }
 
     @Test
+    func incomingOrRestorePresentationDoesNotPrepareOutgoingDispatch() {
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: false,
+                                                                           featureEnabled: true,
+                                                                           startMode: .audio,
+                                                                           hasSession: true) == false)
+    }
+
+    @Test
+    func userInitiatedAudioWithSessionPreparesOutgoingDispatch() {
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: true,
+                                                                           featureEnabled: true,
+                                                                           startMode: .audio,
+                                                                           hasSession: true))
+    }
+
+    @Test
+    func disabledFeatureOrMissingSessionStaysOnStockCallScreen() {
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: true,
+                                                                           featureEnabled: false,
+                                                                           startMode: .audio,
+                                                                           hasSession: true) == false)
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: true,
+                                                                           featureEnabled: true,
+                                                                           startMode: .audio,
+                                                                           hasSession: false) == false)
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: true,
+                                                                           featureEnabled: true,
+                                                                           startMode: .video,
+                                                                           hasSession: true) == false)
+    }
+
+    @Test
     func memberResolutionReturnsJoinedUserIDs() async {
         let room = JoinedRoomProxyMock(.init(members: [.mockMe, .mockAlice, .mockInvitedAlice]))
 

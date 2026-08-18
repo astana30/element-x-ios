@@ -17,7 +17,7 @@ schemes:
     profile:
       config: Release
     run:
-      config: Debug
+      config: SalemXDispatchActivation
       environmentVariables:
         - variable: HTTPS_PROXY
           value: localhost:9090

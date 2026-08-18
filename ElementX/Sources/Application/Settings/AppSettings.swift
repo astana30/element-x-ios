@@ -48,6 +48,11 @@ final class AppSettings: @unchecked Sendable {
 
     static let salemxProductionDispatchV1DefaultEnabled = salemxProductionDispatchV1ActivationBuild
 
+    static func applyProductionDispatchActivationOverride(to appSettings: AppSettings) {
+        guard salemxProductionDispatchV1ActivationBuild else { return }
+        appSettings.salemxProductionDispatchV1Enabled = true
+    }
+
     private enum UserDefaultsKeys: String {
         case lastVersionLaunched
         case seenInvites
