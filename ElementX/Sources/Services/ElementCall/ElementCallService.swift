@@ -2251,7 +2251,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-CALLKIT-END] callkit_id=\(uuid) reason=\(reason)")
-        MXLog.info("Reported CallKit ended after the answered call terminated")
+        MXLog.info("Reported CallKit ended after the call terminated")
         callProvider.reportCall(with: uuid, endedAt: nil, reason: reason)
     }
 
@@ -2366,7 +2366,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         let callKitUUIDToEnd: UUID?
         if let keptAliveAudioCallKitID {
             callKitUUIDToEnd = keptAliveAudioCallKitID
-        } else if terminatingCallID?.startMode == .audio, activeCallSession?.direction == .incoming {
+        } else if terminatingCallID?.startMode == .audio {
             callKitUUIDToEnd = terminatingCallID?.callKitID
         } else {
             callKitUUIDToEnd = nil

@@ -1295,6 +1295,26 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
+    func publicTearDownEndsOutgoingAudioCallKitSession() async {
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: BootstrapResolverSpy(),
+                                          answerBridge: AnswerBridgeSpy(result: .alreadyPresented))
+
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.tearDownCallSession()
+
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+        #expect(service.ongoingCallRoomIDPublisher.value == nil)
+
+        service.tearDownCallSession()
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+    }
+
+    @Test
     func answeredAudioCallResumesHandoffIfCallKitAudioActivationNeverArrives() async throws {
         let testClock = TestClock()
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
