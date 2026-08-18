@@ -1217,6 +1217,19 @@ extension CallScreenViewModelTests {
     }
 
     @Test
+    func appStoreLinePresentsIncomingCallsFromMatrixRTCPresence() throws {
+        let appCoordinator = try repositorySource(named: "ElementX/Sources/Application/AppCoordinator.swift")
+        let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout"))
+        #expect(callService.contains("[MATRIXRTC-PRESENCE-INCOMING]"))
+        #expect(callService.contains("source=matrixrtc_presence"))
+        #expect(callService.contains("Production dispatch confirming local MatrixRTC membership after observation timeout."))
+        #expect(callService.contains("Production direct-call capability registration failed: \\(error)"))
+        #expect(callService.contains("membershipConfirmationTimeout: Duration = .seconds(5)"))
+        #expect(!callService.contains("DirectCallEngine"))
+    }
+
+    @Test
     func roomScreenDoesNotExposeAVideoCallButton() throws {
         let source = try repositorySource(named: "ElementX/Sources/Screens/RoomScreen/View/RoomScreen.swift")
         #expect(!source.contains("videoCallSolid"))

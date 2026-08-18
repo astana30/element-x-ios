@@ -3377,6 +3377,34 @@ final class ElementCallServiceTests {
         service.cancelObservation(handle)
     }
 
+    @Test
+    func productionDispatchObservationConfirmsMembershipAfterTimeoutWhenTimelineIsSilent() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!outgoing-timeout:test"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true))
+        room.emitsInitialRawMembershipState = false
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 13).get()
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        await Task.yield()
+        await testClock.advance(by: .seconds(5))
+
+        let context = try await confirmationTask.value.get()
+        #expect(context.roomID == roomID)
+        #expect(context.callHandle == "_@test:user.net_LOCAL_DEVICE_m.call")
+        service.cancelObservation(handle)
+    }
+
     private func makeRoomInfo(id: String,
                               isDirect: Bool,
                               hasRoomCall: Bool,
@@ -3707,6 +3735,47 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
         ])
 
         #expect(await waitForIncomingCallReports(count: 1) == false)
+    }
+
+    @Test
+    func matrixRTCRoomListPresenceReportsIncomingCallKit() async {
+        let roomSummaries = configureRoomSummaryProvider()
+        service.setClientProxy(clientProxy)
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        roomSummaries.send([
+            makeRoomSummary(id: "redacted-room",
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: ["redacted-remote"])
+        ])
+
+        #expect(await waitForIncomingCallReports(count: 1))
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionReceivedArguments?.update.hasVideo == false)
+    }
+
+    @Test
+    func localMatrixRTCPresenceDoesNotReportIncomingCallKit() async {
+        let roomSummaries = configureRoomSummaryProvider()
+        service.setClientProxy(clientProxy)
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        roomSummaries.send([
+            makeRoomSummary(id: "redacted-room",
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: [clientProxy.userID])
+        ])
+
+        #expect(await waitForIncomingCallReports(count: 1) == false)
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
     }
 
     @Test

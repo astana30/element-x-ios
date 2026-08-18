@@ -904,6 +904,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         static let suppressionDuration: TimeInterval = 30
     }
 
+    private enum ProductionDispatchObservationConstants {
+        static let membershipConfirmationTimeout: Duration = .seconds(5)
+        static let capabilityRetryDelay: Duration = .seconds(5)
+    }
+
     private enum CallTerminationConstants {
         static let duplicateSuppression: TimeInterval = 1
     }
@@ -1033,6 +1038,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     @MainActor private var productionDispatchCapabilityTokenRevision: UInt64 = 0
     @MainActor private var registeredProductionDispatchCapability: (appSessionGeneration: String, tokenRevision: UInt64)?
     @MainActor private var productionDispatchCapabilityRegistrationInFlight: (appSessionGeneration: String, tokenRevision: UInt64)?
+    @MainActor private var productionDispatchCapabilityRetryCount = 0
     @MainActor private var productionDispatchReceiverConsumptions = Set<UUID>()
     @MainActor private var productionDispatchObservations = [UUID: SalemXStockElementCallObservationState]()
     
@@ -1105,9 +1111,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     
     private var declineListenerHandle: TaskHandle?
     private var sessionGlobalIncomingCallCancellable: AnyCancellable?
+    private var sessionGlobalPresenceCancellable: AnyCancellable?
     private var sessionGlobalIncomingCallObservationStartedAt: Date?
     private var sessionGlobalIncomingCallSubscriptionGeneration: UInt64 = 0
     private var observedSessionGlobalIncomingCallIdentityKeys = Set<ConsumedDirectCallIdentityKey>()
+    private var observedSessionGlobalPresenceRoomIDs = Set<String>()
     private var incomingFallbackSuppressionByRoomID: [String: Date] = [:]
     private var consumedDirectCallIdentityKeys = Set<ConsumedDirectCallIdentityKey>()
     private var ongoingDeclineListenerHandles: [String: TaskHandle] = [:]
@@ -1190,6 +1198,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     func configureProductionDispatchCapability(_ configuration: SalemXProductionDispatchCapabilityConfiguration?) {
         productionDispatchCapabilityConfiguration = configuration
         registeredProductionDispatchCapability = nil
+        productionDispatchCapabilityRetryCount = 0
         if configuration == nil {
             productionDispatchReceiverConsumptions.removeAll()
         }
@@ -1313,10 +1322,39 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 return
             }
             state.confirmationContinuations.append(continuation)
+            self.scheduleProductionDispatchMembershipConfirmationTimeout(handle)
             if Task.isCancelled {
                 self.cancelObservation(handle)
             }
         }
+    }
+
+    @MainActor
+    private func scheduleProductionDispatchMembershipConfirmationTimeout(_ handle: SalemXStockElementCallObservationHandle) {
+        Task { [weak self] in
+            try? await self?.timeProvider.clock.sleep(for: ProductionDispatchObservationConstants.membershipConfirmationTimeout)
+            await MainActor.run {
+                self?.confirmProductionDispatchMembershipIfTimedOut(handle)
+            }
+        }
+    }
+
+    @MainActor
+    private func confirmProductionDispatchMembershipIfTimedOut(_ handle: SalemXStockElementCallObservationHandle) {
+        guard let state = productionDispatchObservation(matching: handle),
+              state.confirmationResult == nil else {
+            return
+        }
+
+        let identity = Self.productionDispatchRoomInfoMembershipIdentity(ownUserID: state.ownUserID,
+                                                                         ownDeviceID: state.ownDeviceID)
+        state.confirmedMembership = identity
+        state.observedLocalParticipantAfterConfirmation = true
+        let context = SalemXStockElementCallContext(callID: identity.callScope.callID,
+                                                    roomID: state.roomID,
+                                                    callHandle: identity.stateKey)
+        MXLog.info("Production dispatch confirming local MatrixRTC membership after observation timeout.")
+        finishProductionDispatchConfirmation(state, result: .success(context))
     }
 
     @MainActor
@@ -2451,6 +2489,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         registeredVoIPPushToken = voIPPushToken
         productionDispatchCapabilityTokenRevision &+= 1
         registeredProductionDispatchCapability = nil
+        productionDispatchCapabilityRetryCount = 0
         let tokenRevision = productionDispatchCapabilityTokenRevision
         
         do {
@@ -2530,9 +2569,19 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         switch result {
         case .success:
             registeredProductionDispatchCapability = registrationIdentity
+            productionDispatchCapabilityRetryCount = 0
             MXLog.info("Production direct-call capability registration succeeded.")
-        case .failure:
-            MXLog.error("Production direct-call capability registration failed.")
+        case .failure(let error):
+            MXLog.error("Production direct-call capability registration failed: \(error)")
+            guard productionDispatchCapabilityRetryCount < 2 else {
+                return
+            }
+            productionDispatchCapabilityRetryCount += 1
+            Task { [weak self] in
+                try? await self?.timeProvider.clock.sleep(for: ProductionDispatchObservationConstants.capabilityRetryDelay)
+                await self?.registerProductionDispatchCapabilityIfNeeded(token: voIPPushToken,
+                                                                         tokenRevision: tokenRevision)
+            }
         }
     }
 
@@ -2699,9 +2748,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     private func observeSessionGlobalIncomingCalls() {
         sessionGlobalIncomingCallCancellable = nil
+        sessionGlobalPresenceCancellable = nil
         sessionGlobalIncomingCallObservationStartedAt = nil
         sessionGlobalIncomingCallSubscriptionGeneration &+= 1
         observedSessionGlobalIncomingCallIdentityKeys.removeAll()
+        observedSessionGlobalPresenceRoomIDs.removeAll()
 
         guard let clientProxy else {
             return
@@ -2711,6 +2762,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         let clientIdentity = ObjectIdentifier(clientProxy as AnyObject)
         sessionGlobalIncomingCallObservationStartedAt = timeProvider.now()
         recordSessionGlobalIncomingCallSnapshotHistory(clientProxy.staticRoomSummaryProvider.roomListPublisher.value)
+        recordSessionGlobalPresenceSnapshot(clientProxy.staticRoomSummaryProvider.roomListPublisher.value)
+        recordSessionGlobalPresenceSnapshot(clientProxy.roomSummaryProvider.roomListPublisher.value)
         sessionGlobalIncomingCallCancellable = clientProxy.actionsPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] action in
@@ -2723,6 +2776,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                                                           clientIdentity: clientIdentity,
                                                           subscriptionGeneration: subscriptionGeneration)
             }
+        sessionGlobalPresenceCancellable = Publishers.Merge(clientProxy.roomSummaryProvider.roomListPublisher,
+                                                            clientProxy.staticRoomSummaryProvider.roomListPublisher)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] roomSummaries in
+                self?.handleSessionGlobalRoomSummaries(roomSummaries)
+            }
     }
 
     private func recordSessionGlobalIncomingCallSnapshotHistory(_ roomSummaries: [RoomSummary]) {
@@ -2732,6 +2791,83 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 consumedDirectCallIdentityKeys.formUnion(candidate.identityKeys)
             }
         }
+    }
+
+    private func recordSessionGlobalPresenceSnapshot(_ roomSummaries: [RoomSummary]) {
+        for summary in roomSummaries where isIncomingMatrixRTCPresence(summary) {
+            observedSessionGlobalPresenceRoomIDs.insert(summary.id)
+        }
+    }
+
+    private func handleSessionGlobalRoomSummaries(_ roomSummaries: [RoomSummary]) {
+        guard !salemXAnswerBridgeConfiguration.embeddedMatrixRTCAnswerBridgeEnabled else {
+            return
+        }
+
+        let roomsWithPresence = Set(roomSummaries.filter { isIncomingMatrixRTCPresence($0) }.map(\.id))
+        observedSessionGlobalPresenceRoomIDs.subtract(observedSessionGlobalPresenceRoomIDs.subtracting(roomsWithPresence))
+
+        for summary in roomSummaries {
+            guard isIncomingMatrixRTCPresence(summary),
+                  !observedSessionGlobalPresenceRoomIDs.contains(summary.id) else {
+                continue
+            }
+
+            observedSessionGlobalPresenceRoomIDs.insert(summary.id)
+            let callEvent: RoomCallEvent
+            if let lastCallEvent = summary.lastCallEvent, Self.isIncomingFallbackStartEvent(lastCallEvent) {
+                callEvent = lastCallEvent
+            } else {
+                callEvent = .init(state: .incoming, intent: .audio)
+            }
+            let presenceIdentity = callEvent.callID ?? "matrixrtc-presence:\(summary.id):\(nextSessionSequence())"
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][MATRIXRTC-PRESENCE-INCOMING] room_id=\(summary.id) source=matrixrtc_presence")
+            handleSessionGlobalIncomingCallCandidate(roomID: summary.id,
+                                                     roomDisplayName: summary.name,
+                                                     isDirect: summary.isDirect,
+                                                     candidate: .init(callEvent: .init(state: callEvent.state,
+                                                                                       intent: callEvent.intent,
+                                                                                       callID: presenceIdentity),
+                                                                      deduplicationID: presenceIdentity,
+                                                                      isOwnEvent: false))
+        }
+    }
+
+    private func isIncomingMatrixRTCPresence(_ summary: RoomSummary) -> Bool {
+        guard summary.isDirect,
+              !summary.isSpace,
+              incomingCallID == nil,
+              ongoingCallID == nil,
+              let ownUserID = clientProxy?.userID else {
+            return false
+        }
+
+        if let lastCallEvent = summary.lastCallEvent, Self.isTerminalCallEvent(lastCallEvent) {
+            return false
+        }
+
+        if let suppressionDeadline = incomingFallbackSuppressionByRoomID[summary.id],
+           suppressionDeadline > timeProvider.now() {
+            return false
+        }
+
+        let hasLocalParticipant = summary.activeRoomCallParticipants.contains { participantBelongsToUser($0, userID: ownUserID) }
+        guard !hasLocalParticipant else {
+            return false
+        }
+
+        let hasRemoteParticipant = summary.activeRoomCallParticipants.contains { !participantBelongsToUser($0, userID: ownUserID) }
+        if hasRemoteParticipant {
+            return true
+        }
+
+        guard summary.hasOngoingCall,
+              let lastCallEvent = summary.lastCallEvent,
+              Self.isIncomingFallbackStartEvent(lastCallEvent) else {
+            return false
+        }
+
+        return true
     }
 
     private func handleSessionGlobalSyncNotification(_ notification: NotificationItem,
