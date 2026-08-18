@@ -272,6 +272,20 @@ struct TimeProvider {
     var now: () -> Date
 }
 
+/// Lets CallKit answer handoff wait for the app to be active instead of CallKit audio activation.
+struct ApplicationActivityProvider {
+    var isActive: () -> Bool
+    var didBecomeActivePublisher: AnyPublisher<Void, Never>
+    
+    static var live: ApplicationActivityProvider {
+        ApplicationActivityProvider(isActive: { UIApplication.shared.applicationState == .active },
+                                    didBecomeActivePublisher: NotificationCenter.default
+                                        .publisher(for: UIApplication.didBecomeActiveNotification)
+                                        .map { _ in }
+                                        .eraseToAnyPublisher())
+    }
+}
+
 struct SessionGlobalIncomingCallEvent {
     let roomID: String
     let roomDisplayName: String?
@@ -888,7 +902,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private enum IncomingFallbackConstants {
         static let unansweredTimeout: Duration = .seconds(45)
         static let suppressionDuration: TimeInterval = 30
-        static let legacyAnswerAudioActivationFallback: Duration = .seconds(5)
     }
 
     private enum CallTerminationConstants {
@@ -1062,8 +1075,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private var callSessionSequence: UInt64 = 0
     private var isCallKitAudioSessionActive = false
     private var pendingLegacyAnswerCallID: CallID?
-    private var pendingLegacyAnswerAudioActivationFallbackTask: Task<Void, Never>?
     private var keptAliveAudioCallKitID: UUID?
+    private let applicationActivityProvider: ApplicationActivityProvider
+    private var applicationBecameActiveCancellable: AnyCancellable?
     private var ongoingCallID: CallID? {
         didSet {
             ongoingCallRoomIDSubject.send(ongoingCallID?.roomID)
@@ -1118,6 +1132,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     init(appSettings: AppSettings = AppSettings(),
          callProvider: CXProviderProtocol? = nil,
          timeProvider: TimeProvider? = nil,
+         applicationActivityProvider: ApplicationActivityProvider = .live,
          salemXAnswerBridgeConfiguration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(),
          salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)? = nil,
          salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)? = nil,
@@ -1126,6 +1141,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         
         self.appSettings = appSettings
         self.timeProvider = timeProvider ?? TimeProvider(clock: ContinuousClock(), now: Date.init)
+        self.applicationActivityProvider = applicationActivityProvider
         self.salemXAnswerBridgeConfiguration = salemXAnswerBridgeConfiguration
         self.salemXIncomingCallBootstrapResolver = salemXIncomingCallBootstrapResolver
         self.salemXAnswerBridge = salemXAnswerBridge
@@ -1155,6 +1171,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         pushRegistry.desiredPushTypes = [.voIP]
         
         self.callProvider.setDelegate(self, queue: nil)
+        
+        applicationBecameActiveCancellable = applicationActivityProvider.didBecomeActivePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.resumePendingLegacyAnswerIfApplicationIsActive()
+            }
     }
     
     func setClientProxy(_ clientProxy: any ClientProxyProtocol) {
@@ -1592,7 +1614,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                             startMode: incomingStartMode,
                             startedAt: nowDate)
         isCallKitAudioSessionActive = false
-        cancelPendingLegacyAnswerAudioActivationFallback()
         pendingLegacyAnswerCallID = nil
         incomingCallID = callID
         if let rtcNotificationID {
@@ -1701,7 +1722,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     func handleCallProviderAudioSessionActivation() {
         isCallKitAudioSessionActive = true
-        resumePendingLegacyAnswerAfterAudioActivation()
+        resumePendingLegacyAnswerIfApplicationIsActive()
     }
     
     func providerDidReset(_ provider: CXProvider) {
@@ -1765,32 +1786,28 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             keptAliveAudioCallKitID = incomingCallID.callKitID
         }
         action.fulfill()
-        if isCallKitAudioSessionActive {
-            resumePendingLegacyAnswerAfterAudioActivation(provider: provider)
-        } else {
-            schedulePendingLegacyAnswerAudioActivationFallback(provider: provider)
+        resumePendingLegacyAnswerIfApplicationIsActive(provider: provider)
+    }
+
+    private func resumePendingLegacyAnswerIfApplicationIsActive(provider: (any CXProviderProtocol)? = nil) {
+        Task { @MainActor [weak self] in
+            guard let self, pendingLegacyAnswerCallID != nil else {
+                return
+            }
+
+            guard applicationActivityProvider.isActive() else {
+                MXLog.info("Delaying answered call presentation until the application becomes active")
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-ACTIVE]")
+                return
+            }
+
+            MXLog.info("Resuming answered call because the application is active")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason=application_active")
+            resumePendingLegacyAnswerPresentation(provider: provider)
         }
     }
 
-    private func schedulePendingLegacyAnswerAudioActivationFallback(provider: any CXProviderProtocol) {
-        cancelPendingLegacyAnswerAudioActivationFallback()
-        pendingLegacyAnswerAudioActivationFallbackTask = Task { [weak self] in
-            guard let self else { return }
-            try? await timeProvider.clock.sleep(for: IncomingFallbackConstants.legacyAnswerAudioActivationFallback)
-            guard !Task.isCancelled else { return }
-            guard pendingLegacyAnswerCallID != nil else { return }
-            MXLog.info("Resuming answered call after missing CallKit audio activation")
-            resumePendingLegacyAnswerAfterAudioActivation(provider: provider)
-        }
-    }
-
-    private func cancelPendingLegacyAnswerAudioActivationFallback() {
-        pendingLegacyAnswerAudioActivationFallbackTask?.cancel()
-        pendingLegacyAnswerAudioActivationFallbackTask = nil
-    }
-
-    private func resumePendingLegacyAnswerAfterAudioActivation(provider: (any CXProviderProtocol)? = nil) {
-        cancelPendingLegacyAnswerAudioActivationFallback()
+    private func resumePendingLegacyAnswerPresentation(provider: (any CXProviderProtocol)? = nil) {
         guard let pendingLegacyAnswerCallID else {
             return
         }
@@ -4222,7 +4239,6 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     private func clearIncomingCallState(cancelEmbeddedAnswer: Bool = true) {
-        cancelPendingLegacyAnswerAudioActivationFallback()
         if cancelEmbeddedAnswer {
             cancelEmbeddedMatrixRTCAnswer(for: incomingCallID?.callKitID)
         }
