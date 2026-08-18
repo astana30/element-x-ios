@@ -1353,6 +1353,15 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
+    func audioAnswerConfiguresEarpieceBeforeCallKitFulfillAndKeepsCallKitAlive() throws {
+        let source = try SalemXEmbeddedCallAnswerBridgeTests.source(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+        #expect(source.contains("CallVoiceAudioSession.configure(speakerEnabled: false)"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=answer"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=callkit_activated"))
+        #expect(source.contains("keptAliveAudioCallKitID = incomingCallID.callKitID"))
+    }
+
+    @Test
     func answeredAudioCallWaitsForApplicationToBecomeActiveBeforeStarting() async throws {
         let activity = ApplicationActivitySpy(isActive: false)
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)

@@ -94,7 +94,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         let appVersion = InfoPlistReader.main.bundleShortVersionString
         let appBuild = InfoPlistReader.main.bundleVersion
         MXLog.info("\(appName) \(appVersion) (\(appBuild))")
-        MXLog.info("App Store line build: callkit-end-on-hangup unstick-handset audio-only no-video-button outgoing-hangup-callkit answer-on-active")
+        MXLog.info("App Store line build: callkit-end-on-hangup unstick-handset audio-only no-video-button outgoing-hangup-callkit answer-on-active earpiece-voicechat")
         
         if ProcessInfo.processInfo.environment["RESET_APP_SETTINGS"].map(Bool.init) == true {
             AppSettings.resetAllSettings()

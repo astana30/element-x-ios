@@ -184,6 +184,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             .store(in: &cancellables)
         
         setupCall()
+        if shouldControlAudioRoute {
+            CallVoiceAudioSession.configure(speakerEnabled: false)
+            schedulePreferredAudioRouteEnforcement()
+        }
     }
     
     override func process(viewAction: CallScreenViewAction) {
@@ -522,6 +526,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                     SalemXStage2FSimulatorSignalingDebug.recordReceiverElementCallReady()
                     #endif
                     state.url = url
+                    schedulePreferredAudioRouteEnforcement()
                 case .failure(let error):
                     guard !Task.isCancelled, !isDismissingAfterLocalHangup else {
                         return
@@ -542,6 +547,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 await elementCallService.setupCallSession(roomID: roomProxy.id,
                                                           roomDisplayName: roomProxy.infoPublisher.value.displayName ?? roomProxy.id,
                                                           startMode: configuration.startMode)
+                schedulePreferredAudioRouteEnforcement()
             }
             
             timeoutTask = Task { [weak self] in
@@ -641,7 +647,14 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         audioRouteEnforcementTask = Task { @MainActor [weak self] in
-            let delays: [Duration] = [.zero, .milliseconds(150), .milliseconds(500), .seconds(1)]
+            let delays: [Duration] = [.zero,
+                                      .milliseconds(150),
+                                      .milliseconds(400),
+                                      .milliseconds(800),
+                                      .seconds(1.5),
+                                      .seconds(3),
+                                      .seconds(5),
+                                      .seconds(8)]
 
             for delay in delays {
                 if delay > .zero {
@@ -676,12 +689,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             setSpeakerphoneEnabled(true)
         case .earpiece:
             switch currentOutput.portType {
-            case .builtInSpeaker:
+            case .builtInSpeaker, .builtInReceiver:
                 setSpeakerphoneEnabled(false)
-            case .builtInReceiver:
-                state.isSpeakerphoneEnabled = false
-                UIDevice.current.isProximityMonitoringEnabled = true
             default:
+                CallVoiceAudioSession.restoreEarpieceIfNeeded()
                 state.isSpeakerphoneEnabled = false
                 UIDevice.current.isProximityMonitoringEnabled = false
             }
@@ -689,16 +700,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
     
     private func setSpeakerphoneEnabled(_ enabled: Bool) {
-        do {
-            try AVAudioSession.sharedInstance().overrideOutputAudioPort(enabled ? .speaker : .none)
-        } catch {
-            MXLog.error("Failed updating call audio route with error: \(error)")
-            preferredAudioRoute = .systemDefault
-            state.isSpeakerphoneEnabled = AVAudioSession.sharedInstance().currentRoute.outputs.first?.portType == .builtInSpeaker
-            UIDevice.current.isProximityMonitoringEnabled = false
-            return
+        if enabled {
+            CallVoiceAudioSession.configure(speakerEnabled: true)
+        } else {
+            CallVoiceAudioSession.restoreEarpieceIfNeeded()
         }
-        
+
         state.isSpeakerphoneEnabled = enabled
         UIDevice.current.isProximityMonitoringEnabled = !enabled
     }

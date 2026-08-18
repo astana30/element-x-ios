@@ -1184,6 +1184,33 @@ extension CallScreenViewModelTests {
     }
 
     @Test
+    func audioRoomCallStartsOnEarpiece() throws {
+        let harness = try makeAudioRoomCallViewModel()
+        #expect(harness.viewModel.context.viewState.isSpeakerphoneEnabled == false)
+    }
+
+    @Test
+    func audioCallGivesNativeControlOfAudioDevices() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallWidgetDriver.swift")
+        #expect(source.contains("startMode == .audio ? \"true\" : \"false\""))
+        #expect(!source.contains("controlledAudioDevices, value: \"false\""))
+    }
+
+    @Test
+    func audioCallKeepsReassertingVoiceChatEarpiece() throws {
+        let callScreen = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift")
+        let session = try repositorySource(named: "ElementX/Sources/Services/ElementCall/CallVoiceAudioSession.swift")
+        #expect(session.contains("mode: .voiceChat"))
+        #expect(session.contains("overrideOutputAudioPort"))
+        #expect(session.contains(".allowBluetoothHFP"))
+        #expect(!session.contains("defaultToSpeaker"))
+        #expect(callScreen.contains("CallVoiceAudioSession.restoreEarpieceIfNeeded()"))
+        #expect(callScreen.contains("CallVoiceAudioSession.configure(speakerEnabled: true)"))
+        #expect(callScreen.contains(".seconds(8)"))
+        #expect(!callScreen.contains("Failed updating call audio route with error"))
+    }
+
+    @Test
     func roomScreenDoesNotExposeAVideoCallButton() throws {
         let source = try repositorySource(named: "ElementX/Sources/Screens/RoomScreen/View/RoomScreen.swift")
         #expect(!source.contains("videoCallSolid"))

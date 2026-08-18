@@ -1722,6 +1722,13 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     func handleCallProviderAudioSessionActivation() {
         isCallKitAudioSessionActive = true
+        if keptAliveAudioCallKitID != nil
+            || incomingCallID?.startMode == .audio
+            || ongoingCallID?.startMode == .audio
+            || pendingLegacyAnswerCallID?.startMode == .audio {
+            CallVoiceAudioSession.configure(speakerEnabled: false)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=callkit_activated")
+        }
         resumePendingLegacyAnswerIfApplicationIsActive()
     }
     
@@ -1784,6 +1791,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         pendingLegacyAnswerCallID = incomingCallID
         if incomingCallID.startMode == .audio {
             keptAliveAudioCallKitID = incomingCallID.callKitID
+            CallVoiceAudioSession.configure(speakerEnabled: false)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=answer")
         }
         action.fulfill()
         resumePendingLegacyAnswerIfApplicationIsActive(provider: provider)

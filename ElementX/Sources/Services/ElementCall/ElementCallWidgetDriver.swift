@@ -218,7 +218,9 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
     }
     
     private func updateCallURLParameters(_ queryItems: inout [URLQueryItem], isDirectRoomCall: Bool) {
-        setQueryItem(&queryItems, name: CallURLParameter.controlledAudioDevices, value: "false")
+        // Audio 1:1 calls let the native app own the output route (earpiece by
+        // default). Element Call otherwise defaults to speaker on iOS.
+        setQueryItem(&queryItems, name: CallURLParameter.controlledAudioDevices, value: startMode == .audio ? "true" : "false")
         
         guard isDirectRoomCall else {
             return
