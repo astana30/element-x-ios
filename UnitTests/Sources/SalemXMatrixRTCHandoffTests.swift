@@ -1161,6 +1161,14 @@ final class SalemXMatrixRTCHandoffTests {
     }
 }
 
+private final class ReceiverCallBoundaryEventRecorder {
+    private(set) var events = [SalemXCallBoundaryEvent]()
+
+    func record(_ event: SalemXCallBoundaryEvent) {
+        events.append(event)
+    }
+}
+
 @MainActor
 final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     private let appSettings = AppSettings()
@@ -1188,9 +1196,11 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     func defaultRouteRemainsUnchangedWhenBridgeIsConfiguredButDisabled() async throws {
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
+        let callBoundaryRecorder = ReceiverCallBoundaryEventRecorder()
         service = makeAnswerBridgeService(configuration: .init(),
                                           bootstrapResolver: bootstrapResolver,
-                                          answerBridge: answerBridge)
+                                          answerBridge: answerBridge,
+                                          callBoundaryObserver: callBoundaryRecorder.record)
 
         var observedActions = [ElementCallServiceAction]()
         service.actions
@@ -1212,6 +1222,16 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
             }
             return roomID == Self.roomID && startMode == .video
         } })
+        #expect(callBoundaryRecorder.events == [
+            .receiverAnswerEntered(.legacy),
+            .receiverAnswerFulfilled(.legacy),
+            .receiverContinuationScheduled,
+            .receiverContinuationEntered,
+            .receiverRoomLookupStarted,
+            .receiverRoomLookupFinished(.missingClient),
+            .receiverStartCallEmitted,
+            .receiverUnansweredWatchdogCancelled(.startCallEmitted, .accepted)
+        ])
     }
 
     @Test
@@ -1908,14 +1928,16 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
                                                                                                             answerTimeout: .seconds(1)),
                                          bootstrapResolver: BootstrapResolverSpy,
                                          answerBridge: AnswerBridgeSpy,
-                                         endBridge: EndBridgeSpy? = nil) -> ElementCallService {
+                                         endBridge: EndBridgeSpy? = nil,
+                                         callBoundaryObserver: ((SalemXCallBoundaryEvent) -> Void)? = nil) -> ElementCallService {
         ElementCallService(appSettings: appSettings,
                            callProvider: callProvider,
                            timeProvider: TimeProvider(clock: ContinuousClock()) { self.currentDate },
                            salemXAnswerBridgeConfiguration: configuration,
                            salemXIncomingCallBootstrapResolver: bootstrapResolver,
                            salemXAnswerBridge: answerBridge,
-                           salemXEndBridge: endBridge)
+                           salemXEndBridge: endBridge,
+                           callBoundaryObserver: callBoundaryObserver)
     }
 
     private func prepareOngoingEmbeddedCall(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,

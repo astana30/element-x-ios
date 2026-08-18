@@ -7,6 +7,124 @@
 
 import Foundation
 
+enum SalemXCallBoundaryEvent: Equatable, CustomStringConvertible {
+    enum EligibilityCategory: String, Equatable {
+        case eligible
+        case featureDisabled = "feature_disabled"
+        case startModeNotAudio = "start_mode_not_audio"
+        case sessionUnavailable = "session_unavailable"
+        case roomNotEncrypted = "room_not_encrypted"
+        case roomNotDirect = "room_not_direct"
+        case roomMemberCountInvalid = "room_member_count_invalid"
+        case memberResolutionUnavailable = "member_resolution_unavailable"
+        case recipientUnavailable = "recipient_unavailable"
+    }
+
+    enum MembershipResult: String, Equatable {
+        case success
+        case timeout = "timeout_or_not_confirmed"
+        case unavailable
+        case cancelled
+    }
+
+    enum ReceiverRoute: String, Equatable {
+        case legacy
+        case embedded
+    }
+
+    enum ReceiverState: String, Equatable {
+        case idle
+        case outgoingRinging = "outgoing_ringing"
+        case incomingRinging = "incoming_ringing"
+        case accepted
+        case connected
+        case declined
+        case cancelled
+        case missed
+        case ended
+        case failed
+        case unknown
+    }
+
+    enum ReceiverLookupResult: String, Equatable {
+        case success
+        case missingClient = "missing_client"
+        case roomUnavailable = "room_unavailable"
+    }
+
+    enum WatchdogCancellationReason: String, Equatable {
+        case startCallEmitted = "start_call_emitted"
+        case embeddedAnswerFinished = "embedded_answer_finished"
+        case incomingStateCleared = "incoming_state_cleared"
+    }
+
+    case senderEligibility(EligibilityCategory)
+    case senderDispatchCoordinatorEntered
+    case senderMembershipAwaitStarted
+    case senderMembershipAwaitFinished(MembershipResult)
+    case senderPrepareWillStart
+    case receiverAnswerEntered(ReceiverRoute)
+    case receiverAnswerFulfilled(ReceiverRoute)
+    case receiverContinuationScheduled
+    case receiverContinuationEntered
+    case receiverRoomLookupStarted
+    case receiverRoomLookupTimedOut
+    case receiverRoomLookupFinished(ReceiverLookupResult)
+    case receiverProviderDidActivate
+    case receiverStartCallEmitted
+    case receiverUnansweredWatchdogCancelled(WatchdogCancellationReason, ReceiverState)
+    case receiverUnansweredWatchdogFired(ReceiverState)
+
+    var description: String {
+        let prefix = "Stage8F call boundary:"
+        switch self {
+        case .senderEligibility(let category):
+            let result = category == .eligible ? "accepted" : "rejected"
+            return "\(prefix) role=sender event=eligibility result=\(result) category=\(category.rawValue)"
+        case .senderDispatchCoordinatorEntered:
+            return "\(prefix) role=sender event=dispatch_coordinator_entered"
+        case .senderMembershipAwaitStarted:
+            return "\(prefix) role=sender event=local_membership_await_started"
+        case .senderMembershipAwaitFinished(let result):
+            return "\(prefix) role=sender event=local_membership_await_finished result=\(result.rawValue)"
+        case .senderPrepareWillStart:
+            return "\(prefix) role=sender event=prepare_will_start"
+        case .receiverAnswerEntered(let route):
+            return "\(prefix) role=receiver event=answer_action_entered route=\(route.rawValue)"
+        case .receiverAnswerFulfilled(let route):
+            return "\(prefix) role=receiver event=answer_action_fulfilled route=\(route.rawValue)"
+        case .receiverContinuationScheduled:
+            return "\(prefix) role=receiver event=answer_continuation_scheduled"
+        case .receiverContinuationEntered:
+            return "\(prefix) role=receiver event=answer_continuation_entered"
+        case .receiverRoomLookupStarted:
+            return "\(prefix) role=receiver event=room_lookup_started"
+        case .receiverRoomLookupTimedOut:
+            return "\(prefix) role=receiver event=room_lookup_timeout observation_only=true"
+        case .receiverRoomLookupFinished(let result):
+            return "\(prefix) role=receiver event=room_lookup_finished result=\(result.rawValue)"
+        case .receiverProviderDidActivate:
+            return "\(prefix) role=receiver event=provider_did_activate"
+        case .receiverStartCallEmitted:
+            return "\(prefix) role=receiver event=start_call_emitted"
+        case .receiverUnansweredWatchdogCancelled(let reason, let state):
+            return "\(prefix) role=receiver event=unanswered_watchdog_cancelled reason=\(reason.rawValue) state=\(state.rawValue)"
+        case .receiverUnansweredWatchdogFired(let state):
+            return "\(prefix) role=receiver event=unanswered_watchdog_fired state=\(state.rawValue)"
+        }
+    }
+}
+
+enum SalemXCallBoundaryInstrumentation {
+    static func record(_ event: SalemXCallBoundaryEvent,
+                       observer: ((SalemXCallBoundaryEvent) -> Void)? = nil) {
+        #if SALEMX_PRODUCTION_DISPATCH_ACTIVATION
+        MXLog.info(event.description)
+        #endif
+        observer?(event)
+    }
+}
+
 @MainActor
 final class SalemXProductionDispatchSession {
     let coordinator: SalemXProductionDispatchCoordinator
@@ -368,6 +486,7 @@ final class SalemXProductionDispatchCoordinator {
     private let dispatchClient: SalemXProductionDispatchClientProtocol
     private let stockCallLifecycle: SalemXProductionDispatchStockCallLifecycleProtocol
     private let dispatchIDGenerator: () -> UUID
+    private let callBoundaryObserver: ((SalemXCallBoundaryEvent) -> Void)?
     private var nextGeneration = 0
     private var activeAttempt: ActiveAttempt?
     private var invalidatedSessionGenerations = Set<String>()
@@ -378,9 +497,11 @@ final class SalemXProductionDispatchCoordinator {
 
     init(dispatchClient: SalemXProductionDispatchClientProtocol,
          stockCallLifecycle: SalemXProductionDispatchStockCallLifecycleProtocol,
+         callBoundaryObserver: ((SalemXCallBoundaryEvent) -> Void)? = nil,
          dispatchIDGenerator: @escaping () -> UUID = UUID.init) {
         self.dispatchClient = dispatchClient
         self.stockCallLifecycle = stockCallLifecycle
+        self.callBoundaryObserver = callBoundaryObserver
         self.dispatchIDGenerator = dispatchIDGenerator
     }
 
@@ -433,6 +554,7 @@ final class SalemXProductionDispatchCoordinator {
     private func runAttempt(_ input: SalemXProductionDispatchAttemptInput,
                             generation: Int) async -> SalemXProductionDispatchCoordinatorOutcome {
         guard isCurrent(generation) else { return .failed(.staleGeneration) }
+        recordCallBoundary(.senderDispatchCoordinatorEntered)
         state = .startingMatrixRTC
 
         let context: SalemXProductionDispatchStockCallContext
@@ -448,10 +570,12 @@ final class SalemXProductionDispatchCoordinator {
             return .failed(.cancelled)
         }
 
+        recordCallBoundary(.senderMembershipAwaitStarted)
         switch await stockCallLifecycle.awaitConfirmedLocalMembership(for: context) {
         case .success:
-            break
-        case .failure:
+            recordCallBoundary(.senderMembershipAwaitFinished(.success))
+        case .failure(let error):
+            recordCallBoundary(.senderMembershipAwaitFinished(membershipResult(for: error)))
             return .failed(Task.isCancelled ? .cancelled : .lifecycle)
         }
 
@@ -465,6 +589,7 @@ final class SalemXProductionDispatchCoordinator {
     private func dispatchConfirmedMembership(_ input: SalemXProductionDispatchAttemptInput,
                                              generation: Int,
                                              context: SalemXProductionDispatchStockCallContext) async -> SalemXProductionDispatchCoordinatorOutcome {
+        recordCallBoundary(.senderPrepareWillStart)
         state = .preparing
 
         let prepareRequest = SalemXProductionDispatchPrepareRequest(recipient: input.admission.recipient,
@@ -519,6 +644,21 @@ final class SalemXProductionDispatchCoordinator {
             return .failed(Task.isCancelled ? .cancelled : .deliveryUnknown)
         case .failure(let error):
             return .failed(coordinatorError(for: error))
+        }
+    }
+
+    private func recordCallBoundary(_ event: SalemXCallBoundaryEvent) {
+        SalemXCallBoundaryInstrumentation.record(event, observer: callBoundaryObserver)
+    }
+
+    private func membershipResult(for error: SalemXProductionDispatchStockCallLifecycleError) -> SalemXCallBoundaryEvent.MembershipResult {
+        switch error {
+        case .membershipNotConfirmed:
+            .timeout
+        case .unavailable:
+            .unavailable
+        case .cancelled:
+            .cancelled
         }
     }
 

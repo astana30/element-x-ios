@@ -717,9 +717,20 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                      elementCallBaseURLOverride: flowParameters.appSettings.elementCallBaseURLOverride,
                                                      colorScheme: colorScheme,
                                                      startMode: startMode)
-        guard flowParameters.appSettings.salemxProductionDispatchV1Enabled,
-              startMode == .audio,
-              flowParameters.productionDispatchSession != nil else {
+        guard flowParameters.appSettings.salemxProductionDispatchV1Enabled else {
+            recordProductionDispatchEligibility(.featureDisabled)
+            presentStockCallScreen(configuration: configuration)
+            return
+        }
+
+        guard startMode == .audio else {
+            recordProductionDispatchEligibility(.startModeNotAudio)
+            presentStockCallScreen(configuration: configuration)
+            return
+        }
+
+        guard flowParameters.productionDispatchSession != nil else {
+            recordProductionDispatchEligibility(.sessionUnavailable)
             presentStockCallScreen(configuration: configuration)
             return
         }
@@ -781,9 +792,20 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private func presentEligibleProductionDispatchCall(roomProxy: JoinedRoomProxyProtocol,
                                                        configuration: ElementCallConfiguration) async {
         let roomInfo = roomProxy.infoPublisher.value
-        guard roomInfo.isEncrypted,
-              roomInfo.isDirect,
-              roomInfo.joinedMembersCount == 2 else {
+        guard roomInfo.isEncrypted else {
+            recordProductionDispatchEligibility(.roomNotEncrypted)
+            presentStockCallScreen(configuration: configuration)
+            return
+        }
+
+        guard roomInfo.isDirect else {
+            recordProductionDispatchEligibility(.roomNotDirect)
+            presentStockCallScreen(configuration: configuration)
+            return
+        }
+
+        guard roomInfo.joinedMembersCount == 2 else {
+            recordProductionDispatchEligibility(.roomMemberCountInvalid)
             presentStockCallScreen(configuration: configuration)
             return
         }
@@ -794,6 +816,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         case .resolved(let resolvedUserIDs):
             joinedUserIDs = resolvedUserIDs
         case .unavailable:
+            recordProductionDispatchEligibility(.memberResolutionUnavailable)
             flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
             return
         }
@@ -807,9 +830,12 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                                             joinedUserIDs: joinedUserIDs,
                                                                             ownUserID: userSession.clientProxy.userID),
             let session = flowParameters.productionDispatchSession else {
+            recordProductionDispatchEligibility(.recipientUnavailable)
             presentStockCallScreen(configuration: configuration)
             return
         }
+
+        recordProductionDispatchEligibility(.eligible)
 
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         let input = SalemXProductionDispatchAttemptInput(appSessionGeneration: session.appSessionGeneration,
@@ -825,6 +851,10 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
 
         guard case .failed = outcome else { return }
         flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
+    }
+
+    private func recordProductionDispatchEligibility(_ category: SalemXCallBoundaryEvent.EligibilityCategory) {
+        SalemXCallBoundaryInstrumentation.record(.senderEligibility(category))
     }
     
     private func hideCallScreenOverlay() {

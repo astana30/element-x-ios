@@ -1006,6 +1006,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private var salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)?
     private var salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)?
     private var salemXEndBridge: (any SalemXEmbeddedCallEndBridging)?
+    private let callBoundaryObserver: ((SalemXCallBoundaryEvent) -> Void)?
+    private let callBoundaryRoomLookupObservationTimeout: Duration
     
     private var voIPPushToken: Data?
     private var registeredVoIPPushToken: Data?
@@ -1111,7 +1113,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
          salemXAnswerBridgeConfiguration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(),
          salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)? = nil,
          salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)? = nil,
-         salemXEndBridge: (any SalemXEmbeddedCallEndBridging)? = nil) {
+         salemXEndBridge: (any SalemXEmbeddedCallEndBridging)? = nil,
+         callBoundaryObserver: ((SalemXCallBoundaryEvent) -> Void)? = nil,
+         callBoundaryRoomLookupObservationTimeout: Duration = .seconds(5)) {
         pushRegistry = PKPushRegistry(queue: nil)
         
         self.appSettings = appSettings
@@ -1120,6 +1124,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         self.salemXIncomingCallBootstrapResolver = salemXIncomingCallBootstrapResolver
         self.salemXAnswerBridge = salemXAnswerBridge
         self.salemXEndBridge = salemXEndBridge
+        self.callBoundaryObserver = callBoundaryObserver
+        self.callBoundaryRoomLookupObservationTimeout = callBoundaryRoomLookupObservationTimeout
         
         if let callProvider {
             self.callProvider = callProvider
@@ -1526,6 +1532,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             }
             
             if let incomingCallID, incomingCallID.callKitID == callID.callKitID {
+                recordCallBoundary(.receiverUnansweredWatchdogFired(callBoundaryState(for: incomingCallID)))
                 IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-RECIPIENT-TIMEOUT] room_id=\(incomingCallID.roomID) callkit_id=\(incomingCallID.callKitID)")
                 reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
             }
@@ -1583,6 +1590,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     // MARK: - CXProviderDelegate
     
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        recordCallBoundary(.receiverProviderDidActivate)
         MXLog.info("Call provider did activate audio session")
     }
     
@@ -1604,6 +1612,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     func handleAnswerCallAction(_ action: any SalemXCallKitAnswerActionCompleting, provider: any CXProviderProtocol) {
+        let route: SalemXCallBoundaryEvent.ReceiverRoute = salemXAnswerBridgeConfiguration.embeddedMatrixRTCAnswerBridgeEnabled ? .embedded : .legacy
+        recordCallBoundary(.receiverAnswerEntered(route))
         guard salemXAnswerBridgeConfiguration.embeddedMatrixRTCAnswerBridgeEnabled else {
             handleLegacyAnswerCallAction(action, provider: provider)
             return
@@ -1638,11 +1648,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         
         // First fullfill the action
         action.fulfill()
+        recordCallBoundary(.receiverAnswerFulfilled(.legacy))
         
         // And delay ending the call so that the app has enough time
         // to get deeplinked into
+        recordCallBoundary(.receiverContinuationScheduled)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             Task { @MainActor in
+                self.recordCallBoundary(.receiverContinuationEntered)
                 guard self.incomingCallID?.callKitID == incomingCallID.callKitID else {
                     return
                 }
@@ -1663,8 +1676,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 provider.reportCall(with: incomingCallID.callKitID, endedAt: nil, reason: .remoteEnded)
 
                 IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-START-CALL-SEND] room_id=\(incomingCallID.roomID) start_mode=\(incomingCallID.startMode)")
+                self.recordCallBoundary(.receiverStartCallEmitted)
                 self.actionsSubject.send(.startCall(roomID: incomingCallID.roomID, startMode: incomingCallID.startMode))
                 self.endUnansweredCallTask?.cancel()
+                self.recordCallBoundary(.receiverUnansweredWatchdogCancelled(.startCallEmitted,
+                                                                             self.callBoundaryState(for: incomingCallID)))
             }
         }
     }
@@ -1779,6 +1795,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         let actions = salemXEmbeddedAnswerActions.removeValue(forKey: callID) ?? []
         salemXEmbeddedAnswerActionIDs.removeValue(forKey: callID)
         endUnansweredCallTask?.cancel()
+        recordCallBoundary(.receiverUnansweredWatchdogCancelled(.embeddedAnswerFinished,
+                                                                callBoundaryState(for: incomingCallID)))
         #if DEBUG
         Task { @MainActor in
             SalemXStage2FSimulatorSignalingDebug.recordAnswerGuardReleased()
@@ -1788,6 +1806,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
         if result.isCallKitSuccess {
             promoteEmbeddedMatrixRTCAnsweredCall(incomingCallID)
+            recordCallBoundary(.receiverAnswerFulfilled(.embedded))
             actions.forEach { $0.fulfill() }
         } else {
             removeVerifiedBootstrapOnce(for: callID)
@@ -2598,6 +2617,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 return
             }
 
+            recordCallBoundary(.receiverUnansweredWatchdogFired(callBoundaryState(for: incomingCallID)))
             reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
         }
     }
@@ -2681,6 +2701,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                     return
                 }
 
+                recordCallBoundary(.receiverUnansweredWatchdogFired(callBoundaryState(for: incomingCallID)))
                 reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
             }
         }
@@ -3592,15 +3613,22 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     private func isIncomingCallStillAliveBeforeAnswer(_ incomingCallID: CallID) async -> Bool {
+        recordCallBoundary(.receiverRoomLookupStarted)
+        let timeoutObservation = makeCallBoundaryRoomLookupTimeoutObservation()
+        defer { timeoutObservation?.cancel() }
+
         guard let clientProxy else {
+            recordCallBoundary(.receiverRoomLookupFinished(.missingClient))
             MXLog.warning("Incoming answer guard missing ClientProxy for room \(incomingCallID.roomID)")
             return true
         }
 
         guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(incomingCallID.roomID) else {
+            recordCallBoundary(.receiverRoomLookupFinished(.roomUnavailable))
             MXLog.warning("Incoming answer guard missing joined room for room \(incomingCallID.roomID)")
             return true
         }
+        recordCallBoundary(.receiverRoomLookupFinished(.success))
 
         for attempt in 0..<6 {
             let participants = Set(roomProxy.infoPublisher.value.activeRoomCallParticipants)
@@ -3618,6 +3646,58 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
         MXLog.info("Incoming answer guard marked stale incoming for room \(incomingCallID.roomID)")
         return false
+    }
+
+    private func makeCallBoundaryRoomLookupTimeoutObservation() -> Task<Void, Never>? {
+        guard shouldObserveCallBoundaryRoomLookupTimeout else { return nil }
+
+        return Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: callBoundaryRoomLookupObservationTimeout)
+            guard !Task.isCancelled else { return }
+            recordCallBoundary(.receiverRoomLookupTimedOut)
+        }
+    }
+
+    private var shouldObserveCallBoundaryRoomLookupTimeout: Bool {
+        #if SALEMX_PRODUCTION_DISPATCH_ACTIVATION
+        true
+        #else
+        callBoundaryObserver != nil
+        #endif
+    }
+
+    private func recordCallBoundary(_ event: SalemXCallBoundaryEvent) {
+        SalemXCallBoundaryInstrumentation.record(event, observer: callBoundaryObserver)
+    }
+
+    private func callBoundaryState(for callID: CallID) -> SalemXCallBoundaryEvent.ReceiverState {
+        guard let session = activeCallSession, session.callKitID == callID.callKitID else {
+            return .unknown
+        }
+
+        switch session.state {
+        case .idle:
+            return .idle
+        case .outgoingRinging:
+            return .outgoingRinging
+        case .incomingRinging:
+            return .incomingRinging
+        case .accepted:
+            return .accepted
+        case .connected:
+            return .connected
+        case .declined:
+            return .declined
+        case .cancelled:
+            return .cancelled
+        case .missed:
+            return .missed
+        case .ended:
+            return .ended
+        case .failed:
+            return .failed
+        }
     }
     
     private func startObservingOngoingDeclines(roomProxy: JoinedRoomProxyProtocol, ongoingCallID: CallID) async {
@@ -3968,6 +4048,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     private func clearIncomingCallState(cancelEmbeddedAnswer: Bool = true) {
+        if let incomingCallID, endUnansweredCallTask != nil {
+            recordCallBoundary(.receiverUnansweredWatchdogCancelled(.incomingStateCleared,
+                                                                    callBoundaryState(for: incomingCallID)))
+        }
         if cancelEmbeddedAnswer {
             cancelEmbeddedMatrixRTCAnswer(for: incomingCallID?.callKitID)
         }
