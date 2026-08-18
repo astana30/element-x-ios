@@ -2235,6 +2235,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             }
         }
 
+        salemXEmbeddedTerminatedCallIDs.insert(knownCallID.callKitID)
         action.fulfill()
     }
     
