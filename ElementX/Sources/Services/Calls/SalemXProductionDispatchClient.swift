@@ -289,7 +289,8 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
                 let error = httpError(response)
                 let errcode = SalemXProductionDispatchErrorSanitizer.loggedErrcode(from: response.data)
                 let errorText = SalemXProductionDispatchErrorSanitizer.loggedErrorText(from: response.data)
-                MXLog.error("Production dispatch HTTP failed path=\(path) status=\(response.statusCode) error=\(error) errcode=\(errcode) error_text=\(errorText)")
+                let delivery = SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: response.data)
+                MXLog.error("Production dispatch HTTP failed path=\(path) status=\(response.statusCode) error=\(error) errcode=\(errcode) error_text=\(errorText) delivery=\(delivery)")
                 if authenticationRetryAllowed, case .http(.authentication, _) = error {
                     if Task.isCancelled { return .failure(.cancelled) }
                     MXLog.info("Production dispatch retrying once after authentication failure path=\(path)")

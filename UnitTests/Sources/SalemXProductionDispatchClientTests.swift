@@ -173,6 +173,41 @@ struct SalemXProductionDispatchClientTests {
     }
 
     @Test
+    func pushKitCapabilityTokenUsesAPNsHexNotMatrixBase64() {
+        let token = Data([0x01, 0x23, 0xab, 0xcd])
+        let hex = SalemXPushKitTokenEncoding.apnsDeviceTokenHex(from: token)
+
+        #expect(hex == "0123abcd")
+        #expect(hex != token.base64EncodedString())
+        #expect(SalemXPushKitTokenEncoding.isAPNsHexToken(hex))
+        #expect(!SalemXPushKitTokenEncoding.isAPNsHexToken(token.base64EncodedString()))
+        #expect(!SalemXPushKitTokenEncoding.isAPNsHexToken(""))
+        #expect(SalemXProductionDispatchAPNsEnvironment.capabilityRegistrationEnvironment == .development)
+    }
+
+    @Test
+    func deliveryDiagnosticsAreRedactedAndDoNotRetryHints() {
+        let payload = Data(#"""
+        {"errcode":"M_DIRECT_CALL_APNS_DELIVERY_FAILED","error":"APNs delivery failed.",
+         "blocked_reason":"apns_sandbox_send_http_failure_redacted","apns_environment":"sandbox",
+         "background_apns_failure_reason":"BadDeviceToken","pushkit_upload_token_is_hex":false,
+         "pushkit_upload_environment":"production","token":"should-not-appear"}
+        """#.utf8)
+        let nested = Data(#"""
+        {"errcode":"M_DIRECT_CALL_APNS_DELIVERY_FAILED","error":"APNs delivery failed.",
+         "diagnostics":{"blocked_reason":"none","apns_environment":"sandbox",
+         "apns_failure_reason":"none","pushkit_upload_token_is_hex":true,
+         "pushkit_upload_environment":"development"}}
+        """#.utf8)
+        let missing = Data(#"{"errcode":"M_DIRECT_CALL_APNS_DELIVERY_FAILED","error":"APNs delivery failed."}"#.utf8)
+
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: payload) == "blocked=apns_sandbox_send_http_failure_redacted apns_env=sandbox failure=BadDeviceToken token_hex=false upload_env=production")
+        #expect(!SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: payload).contains("should-not-appear"))
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: nested) == "blocked=none apns_env=sandbox failure=none token_hex=true upload_env=development")
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: missing) == "blocked=none apns_env=none failure=none token_hex=unknown upload_env=none")
+    }
+
+    @Test
     func ambiguousSendRemainsAmbiguousAndIsNotRetried() async {
         let transport = DispatchTransportSpy(response: .failure(.tokenUnavailable))
         let result = await makeClient(transport: transport).sendPrepared(sendRequest())

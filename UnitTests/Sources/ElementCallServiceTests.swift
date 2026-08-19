@@ -3082,19 +3082,21 @@ final class ElementCallServiceTests {
         clientProxy.setPusherWithClosure = { _ in }
         service.setClientProxy(clientProxy)
 
+        let tokenData = Data("capability-token".utf8)
+        let expectedHexToken = SalemXPushKitTokenEncoding.apnsDeviceTokenHex(from: tokenData)
         await confirmation { confirmation in
             capabilityClient.registrationHandler = { request in
-                guard request.token == Data("capability-token".utf8).base64EncodedString() else { return }
+                guard request.token == expectedHexToken else { return }
                 confirmation()
             }
             service.pushRegistry(pushRegistry,
-                                 didUpdate: PKPushCredentialsMock(token: Data("capability-token".utf8)),
+                                 didUpdate: PKPushCredentialsMock(token: tokenData),
                                  for: .voIP)
             try? await Task.sleep(for: .milliseconds(100))
         }
 
         let matchingRequests = capabilityClient.registrationRequests.filter {
-            $0.token == Data("capability-token".utf8).base64EncodedString()
+            $0.token == expectedHexToken
         }
         let request = try #require(matchingRequests.first)
         #expect(matchingRequests.count == 1)
@@ -3103,7 +3105,10 @@ final class ElementCallServiceTests {
         #expect(request.intents == [.audio])
         #expect(request.receiverHandoff == .matrixRTCElementCall)
         #expect(request.appSessionGeneration == "opaque-generation")
-        #expect(request.token == Data("capability-token".utf8).base64EncodedString())
+        #expect(request.environment == SalemXProductionDispatchAPNsEnvironment.capabilityRegistrationEnvironment)
+        #expect(request.token == expectedHexToken)
+        #expect(request.token != tokenData.base64EncodedString())
+        #expect(SalemXPushKitTokenEncoding.isAPNsHexToken(request.token))
         #expect(String(describing: request) == "SalemXProductionDispatchCapabilityRegistrationRequest(<redacted>)")
     }
 

@@ -2563,12 +2563,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             }
         }
 
-        #if DEBUG
-        let environment = SalemXProductionDispatchEnvironment.development
-        #else
-        let environment = SalemXProductionDispatchEnvironment.production
-        #endif
-        let request = SalemXProductionDispatchCapabilityRegistrationRequest(token: voIPPushToken.base64EncodedString(),
+        let environment = SalemXProductionDispatchAPNsEnvironment.capabilityRegistrationEnvironment
+        let request = SalemXProductionDispatchCapabilityRegistrationRequest(token: SalemXPushKitTokenEncoding.apnsDeviceTokenHex(from: voIPPushToken),
                                                                             environment: environment,
                                                                             appSessionGeneration: configuration.appSessionGeneration,
                                                                             capabilityExpiresInSeconds: configuration.capabilityExpiresInSeconds)
@@ -2583,7 +2579,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         case .success:
             registeredProductionDispatchCapability = registrationIdentity
             productionDispatchCapabilityRetryCount = 0
-            MXLog.info("Production direct-call capability registration succeeded.")
+            MXLog.info("Production direct-call capability registration succeeded. token_format=apns_hex token_bytes=\(voIPPushToken.count) environment=\(environment.rawValue)")
         case .failure(let error):
             MXLog.error("Production direct-call capability registration failed: \(error)")
             guard productionDispatchCapabilityRetryCount < 2 else {

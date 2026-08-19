@@ -7,6 +7,16 @@
 
 import Foundation
 
+enum SalemXPushKitTokenEncoding {
+    static func apnsDeviceTokenHex(from token: Data) -> String {
+        token.map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func isAPNsHexToken(_ token: String) -> Bool {
+        !token.isEmpty && token.count.isMultiple(of: 2) && token.allSatisfy(\.isHexDigit)
+    }
+}
+
 enum SalemXProductionDispatchProtocolVersion: Int, Codable {
     case v1 = 1
 }
@@ -18,6 +28,16 @@ enum SalemXProductionDispatchIntent: String, Codable {
 enum SalemXProductionDispatchEnvironment: String, Codable {
     case development
     case production
+}
+
+enum SalemXProductionDispatchAPNsEnvironment {
+    static var capabilityRegistrationEnvironment: SalemXProductionDispatchEnvironment {
+        #if DEBUG || SALEMX_PRODUCTION_DISPATCH_ACTIVATION
+        .development
+        #else
+        .production
+        #endif
+    }
 }
 
 enum SalemXProductionDispatchReceiverHandoff: String, Codable {
@@ -342,6 +362,32 @@ enum SalemXProductionDispatchErrorSanitizer {
         sanitizeErrorText(jsonString("error", from: data))
     }
 
+    static func loggedDeliveryDiagnostics(from data: Data) -> String {
+        let object = jsonObject(from: data)
+        let nested = object?["diagnostics"] as? [String: Any]
+        func stringValue(_ key: String) -> String? {
+            (object?[key] as? String) ?? (nested?[key] as? String)
+        }
+        func boolValue(_ key: String) -> Bool? {
+            (object?[key] as? Bool) ?? (nested?[key] as? Bool)
+        }
+
+        let tokenHex: String
+        if let value = boolValue("pushkit_upload_token_is_hex") ?? boolValue("real_invite_lookup_token_is_hex") {
+            tokenHex = value ? "true" : "false"
+        } else {
+            tokenHex = "unknown"
+        }
+
+        return [
+            "blocked=\(sanitizeErrcode(stringValue("blocked_reason")))",
+            "apns_env=\(sanitizeErrcode(stringValue("apns_environment")))",
+            "failure=\(sanitizeErrcode(stringValue("background_apns_failure_reason") ?? stringValue("apns_failure_reason")))",
+            "token_hex=\(tokenHex)",
+            "upload_env=\(sanitizeErrcode(stringValue("pushkit_upload_environment") ?? stringValue("real_invite_lookup_environment")))"
+        ].joined(separator: " ")
+    }
+
     static func sanitizeErrcode(_ value: String?) -> String {
         guard let value, !value.isEmpty else {
             return "none"
@@ -379,9 +425,10 @@ enum SalemXProductionDispatchErrorSanitizer {
     }
 
     private static func jsonString(_ key: String, from data: Data) -> String? {
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        return object[key] as? String
+        jsonObject(from: data)?[key] as? String
+    }
+
+    private static func jsonObject(from data: Data) -> [String: Any]? {
+        try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 }
