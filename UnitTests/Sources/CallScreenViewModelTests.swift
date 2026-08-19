@@ -1197,14 +1197,14 @@ extension CallScreenViewModelTests {
     }
 
     @Test
-    func audioCallAppliesVoiceChatCategoryOnceWithoutFightingWebRTC() throws {
+    func audioCallLeavesWebRTCAudioSessionUntouched() throws {
         let callScreen = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift")
         let session = try repositorySource(named: "ElementX/Sources/Services/ElementCall/CallVoiceAudioSession.swift")
         let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
-        #expect(session.contains("voicechat_once=true"))
-        #expect(session.contains("try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])"))
+        #expect(session.contains("native_category=false"))
         #expect(session.contains("try session.overrideOutputAudioPort(speakerEnabled ? .speaker : .none)"))
         #expect(session.contains("static func lockAfterCapture()"))
+        #expect(!session.contains("setCategory"))
         #expect(!session.contains("setActive("))
         #expect(!session.contains("options: [.defaultToSpeaker"))
         #expect(!session.contains("options: [.allowBluetoothHFP, .defaultToSpeaker]"))
@@ -1231,7 +1231,7 @@ extension CallScreenViewModelTests {
     func appStoreLinePresentsIncomingCallsFromMatrixRTCPresence() throws {
         let appCoordinator = try repositorySource(named: "ElementX/Sources/Application/AppCoordinator.swift")
         let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
-        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session voicechat-category-once"))
+        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session no-native-category"))
         #expect(callService.contains("[MATRIXRTC-PRESENCE-INCOMING]"))
         #expect(callService.contains("source=matrixrtc_presence"))
         #expect(callService.contains("Production dispatch confirming local MatrixRTC membership after \\(source)."))

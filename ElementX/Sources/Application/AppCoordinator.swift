@@ -94,7 +94,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         let appVersion = InfoPlistReader.main.bundleShortVersionString
         let appBuild = InfoPlistReader.main.bundleVersion
         MXLog.info("\(appName) \(appVersion) (\(appBuild))")
-        MXLog.info("App Store line build: callkit-end-on-hangup unstick-handset audio-only no-video-button outgoing-hangup-callkit answer-on-active earpiece-voicechat no-audio-session-loop reassert-voicechat-category matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session voicechat-category-once")
+        MXLog.info("App Store line build: callkit-end-on-hangup unstick-handset audio-only no-video-button outgoing-hangup-callkit answer-on-active earpiece-voicechat no-audio-session-loop reassert-voicechat-category matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session no-native-category")
         
         if ProcessInfo.processInfo.environment["RESET_APP_SETTINGS"].map(Bool.init) == true {
             AppSettings.resetAllSettings()

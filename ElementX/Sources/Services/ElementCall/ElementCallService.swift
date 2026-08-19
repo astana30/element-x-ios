@@ -1775,6 +1775,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             || incomingCallID?.startMode == .audio
             || ongoingCallID?.startMode == .audio
             || pendingLegacyAnswerCallID?.startMode == .audio {
+            // Log-only: WKWebView WebRTC owns the audio session.
             CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=callkit_activated")
         }
@@ -1840,6 +1841,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         pendingLegacyAnswerCallID = incomingCallID
         if incomingCallID.startMode == .audio {
             keptAliveAudioCallKitID = incomingCallID.callKitID
+            // Log-only: WKWebView WebRTC owns the audio session.
             CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=answer")
         }
