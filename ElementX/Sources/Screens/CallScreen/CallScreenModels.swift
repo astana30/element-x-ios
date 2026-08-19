@@ -84,6 +84,7 @@ enum CallScreenViewAction: CustomStringConvertible {
     case toggleSpeakerphone
     case mediaCapturePermissionGranted
     case outputDeviceSelected(deviceID: String)
+    case audioPlaybackStarted
     case widgetAction(message: String)
     case elementCallMediaDiagnostics(message: String)
     case callWebViewCreated(webViewID: UUID, sessionIdentity: CallWebViewSessionIdentity)
@@ -113,6 +114,8 @@ enum CallScreenViewAction: CustomStringConvertible {
             "mediaCapturePermissionGranted"
         case .outputDeviceSelected:
             "outputDeviceSelected"
+        case .audioPlaybackStarted:
+            "audioPlaybackStarted"
         case .widgetAction:
             "widgetAction"
         case .elementCallMediaDiagnostics:
@@ -332,6 +335,10 @@ enum CallScreenJavaScriptMessageName: String, CaseIterable {
     case showNativeOutputDevicePicker
     /// Used to determine if the webview has selected the earpiece or not.
     case onOutputDeviceSelect
+    /// Newer Element Call callback; same payload as `onOutputDeviceSelect`.
+    case onAudioDeviceSelect
+    /// Fired the first time Element Call starts playing audio in the webview.
+    case onAudioPlaybackStarted
     /// Used to handle the webview back button
     case onBackButtonPressed
     
@@ -419,10 +426,16 @@ enum CallScreenJavaScriptMessageName: String, CaseIterable {
                 window.webkit.messageHandlers.\(rawValue).postMessage("");
             };
             """
-        case .onOutputDeviceSelect:
+        case .onOutputDeviceSelect, .onAudioDeviceSelect:
             """
             window.controls.\(rawValue) = (id) => {
                 window.webkit.messageHandlers.\(rawValue).postMessage(id);
+            };
+            """
+        case .onAudioPlaybackStarted:
+            """
+            window.controls.\(rawValue) = () => {
+                window.webkit.messageHandlers.\(rawValue).postMessage("");
             };
             """
         case .onBackButtonPressed:

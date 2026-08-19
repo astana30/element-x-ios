@@ -85,6 +85,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private var timeoutTask: Task<Void, Never>?
 
     private var lastAudioRouteApply = Date.distantPast
+    private var advertisedSpeakerDeviceID = "Speaker"
         
     /// Designated initialiser
     /// - Parameters:
@@ -209,9 +210,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .mediaCapturePermissionGranted:
             if shouldControlAudioRoute {
                 CallVoiceAudioSession.lockAfterCapture()
+                schedulePreferredAudioRouteEnforcement()
             }
         case .outputDeviceSelected(deviceID: let deviceID):
             handleOutputDeviceSelected(deviceID: deviceID)
+        case .audioPlaybackStarted:
+            schedulePreferredAudioRouteEnforcement()
         case .widgetAction(let message):
             Task { await handleWidgetAction(message: message) }
         case .elementCallMediaDiagnostics(let message):
@@ -334,6 +338,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         activeCallWebViewBinding = binding
+        schedulePreferredAudioRouteEnforcement()
     }
 
     private func handleCallWebViewDismantled(_ identity: CallWebViewDocumentIdentity) {
@@ -368,15 +373,17 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
         recordMatrixRTCWidgetRequestIfNeeded(message)
 
-        if timeoutTask != nil,
-           let decodedMessage = try? DecodedWidgetMessage.decode(message: message),
+        if let decodedMessage = try? DecodedWidgetMessage.decode(message: message),
            decodedMessage.hasLoaded {
-            // This means that the call room was joined succesfully, we can stop the timeout task
-            timeoutTask = nil
-            #if DEBUG
-            SalemXStage2FSimulatorSignalingDebug.recordReceiverElementCallLoaded()
-            #endif
-            MXLog.info("Element Call media diagnostics: content_loaded=true start_mode=\(configuration.startMode)")
+            if timeoutTask != nil {
+                // This means that the call room was joined succesfully, we can stop the timeout task
+                timeoutTask = nil
+                #if DEBUG
+                SalemXStage2FSimulatorSignalingDebug.recordReceiverElementCallLoaded()
+                #endif
+                MXLog.info("Element Call media diagnostics: content_loaded=true start_mode=\(configuration.startMode)")
+            }
+            schedulePreferredAudioRouteEnforcement()
         }
 
         if await handleNativeWidgetActionIfNeeded(message) {
@@ -562,6 +569,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     
     /// This should always match the web app value
     private static let earpieceID = "earpiece-id"
+    private static let speakerDeviceID = "Speaker"
 
     private static let embeddedWebContentResetJavaScript = """
     (() => {
@@ -612,16 +620,31 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             return
         }
 
-        // WebRTC advertises the current OS output. Do not override the session;
-        // only follow the native earpiece id for the in-call speaker button state.
-        guard deviceID == Self.earpieceID else {
+        // Element Call's iOS earpiece is virtual: it ducks and pans the loudspeaker
+        // device. Follow that selection for the in-call button and proximity sensor
+        // without changing AVAudioSession category.
+        if deviceID == Self.earpieceID {
+            preferredAudioRoute = .earpiece
+            state.isSpeakerphoneEnabled = false
+            UIDevice.current.isProximityMonitoringEnabled = true
+            CallVoiceAudioSession.logCurrentRoute(speakerEnabled: false)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-VIRTUAL-EARPIECE] selected=earpiece speaker_ui=false")
             return
         }
 
-        preferredAudioRoute = .earpiece
-        CallVoiceAudioSession.logCurrentRoute(speakerEnabled: false)
+        if deviceID == advertisedSpeakerDeviceID || deviceID == Self.speakerDeviceID {
+            preferredAudioRoute = .speaker
+            state.isSpeakerphoneEnabled = true
+            UIDevice.current.isProximityMonitoringEnabled = false
+            CallVoiceAudioSession.logCurrentRoute(speakerEnabled: true)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-VIRTUAL-EARPIECE] selected=speaker speaker_ui=true")
+            return
+        }
+
         state.isSpeakerphoneEnabled = false
-        UIDevice.current.isProximityMonitoringEnabled = true
+        UIDevice.current.isProximityMonitoringEnabled = false
+        CallVoiceAudioSession.logCurrentRoute(speakerEnabled: false)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-VIRTUAL-EARPIECE] selected=other speaker_ui=false")
     }
 
     private func handleSpeakerphoneToggle() {
@@ -650,15 +673,14 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         CallVoiceAudioSession.logCurrentRoute(speakerEnabled: state.isSpeakerphoneEnabled)
+        Task { await publishControlledAudioDevicesIfNeeded() }
     }
     
     private func applyPreferredAudioRouteIfNeeded(force: Bool = false, userInitiated: Bool = false) {
-        guard let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first else {
-            return
-        }
-
         guard shouldControlAudioRoute else {
-            state.isSpeakerphoneEnabled = currentOutput.portType == .builtInSpeaker
+            if let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first {
+                state.isSpeakerphoneEnabled = currentOutput.portType == .builtInSpeaker
+            }
             UIDevice.current.isProximityMonitoringEnabled = false
             return
         }
@@ -669,16 +691,16 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         lastAudioRouteApply = Date()
 
         guard userInitiated else {
-            state.isSpeakerphoneEnabled = currentOutput.portType == .builtInSpeaker
-            UIDevice.current.isProximityMonitoringEnabled = currentOutput.portType == .builtInReceiver
+            // Virtual earpiece still plays through the loudspeaker. Do not treat
+            // OS Speaker as the in-call speaker button.
             CallVoiceAudioSession.logCurrentRoute(speakerEnabled: state.isSpeakerphoneEnabled)
+            Task { await publishControlledAudioDevicesIfNeeded() }
             return
         }
         
         switch preferredAudioRoute {
         case .systemDefault:
-            state.isSpeakerphoneEnabled = currentOutput.portType == .builtInSpeaker
-            UIDevice.current.isProximityMonitoringEnabled = currentOutput.portType == .builtInReceiver
+            break
         case .speaker:
             setSpeakerphoneEnabled(true)
         case .earpiece:
@@ -691,6 +713,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
         state.isSpeakerphoneEnabled = enabled
         UIDevice.current.isProximityMonitoringEnabled = !enabled
+        Task { await publishControlledAudioDevicesIfNeeded() }
     }
     
     private func handleBackwardsNavigation() async {
@@ -1178,31 +1201,81 @@ extension CallScreenViewModel {
         return await postJSONToWidget(json)
     }
     
-    /// This function updates the list of available audio outputs on the web side
-    /// however since we actually handle switching the audio output through the OS,
-    /// this is only used to inform the webview when the speaker is selected,
-    /// so that the option to use the earpiece can be displayed.
-    private func updateOutputsListOnWeb() async {
-        guard let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first else {
+    /// Publishes the current loudspeaker to Element Call with `forEarpiece: true`.
+    /// Element Call then adds virtual `earpiece-id` (ducked speaker + pan) and
+    /// defaults audio 1:1 calls to that device. Do not send the dummy device:
+    /// without `forEarpiece` EC never creates earpiece mode.
+    private func publishControlledAudioDevicesIfNeeded() async {
+        guard shouldControlAudioRoute else {
             return
         }
-        
-        let deviceList = if currentOutput.portType == .builtInSpeaker {
-            // This allows the webview to display the earpiece option
-            "{id: '\(currentOutput.uid)', name: '\(currentOutput.portName)', forEarpiece: true, isSpeaker: true}"
-        } else {
-            // Doesn't matter because the switch is handled through the OS
-            "{id: 'dummy', name: 'dummy'}"
-        }
-        
-        let javaScript = "window.controls.setAvailableOutputDevices([\(deviceList)])"
         guard let binding = currentCallWebViewBinding else {
             return
         }
 
+        let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first
+        let devices: [[String: Any]]
+        let selectedID: String
+        if CallVoiceAudioSession.isExternalRoute(currentOutput?.portType) {
+            let deviceID = currentOutput?.uid ?? "external"
+            devices = [[
+                "id": deviceID,
+                "name": "Headset",
+                "forEarpiece": false,
+                "isSpeaker": false
+            ]]
+            selectedID = deviceID
+        } else {
+            advertisedSpeakerDeviceID = Self.speakerDeviceID
+            devices = [[
+                "id": Self.speakerDeviceID,
+                "name": "Speaker",
+                "forEarpiece": true,
+                "isSpeaker": true
+            ]]
+            selectedID = preferredAudioRoute == .speaker ? Self.speakerDeviceID : Self.earpieceID
+        }
+
+        guard JSONSerialization.isValidJSONObject(devices),
+              let devicesData = try? JSONSerialization.data(withJSONObject: devices),
+              let devicesJSON = String(data: devicesData, encoding: .utf8),
+              let selectedLiteral = Self.javaScriptStringLiteral(selectedID) else {
+            MXLog.error("Failed encoding Element Call audio devices")
+            return
+        }
+
+        let javaScript = """
+        (() => {
+            const controls = window.controls;
+            if (!controls) {
+                return false;
+            }
+            const setDevices = controls.setAvailableAudioDevices || controls.setAvailableOutputDevices;
+            const setDevice = controls.setAudioDevice || controls.setOutputDevice;
+            if (typeof setDevices !== "function") {
+                return false;
+            }
+            setDevices(\(devicesJSON));
+            if (typeof setDevice === "function") {
+                setDevice(\(selectedLiteral));
+            }
+            return true;
+        })()
+        """
+
         do {
             let result = try await binding.javaScriptEvaluator(javaScript)
-            MXLog.verbose("Element Call output update evaluation completed: result_present=\(result != nil)")
+            let published = result as? Bool ?? false
+            let selectedLabel: String
+            if selectedID == Self.earpieceID {
+                selectedLabel = "earpiece"
+            } else if selectedID == Self.speakerDeviceID {
+                selectedLabel = "speaker"
+            } else {
+                selectedLabel = "other"
+            }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-VIRTUAL-EARPIECE] published=\(published) selected=\(selectedLabel) speaker_ui=\(state.isSpeakerphoneEnabled)")
+            MXLog.verbose("Element Call output update evaluation completed: published=\(published)")
         } catch {
             MXLog.error("Received javascript evaluation error: \(error)")
         }

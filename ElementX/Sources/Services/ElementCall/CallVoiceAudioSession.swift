@@ -63,6 +63,10 @@ enum CallVoiceAudioSession {
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-ROUTE] native_category=false locked=\(isLockedAfterCapture) speaker_enabled=\(speakerEnabled) category=\(session.category.rawValue) mode=\(session.mode.rawValue) options=\(session.categoryOptions.rawValue) output=\(outputName)")
     }
 
+    static func isExternalRoute(_ port: AVAudioSession.Port?) -> Bool {
+        isExternalOutput(port)
+    }
+
     private static func isExternalOutput(_ port: AVAudioSession.Port?) -> Bool {
         switch port {
         case .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .headphones, .headsetMic, .carAudio:

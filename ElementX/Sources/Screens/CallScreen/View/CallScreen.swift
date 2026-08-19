@@ -571,9 +571,11 @@ struct CallView: UIViewRepresentable {
                 DispatchQueue.main.async {
                     self.tapRoutePickerView()
                 }
-            case .onOutputDeviceSelect:
+            case .onOutputDeviceSelect, .onAudioDeviceSelect:
                 guard let deviceID = message.body as? String else { return }
                 viewModelContext?.send(viewAction: .outputDeviceSelected(deviceID: deviceID))
+            case .onAudioPlaybackStarted:
+                viewModelContext?.send(viewAction: .audioPlaybackStarted)
             case .onBackButtonPressed:
                 viewModelContext?.send(viewAction: .navigateBack)
             }
