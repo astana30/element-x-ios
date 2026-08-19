@@ -1651,12 +1651,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     func ownsNativeMatrixRTCAudio(roomID: String) -> Bool {
-        nativeAudioController.activeRoomID == roomID && nativeAudioController.state != .inactive
+        nativeAudioController.activeRoomID == roomID && nativeAudioController.isActive
     }
 
     func nativeMatrixRTCAudioState(roomID: String) -> MatrixRTCNativeAudioState {
         guard nativeAudioController.activeRoomID == roomID else {
-            return .inactive
+            return MatrixRTCNativeAudioState.inactive
         }
         return nativeAudioController.state
     }

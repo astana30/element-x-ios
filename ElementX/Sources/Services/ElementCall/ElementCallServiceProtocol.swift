@@ -266,8 +266,6 @@ protocol ElementCallServiceProtocol {
     func setAudioEnabled(_ enabled: Bool, roomID: String)
 
     func ownsNativeMatrixRTCAudio(roomID: String) -> Bool
-
-    func nativeMatrixRTCAudioState(roomID: String) -> MatrixRTCNativeAudioState
 }
 
 extension ElementCallServiceProtocol {
@@ -288,8 +286,15 @@ extension ElementCallServiceProtocol {
     func ownsNativeMatrixRTCAudio(roomID: String) -> Bool {
         false
     }
+}
 
-    func nativeMatrixRTCAudioState(roomID: String) -> MatrixRTCNativeAudioState {
-        .inactive
+extension MatrixRTCNativeAudioJoining {
+    var isActive: Bool {
+        switch state {
+        case MatrixRTCNativeAudioState.connecting, MatrixRTCNativeAudioState.connected:
+            true
+        case MatrixRTCNativeAudioState.inactive:
+            false
+        }
     }
 }

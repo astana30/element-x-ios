@@ -115,6 +115,14 @@ final class MatrixRTCNativeAudioTests {
         let protocolSource = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallServiceProtocol.swift")
         #expect(protocolSource.contains("enum MatrixRTCNativeAudioState"))
         #expect(protocolSource.contains("protocol MatrixRTCNativeAudioJoining"))
+        #expect(protocolSource.contains("var isActive: Bool"))
+
+        let callService = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+        #expect(callService.contains("nativeAudioController.isActive"))
+        #expect(!callService.contains("!= .inactive"))
+
+        let generatedMocks = try Self.source(named: "ElementX/Sources/Mocks/Generated/GeneratedMocks.swift")
+        #expect(!generatedMocks.contains("MatrixRTCNativeAudioState"))
 
         let pbxproj = try Self.source(named: "SalemX.xcodeproj/project.pbxproj")
         for filename in [
@@ -175,7 +183,7 @@ final class MatrixRTCNativeAudioTests {
 
         await spy.joinIncomingAudio(roomID: "!room:example.com", clientProxy: ClientProxyMock(.init()))
         #expect(service.ownsNativeMatrixRTCAudio(roomID: "!room:example.com"))
-        #expect(service.nativeMatrixRTCAudioState(roomID: "!room:example.com") == .connected)
+        #expect(service.nativeMatrixRTCAudioState(roomID: "!room:example.com") == MatrixRTCNativeAudioState.connected)
     }
 
     private static func source(named name: String) throws -> String {
