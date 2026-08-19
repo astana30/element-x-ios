@@ -1787,6 +1787,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         // https://stackoverflow.com/a/41230020/730924
         update.remoteHandle = .init(type: .generic, value: roomID)
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-CALLKIT] room_id=\(roomID) start_mode=\(incomingStartMode) has_video=\(update.hasVideo) caller_name_source=roomDisplayName")
+        startNativeIncomingKeyListenerIfNeeded(callID)
         
         callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
             if let error {
@@ -2096,6 +2097,23 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         resumePendingLegacyAnswer(provider: provider)
     }
 
+    private func startNativeIncomingKeyListenerIfNeeded(_ incomingCallID: CallID?) {
+        guard let incomingCallID else {
+            return
+        }
+        guard nativeAudioJoinCallKitID == nil else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=early_listen_skip reason=join_started")
+            return
+        }
+        guard let clientProxy else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=early_listen_skip reason=wait_session")
+            return
+        }
+        
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=early_listen_request")
+        nativeAudioController.prepareIncomingKeyListener(roomID: incomingCallID.roomID, clientProxy: clientProxy)
+    }
+    
     private func startNativeMatrixRTCAudioIfNeeded(_ incomingCallID: CallID?) {
         guard let incomingCallID,
               incomingCallID.startMode == .audio,
@@ -3419,6 +3437,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         update.remoteHandle = .init(type: .generic, value: "salemx-call")
 
         MXLog.info("Element Call lifecycle diagnostics: session_global_incoming=true start_mode=\(callID.startMode)")
+        startNativeIncomingKeyListenerIfNeeded(callID)
 
         callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
             if let error {

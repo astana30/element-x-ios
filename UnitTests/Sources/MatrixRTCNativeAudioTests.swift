@@ -152,6 +152,16 @@ final class MatrixRTCNativeAudioTests {
         #expect(handoff.contains("stage=remote_key"))
         #expect(handoff.contains("stage=local_key"))
         #expect(handoff.contains("org.matrix.msc3819.receive.to_device:io.element.call.encryption_keys"))
+        #expect(handoff.contains("enum MatrixRTCNativeEncryptionPeer"))
+        #expect(handoff.contains("prepareIncomingKeyListener"))
+        #expect(handoff.contains("lastRemoteDeviceID"))
+        #expect(handoff.contains("shouldNegotiateCapabilities"))
+        #expect(handoff.contains("stage=early_listen"))
+        
+        let elementCallService = try #require(try? String(contentsOfFile: "\(projectRoot)/ElementX/Sources/Services/ElementCall/ElementCallService.swift", encoding: .utf8))
+        #expect(elementCallService.contains("startNativeIncomingKeyListenerIfNeeded"))
+        #expect(elementCallService.contains("early_listen_request"))
+        #expect(elementCallService.contains("early_listen_skip"))
     }
 
     @Test
@@ -193,7 +203,8 @@ final class MatrixRTCNativeAudioTests {
         let widgetDriver = ElementCallWidgetDriverMock()
         widgetDriver.underlyingWidgetID = "widget"
         widgetDriver.underlyingMessagePublisher = .init()
-        widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationReturnValue = .failure(.failedBuildingWidgetDriver)
+        widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationReturnValue = .success(URL(string: "https://call.element.io")!)
+        widgetDriver.handleMessageReturnValue = .success(true)
         let room = JoinedRoomProxyMock(.init(id: "!room:example.com", name: "Room"))
         room.elementCallWidgetDriverDeviceIDReturnValue = widgetDriver
         let clientProxy = TokenClientProxyMock(.init(userID: "@me:example.com", deviceID: "DEVICE", homeserver: "https://matrix.example"))
@@ -219,6 +230,37 @@ final class MatrixRTCNativeAudioTests {
         try? await Task.sleep(for: .milliseconds(80))
         #expect(liveKit.disconnectCount == 1)
         #expect(signalingHTTP.requests.contains { $0.method == "PUT" && $0.url.path.contains("org.matrix.msc3401.call.member") })
+    }
+    
+    @Test
+    func encryptionPeerDeviceIDTargetsSingleRemoteDevice() {
+        #expect(MatrixRTCNativeEncryptionPeer.peerDeviceID(from: []) == "*")
+        #expect(MatrixRTCNativeEncryptionPeer.peerDeviceID(from: ["aqFw8fCpKO"]) == "aqFw8fCpKO")
+        #expect(MatrixRTCNativeEncryptionPeer.peerDeviceID(from: ["aqFw8fCpKO", "x310zhsKGJ"]) == "*")
+        #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "@r2:mertis.kz:aqFw8fCpKO") == "aqFw8fCpKO")
+        #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "@r2:mertis.kz") == nil)
+        #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "no-separator") == nil)
+    }
+    
+    @Test
+    func widgetBridgeStartCanSkipCapabilityNegotiation() async {
+        let widgetDriver = ElementCallWidgetDriverMock()
+        widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationReturnValue = .success(URL(string: "https://call.element.io")!)
+        widgetDriver.handleMessageReturnValue = .success(true)
+        
+        let widgetBridge = MatrixRTCNativeWidgetBridge(widgetDriver: widgetDriver)
+        let started = await widgetBridge.start(baseURL: URL(string: "https://call.element.io")!,
+                                               clientID: "io.element.call",
+                                               shouldNegotiateCapabilities: false)
+        
+        #expect(started)
+        #expect(widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationCallsCount == 1)
+        
+        let restarted = await widgetBridge.start(baseURL: URL(string: "https://call.element.io")!,
+                                                 clientID: "io.element.call",
+                                                 shouldNegotiateCapabilities: false)
+        #expect(restarted)
+        #expect(widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationCallsCount == 1)
     }
 
     @Test

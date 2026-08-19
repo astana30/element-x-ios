@@ -2620,7 +2620,9 @@ final class MatrixRTCNativeWidgetBridge {
     private var encryptionKeyHandler: ((MatrixRTCWidgetEncryptionKey) -> Void)?
     private let capabilitiesLock = NSLock()
     private var didAnswerCapabilities = false
-
+    private var hasStartedDriver = false
+    private var hasNegotiatedCapabilities = false
+    
     init(widgetDriver: ElementCallWidgetDriverProtocol) {
         self.widgetDriver = widgetDriver
         widgetDriver.messagePublisher
@@ -2631,20 +2633,28 @@ final class MatrixRTCNativeWidgetBridge {
             .store(in: &cancellables)
     }
 
-    func start(baseURL: URL, clientID: String) async -> Bool {
-        switch await widgetDriver.start(baseURL: baseURL,
-                                        clientID: clientID,
-                                        colorScheme: .dark,
-                                        rageshakeURL: nil,
-                                        analyticsConfiguration: nil) {
-        case .success:
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_start ok=true")
-            await negotiateCapabilities()
-            return true
-        case .failure:
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_start ok=false")
-            return false
+    func start(baseURL: URL, clientID: String, shouldNegotiateCapabilities: Bool = true) async -> Bool {
+        if !hasStartedDriver {
+            switch await widgetDriver.start(baseURL: baseURL,
+                                            clientID: clientID,
+                                            colorScheme: .dark,
+                                            rageshakeURL: nil,
+                                            analyticsConfiguration: nil) {
+            case .success:
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_start ok=true")
+                hasStartedDriver = true
+            case .failure:
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_start ok=false")
+                return false
+            }
         }
+        
+        if shouldNegotiateCapabilities, !hasNegotiatedCapabilities {
+            await negotiateCapabilities()
+            hasNegotiatedCapabilities = true
+        }
+        
+        return hasStartedDriver
     }
 
     func requestOpenIDToken() async -> MatrixRTCOpenIDToken? {
@@ -2702,6 +2712,8 @@ final class MatrixRTCNativeWidgetBridge {
         continuations.values.forEach { $0.resume(returning: nil) }
         continuations.removeAll()
         cancellables.removeAll()
+        hasStartedDriver = false
+        hasNegotiatedCapabilities = false
     }
 
     private func negotiateCapabilities() async {
@@ -2912,6 +2924,20 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
     }
 }
 
+enum MatrixRTCNativeEncryptionPeer {
+    static func deviceID(fromIdentity identity: String) -> String? {
+        guard let separatorIndex = identity.lastIndex(of: ":") else {
+            return nil
+        }
+        
+        let deviceID = String(identity[identity.index(after: separatorIndex)...])
+        return deviceID.isEmpty ? nil : deviceID
+    }
+    
+    static func peerDeviceID(from deviceIDs: [String]) -> String {
+        Set(deviceIDs).count == 1 ? deviceIDs[0] : "*"
+    }
+}
 
 final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     private let signalingClient: MatrixRTCNativeSignalingClient
@@ -2930,8 +2956,11 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     private var homeserverURL: URL?
     private var roomID: String?
     private var joinTask: Task<Void, Never>?
-
-    init(signalingClient: MatrixRTCNativeSignalingClient = MatrixRTCNativeSignalingClient(),
+    private var preparedSession: SessionContext?
+    private var lastRemoteDeviceID: String?
+    private var prepareIncomingKeyListenerTask: Task<Void, Never>?
+        
+        init(signalingClient: MatrixRTCNativeSignalingClient = MatrixRTCNativeSignalingClient(),
          liveKitClient: MatrixRTCNativeLiveKitConnecting = MatrixRTCNativeLiveKitClient(),
          widgetBridgeFactory: @escaping (ElementCallWidgetDriverProtocol) -> MatrixRTCNativeWidgetBridge = { MatrixRTCNativeWidgetBridge(widgetDriver: $0) },
          elementCallBaseURL: URL,
@@ -2948,22 +2977,76 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join skipped=already_active")
             return
         }
-
+        
         if isActive {
             leave()
         }
-
+        
+        if joinTask != nil {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join_skip reason=join_in_progress")
+            return
+        }
+        
+        await prepareIncomingKeyListenerTask?.value
+        prepareIncomingKeyListenerTask = nil
+        
         joinGeneration += 1
         let generation = joinGeneration
         activeRoomID = roomID
         self.roomID = roomID
         state = .connecting
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join")
-
+        
         joinTask = Task { [weak self] in
             await self?.performJoin(roomID: roomID, clientProxy: clientProxy, generation: generation)
         }
         await joinTask?.value
+    }
+    
+    func prepareIncomingKeyListener(roomID: String, clientProxy: ClientProxyProtocol) {
+        guard widgetBridge == nil, prepareIncomingKeyListenerTask == nil, joinTask == nil, !isActive else {
+            return
+        }
+        
+        let generation = joinGeneration
+        prepareIncomingKeyListenerTask = Task { @MainActor [weak self] in
+            await self?.performPrepareIncomingKeyListener(roomID: roomID, clientProxy: clientProxy, generation: generation)
+        }
+    }
+
+    private func performPrepareIncomingKeyListener(roomID: String, clientProxy: ClientProxyProtocol, generation: UInt64) async {
+        guard let session = await sessionContext(roomID: roomID, clientProxy: clientProxy, generation: generation, failOnError: false) else {
+            return
+        }
+
+        let widgetBridge = widgetBridgeFactory(session.widgetDriver)
+        widgetBridge.listenForEncryptionKeys { [weak self] key in
+            Task { @MainActor in
+                guard let self else { return }
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key identity=\(key.identity) index=\(key.index)")
+                if let deviceID = MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: key.identity) {
+                    self.lastRemoteDeviceID = deviceID
+                }
+                self.liveKitClient.setRemoteParticipantKey(key.keyBase64, identity: key.identity, index: key.index)
+            }
+        }
+
+        let widgetStarted = await widgetBridge.start(baseURL: elementCallBaseURL,
+                                                     clientID: clientID,
+                                                     shouldNegotiateCapabilities: false)
+        guard widgetStarted else {
+            widgetBridge.stop()
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=early_listen ok=false")
+            return
+        }
+        guard self.widgetBridge == nil else {
+            widgetBridge.stop()
+            return
+        }
+
+        self.widgetBridge = widgetBridge
+        preparedSession = session
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=early_listen ok=true")
     }
 
     func setMicrophoneEnabled(_ enabled: Bool) {
@@ -2974,6 +3057,10 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
 
     func leave() {
         joinGeneration += 1
+        prepareIncomingKeyListenerTask?.cancel()
+        prepareIncomingKeyListenerTask = nil
+        preparedSession = nil
+        lastRemoteDeviceID = nil
         joinTask?.cancel()
         joinTask = nil
 
@@ -3006,19 +3093,36 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     }
 
     private func performJoin(roomID: String, clientProxy: ClientProxyProtocol, generation: UInt64) async {
-        guard let session = await sessionContext(roomID: roomID, clientProxy: clientProxy, generation: generation) else {
+        let session: SessionContext
+        if let preparedSession, preparedSession.roomProxy.id == roomID {
+            session = preparedSession
+            self.preparedSession = nil
+        } else if let freshSession = await sessionContext(roomID: roomID, clientProxy: clientProxy, generation: generation) {
+            session = freshSession
+        } else {
             return
         }
-
-        let widgetBridge = widgetBridgeFactory(session.widgetDriver)
-        widgetBridge.listenForEncryptionKeys { [weak self] key in
-            Task { @MainActor in
-                guard let self, self.joinGeneration == generation else { return }
-                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key identity=\(key.identity) index=\(key.index)")
-                self.liveKitClient.setRemoteParticipantKey(key.keyBase64, identity: key.identity, index: key.index)
+        
+        let widgetBridge: MatrixRTCNativeWidgetBridge
+        if let existingBridge = self.widgetBridge {
+            widgetBridge = existingBridge
+        } else {
+            widgetBridge = widgetBridgeFactory(session.widgetDriver)
+            widgetBridge.listenForEncryptionKeys { [weak self] key in
+                Task { @MainActor in
+                    guard let self, self.joinGeneration == generation else { return }
+                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key identity=\(key.identity) index=\(key.index)")
+                    if let deviceID = MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: key.identity) {
+                        self.lastRemoteDeviceID = deviceID
+                    }
+                    self.liveKitClient.setRemoteParticipantKey(key.keyBase64, identity: key.identity, index: key.index)
+                }
             }
+            self.widgetBridge = widgetBridge
         }
-        let widgetStarted = await widgetBridge.start(baseURL: elementCallBaseURL, clientID: clientID)
+        let widgetStarted = await widgetBridge.start(baseURL: elementCallBaseURL,
+                                                     clientID: clientID,
+                                                     shouldNegotiateCapabilities: true)
         guard isCurrent(generation) else {
             widgetBridge.stop()
             return
@@ -3047,7 +3151,6 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
             return
         }
 
-        self.widgetBridge = widgetBridge
         membership = session.membership
         accessToken = session.accessToken
         homeserverURL = session.homeserverURL
@@ -3075,7 +3178,7 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
                                                             membership: session.membership,
                                                             roomID: roomID,
                                                             peerUserID: peerUserID,
-                                                            peerDeviceID: "*")
+                                                            peerDeviceID: MatrixRTCNativeEncryptionPeer.peerDeviceID(from: [lastRemoteDeviceID].compactMap { $0 }))
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key ok=\(sent)")
         }
 
@@ -3100,23 +3203,29 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         let jwt: MatrixRTCLiveKitJWT
     }
 
-    private func sessionContext(roomID: String, clientProxy: ClientProxyProtocol, generation: UInt64) async -> SessionContext? {
+    private func sessionContext(roomID: String, clientProxy: ClientProxyProtocol, generation: UInt64, failOnError: Bool = true) async -> SessionContext? {
         guard let deviceID = clientProxy.deviceID,
               let homeserverURL = URL(string: clientProxy.homeserver) else {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=session")
-            failIfCurrent(generation: generation)
+            if failOnError {
+                failIfCurrent(generation: generation)
+            }
             return nil
         }
-
+        
         guard let accessToken = await matrixAccessToken(from: clientProxy), !accessToken.isEmpty else {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=token")
-            failIfCurrent(generation: generation)
+            if failOnError {
+                failIfCurrent(generation: generation)
+            }
             return nil
         }
-
+        
         guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(roomID) else {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=room")
-            failIfCurrent(generation: generation)
+            if failOnError {
+                failIfCurrent(generation: generation)
+            }
             return nil
         }
 
