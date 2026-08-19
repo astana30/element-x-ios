@@ -249,6 +249,10 @@ protocol ElementCallServiceProtocol {
     func tearDownCallSession()
     
     func setAudioEnabled(_ enabled: Bool, roomID: String)
+
+    func ownsNativeMatrixRTCAudio(roomID: String) -> Bool
+
+    func nativeMatrixRTCAudioState(roomID: String) -> MatrixRTCNativeAudioState
 }
 
 extension ElementCallServiceProtocol {
@@ -264,5 +268,13 @@ extension ElementCallServiceProtocol {
 
     func isPreAnswerOutgoingCall(roomID: String) -> Bool {
         false
+    }
+
+    func ownsNativeMatrixRTCAudio(roomID: String) -> Bool {
+        false
+    }
+
+    func nativeMatrixRTCAudioState(roomID: String) -> MatrixRTCNativeAudioState {
+        .inactive
     }
 }

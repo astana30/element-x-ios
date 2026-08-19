@@ -132,6 +132,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                                                          isMicrophoneEnabled: true,
                                                          isVideoEnabled: false,
                                                          isSpeakerphoneEnabled: preferredAudioRoute == .speaker,
+                                                         isNativeMatrixRTCAudioActive: elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID),
                                                          certificateValidator: appHooks.certificateValidatorHook),
                    mediaProvider: mediaProvider)
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][CALL-VM-CONFIG] start_mode=\(configuration.startMode) " +
@@ -274,6 +275,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
             Task {
                 state.isMicrophoneEnabled = enabled
+                if elementCallService.ownsNativeMatrixRTCAudio(roomID: roomID) {
+                    return
+                }
                 await setMediaState(audioEnabled: enabled, videoEnabled: state.isVideoEnabled)
             }
         case let .endCall(roomID):
@@ -421,7 +425,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         if sendHangupMessage {
-            guard currentCallWebViewBinding != nil else {
+            guard currentCallWebViewBinding != nil
+                || elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID) else {
                 return
             }
             hasRequestedLocalTermination = true
@@ -494,6 +499,17 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             // We need widget messaging to work before enabling CallKit, otherwise mute, hangup etc do nothing.
             
         case .roomCall(let roomProxy, _, let clientID, let elementCallBaseURL, let elementCallBaseURLOverride, let colorScheme, _):
+            if elementCallService.ownsNativeMatrixRTCAudio(roomID: roomProxy.id) {
+                state.isNativeMatrixRTCAudioActive = true
+                setupCallTask = Task { [weak self] in
+                    guard let self else { return }
+                    await elementCallService.setupCallSession(roomID: roomProxy.id,
+                                                              roomDisplayName: roomProxy.infoPublisher.value.displayName ?? roomProxy.id,
+                                                              startMode: configuration.startMode)
+                }
+                return
+            }
+
             setupCallTask = Task { [weak self] in
                 guard let self else { return }
                 
@@ -659,6 +675,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private func toggleMicrophone() async {
         let isMicrophoneEnabled = !state.isMicrophoneEnabled
         state.isMicrophoneEnabled = isMicrophoneEnabled
+        if elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID) {
+            elementCallService.setAudioEnabled(isMicrophoneEnabled, roomID: configuration.callRoomID)
+            return
+        }
         await setMediaState(audioEnabled: isMicrophoneEnabled, videoEnabled: false)
     }
 
@@ -857,6 +877,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 return false
             }
         case .roomCall(let roomProxy, _, _, _, _, _, _):
+            if elementCallService.ownsNativeMatrixRTCAudio(roomID: roomProxy.id) {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=native_audio reason=\(terminationReason)")
+                await elementCallService.requestCallTermination(roomID: roomProxy.id)
+                return true
+            }
+
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=start reason=\(terminationReason)")
             switch await hangup(waitingFor: setupTask) {
             case .failed:

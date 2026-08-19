@@ -63,6 +63,7 @@ struct CallScreenViewState: BindableState {
     var isMicrophoneEnabled: Bool
     var isVideoEnabled: Bool
     var isSpeakerphoneEnabled: Bool
+    var isNativeMatrixRTCAudioActive: Bool
     
     let certificateValidator: CertificateValidatorHookProtocol
     

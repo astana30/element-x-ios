@@ -1362,6 +1362,8 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-CONSUME]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-AUDIO]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-UNLOCK]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO]"))
+        #expect(source.contains("startNativeMatrixRTCAudioIfNeeded"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-AUDIO-TIMEOUT]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-RECEIVED]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-WAIT-SESSION]"))

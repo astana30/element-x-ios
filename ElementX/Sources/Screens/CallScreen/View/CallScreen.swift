@@ -63,7 +63,7 @@ struct CallScreen: View {
                                               mediaProvider: context.mediaProvider,
                                               isMicrophoneEnabled: context.viewState.isMicrophoneEnabled,
                                               isSpeakerphoneEnabled: context.viewState.isSpeakerphoneEnabled,
-                                              isConnecting: context.viewState.url == nil,
+                                              isConnecting: context.viewState.url == nil && !context.viewState.isNativeMatrixRTCAudioActive,
                                               toggleMicrophoneAction: {
                                                   context.send(viewAction: .toggleMicrophone)
                                               },

@@ -1087,6 +1087,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private let timeProvider: TimeProvider
     private let appSettings: AppSettings
     private let audioSession: AudioSessionProtocol
+    private var nativeAudioController: any MatrixRTCNativeAudioJoining
     private var salemXAnswerBridgeConfiguration: SalemXEmbeddedCallAnswerBridgeConfiguration
     private var salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)?
     private var salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)?
@@ -1116,6 +1117,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             let expectedCallID = ongoingCallID
             Task { await observeOngoingCall(expectedCallID: expectedCallID) }
             observeSessionGlobalIncomingCalls()
+            startNativeMatrixRTCAudioIfNeeded(incomingCallID)
         }
     }
     
@@ -1225,6 +1227,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         self.salemXEndBridge = salemXEndBridge
         self.audioSession = audioSession
         self.callKitAudioActivationStartTimeout = callKitAudioActivationStartTimeout
+        nativeAudioController = MatrixRTCNativeAudioController(elementCallBaseURL: appSettings.elementCallBaseURL,
+                                                               clientID: InfoPlistReader.main.bundleIdentifier)
         
         if let callProvider {
             self.callProvider = callProvider
@@ -1616,6 +1620,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SERVICE-ENDCALL] room_id=\(roomID)")
         suppressIncomingFallback(for: roomID)
         applySessionEvent(type: .hangup, roomID: roomID)
+        nativeAudioController.leave()
         actionsSubject.send(.endCall(roomID: roomID))
     }
 
@@ -1629,6 +1634,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
     
     func setAudioEnabled(_ enabled: Bool, roomID: String) {
+        if nativeAudioController.activeRoomID == roomID {
+            nativeAudioController.setMicrophoneEnabled(enabled)
+            return
+        }
+
         guard let ongoingCallID else {
             MXLog.error("Failed toggling call microphone, no calls running")
             return
@@ -1638,6 +1648,21 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             MXLog.error("Failed toggling call microphone, rooms don't match: \(ongoingCallID.roomID) != \(roomID)")
             return
         }
+    }
+
+    func ownsNativeMatrixRTCAudio(roomID: String) -> Bool {
+        nativeAudioController.activeRoomID == roomID && nativeAudioController.state != .inactive
+    }
+
+    func nativeMatrixRTCAudioState(roomID: String) -> MatrixRTCNativeAudioState {
+        guard nativeAudioController.activeRoomID == roomID else {
+            return .inactive
+        }
+        return nativeAudioController.state
+    }
+
+    func setNativeMatrixRTCAudioController(_ controller: any MatrixRTCNativeAudioJoining) {
+        nativeAudioController = controller
     }
 
     // MARK: - PKPushRegistryDelegate
@@ -2070,6 +2095,32 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         resumePendingLegacyAnswer(provider: provider)
     }
 
+    private func startNativeMatrixRTCAudioIfNeeded(_ incomingCallID: CallID?) {
+        guard let incomingCallID,
+              incomingCallID.startMode == .audio,
+              pendingLegacyAnswerCallID?.callKitID == incomingCallID.callKitID else {
+            return
+        }
+
+        guard !Self.isPendingProductionDispatchRoomID(incomingCallID.roomID) else {
+            return
+        }
+
+        guard !shouldWaitForCallKitAudioBeforeStarting(incomingCallID) else {
+            return
+        }
+
+        guard let clientProxy else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=wait_session")
+            return
+        }
+
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=start")
+        Task { @MainActor [weak self] in
+            await self?.nativeAudioController.joinIncomingAudio(roomID: incomingCallID.roomID, clientProxy: clientProxy)
+        }
+    }
+
     private func shouldWaitForCallKitAudioBeforeStarting(_ incomingCallID: CallID) -> Bool {
         incomingCallID.startMode == .audio && !isCallKitAudioSessionActive && !shouldSkipCallKitAudioWait
     }
@@ -2143,6 +2194,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 scheduleCallKitAudioStartTimeoutIfNeeded()
                 return
             }
+
+            startNativeMatrixRTCAudioIfNeeded(incomingCallID)
 
             if shouldWaitForUnlockBeforeStarting(incomingCallID) {
                 didWaitForUnlockBeforeStart = true
@@ -2653,8 +2706,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
     
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
-        if let ongoingCallID {
-            actionsSubject.send(.setAudioEnabled(!action.isMuted, roomID: ongoingCallID.roomID))
+        let roomID = ongoingCallID?.roomID ?? incomingCallID?.roomID ?? pendingLegacyAnswerCallID?.roomID
+        if let roomID {
+            actionsSubject.send(.setAudioEnabled(!action.isMuted, roomID: roomID))
+            nativeAudioController.setMicrophoneEnabled(!action.isMuted)
         } else {
             MXLog.error("Failed muting/unmuting call, missing ongoingCallID")
         }
@@ -2721,6 +2776,21 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-DIRECT-HELPER] room_id=\(ongoingCallID.roomID) called=false reason=branch_false")
             }
             tearDownCallSession(sendEndCallAction: false)
+        } else if pendingLegacyAnswerCallID?.callKitID == knownCallID.callKitID
+            || nativeAudioController.activeRoomID == incomingCallID?.roomID {
+            let roomID = incomingCallID?.roomID ?? pendingLegacyAnswerCallID?.roomID
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-BRANCH] room_id=\(roomID ?? "nil") is_pre_answer_outgoing=false reason=answered_native_audio")
+            if let roomID {
+                applySessionEvent(type: .hangup, roomID: roomID)
+                suppressIncomingFallback(for: roomID)
+                actionsSubject.send(.requestCallTermination(roomID: roomID))
+            }
+            nativeAudioController.leave()
+            resetCallKitAudioAnswerWaitState()
+            if let incomingCallID, incomingCallID.callKitID == knownCallID.callKitID {
+                markConsumedDirectCallIdentity(incomingCallID)
+                clearIncomingCallState()
+            }
         } else {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-BRANCH] room_id=nil is_pre_answer_outgoing=false reason=missing_ongoing_call_id")
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-ENDCALL-DIRECT-HELPER] room_id=nil called=false reason=missing_ongoing_call_id")
@@ -2787,6 +2857,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         ongoingCallID = nil
         ongoingCallTimelineCancellable = nil
         resetCallKitAudioAnswerWaitState()
+        nativeAudioController.leave()
 
         if let callKitUUIDToEnd {
             reportCallKitEndedIfNeeded(uuid: callKitUUIDToEnd, reason: callKitEndReason)
