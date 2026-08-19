@@ -92,13 +92,13 @@ final class MatrixRTCNativeAudioTests {
 
     @Test
     func nativeAudioFilesStayOffTheDirectCallMediaPath() throws {
-        let controller = try Self.source(named: "ElementX/Sources/Services/ElementCall/MatrixRTCNativeAudioController.swift")
-        let liveKit = try Self.source(named: "ElementX/Sources/Services/ElementCall/MatrixRTCNativeLiveKitClient.swift")
-        let signaling = try Self.source(named: "ElementX/Sources/Services/ElementCall/MatrixRTCNativeSignalingClient.swift")
+        let handoff = try Self.source(named: "ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift")
+        let nativeStart = try #require(handoff.range(of: "struct MatrixRTCOpenIDToken"))
+        let nativeAudio = String(handoff[nativeStart.lowerBound...])
         let callProtocol = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallServiceProtocol.swift")
         let callScreen = try Self.source(named: "ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift")
 
-        for source in [controller, liveKit, signaling, callProtocol] {
+        for source in [nativeAudio, callProtocol] {
             #expect(!source.contains("DirectCallEngine"))
             #expect(!source.contains("LiveKitDirectCall"))
             #expect(!source.contains("ProductionDirectCallLiveKitTokenClient"))
@@ -124,16 +124,15 @@ final class MatrixRTCNativeAudioTests {
         let generatedMocks = try Self.source(named: "ElementX/Sources/Mocks/Generated/GeneratedMocks.swift")
         #expect(!generatedMocks.contains("MatrixRTCNativeAudioState"))
 
+        let handoff = try Self.source(named: "ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift")
         let pbxproj = try Self.source(named: "SalemX.xcodeproj/project.pbxproj")
-        for filename in [
-            "MatrixRTCNativeAudioController.swift",
-            "MatrixRTCNativeLiveKitClient.swift",
-            "MatrixRTCNativeSignalingClient.swift",
-            "MatrixRTCNativeWidgetBridge.swift",
-            "MatrixRTCNativeAudioTests.swift"
-        ] {
-            #expect(pbxproj.contains("\(filename) in Sources"))
-        }
+        #expect(pbxproj.contains("SalemXMatrixRTCHandoff.swift in Sources"))
+        #expect(pbxproj.contains("MatrixRTCNativeAudioTests.swift in Sources"))
+        #expect(!pbxproj.contains("MatrixRTCNativeAudioController.swift in Sources"))
+        #expect(handoff.contains("final class MatrixRTCNativeAudioController"))
+        #expect(handoff.contains("final class MatrixRTCNativeLiveKitClient"))
+        #expect(handoff.contains("struct MatrixRTCNativeSignalingClient"))
+        #expect(handoff.contains("final class MatrixRTCNativeWidgetBridge"))
     }
 
     @Test

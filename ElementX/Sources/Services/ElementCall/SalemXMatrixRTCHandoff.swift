@@ -5,7 +5,11 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import Combine
 import Foundation
+import LiveKit
+import Security
+import SwiftUI
 
 // swiftlint:disable file_length
 
@@ -2331,3 +2335,771 @@ enum SalemXStage2FSimulatorSignalingDebug {
     }
 }
 #endif
+
+struct MatrixRTCOpenIDToken: Equatable {
+    let accessToken: String
+    let tokenType: String
+    let matrixServerName: String
+    let expiresIn: Int
+
+    var jsonObject: [String: Any] {
+        [
+            "access_token": accessToken,
+            "token_type": tokenType,
+            "matrix_server_name": matrixServerName,
+            "expires_in": expiresIn
+        ]
+    }
+
+    static func parse(_ object: [String: Any]) -> MatrixRTCOpenIDToken? {
+        guard let accessToken = object["access_token"] as? String, !accessToken.isEmpty,
+              let tokenType = object["token_type"] as? String, !tokenType.isEmpty,
+              let matrixServerName = object["matrix_server_name"] as? String, !matrixServerName.isEmpty else {
+            return nil
+        }
+
+        let expiresIn: Int
+        if let value = object["expires_in"] as? Int {
+            expiresIn = value
+        } else if let value = object["expires_in"] as? NSNumber {
+            expiresIn = value.intValue
+        } else {
+            expiresIn = 3600
+        }
+
+        return .init(accessToken: accessToken,
+                     tokenType: tokenType,
+                     matrixServerName: matrixServerName,
+                     expiresIn: expiresIn)
+    }
+}
+
+struct MatrixRTCLiveKitJWT: Equatable {
+    let serverURL: URL
+    let token: String
+
+    static func parse(_ data: Data) -> MatrixRTCLiveKitJWT? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let urlString = object["url"] as? String,
+              let url = URL(string: urlString),
+              let token = object["jwt"] as? String,
+              !token.isEmpty else {
+            return nil
+        }
+
+        return .init(serverURL: url, token: token)
+    }
+}
+
+struct MatrixRTCNativeMembership: Equatable {
+    let userID: String
+    let deviceID: String
+    let membershipID: String
+    let liveKitServiceURL: URL
+
+    var stateKey: String {
+        "_\(userID)_\(deviceID)_\(membershipID)"
+    }
+
+    var liveKitIdentity: String {
+        "\(userID):\(deviceID)"
+    }
+
+    func stateContent(createdAt: Date = Date()) -> [String: Any] {
+        [
+            "application": "m.call",
+            "call_id": "",
+            "scope": "m.room",
+            "device_id": deviceID,
+            "membershipID": membershipID,
+            "expires": 14_400_000,
+            "created_ts": UInt64(createdAt.timeIntervalSince1970 * 1000),
+            "foci_preferred": [
+                [
+                    "type": "livekit",
+                    "livekit_service_url": liveKitServiceURL.absoluteString
+                ]
+            ],
+            "focus_active": [
+                "type": "livekit",
+                "focus_selection": "oldest_membership"
+            ]
+        ]
+    }
+}
+
+struct MatrixRTCHTTPResponse: Equatable {
+    let statusCode: Int
+    let data: Data
+}
+
+protocol MatrixRTCHTTPClientProtocol {
+    func send(method: String, url: URL, headers: [String: String], body: Data?) async -> Result<MatrixRTCHTTPResponse, Error>
+}
+
+struct URLSessionMatrixRTCHTTPClient: MatrixRTCHTTPClientProtocol {
+    private let urlSession: URLSession
+
+    init(urlSession: URLSession = .shared) {
+        self.urlSession = urlSession
+    }
+
+    func send(method: String, url: URL, headers: [String: String], body: Data?) async -> Result<MatrixRTCHTTPResponse, Error> {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.httpBody = body
+        for (header, value) in headers {
+            request.setValue(value, forHTTPHeaderField: header)
+        }
+
+        do {
+            let (data, response) = try await urlSession.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return .failure(URLError(.badServerResponse))
+            }
+            return .success(.init(statusCode: httpResponse.statusCode, data: data))
+        } catch {
+            return .failure(error)
+        }
+    }
+}
+
+struct MatrixRTCNativeSignalingClient {
+    private let httpClient: MatrixRTCHTTPClientProtocol
+
+    init(httpClient: MatrixRTCHTTPClientProtocol = URLSessionMatrixRTCHTTPClient()) {
+        self.httpClient = httpClient
+    }
+
+    func requestOpenIDToken(homeserverURL: URL, userID: String, accessToken: String) async -> MatrixRTCOpenIDToken? {
+        let url = homeserverURL
+            .appending(path: "/_matrix/client/v3/user")
+            .appending(path: userID)
+            .appending(path: "openid/request_token")
+        let body = try? JSONSerialization.data(withJSONObject: [String: Any]())
+        switch await sendJSON(method: "POST", url: url, accessToken: accessToken, body: body) {
+        case .success(let response) where (200...299).contains(response.statusCode):
+            guard let object = try? JSONSerialization.jsonObject(with: response.data) as? [String: Any] else {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=openid http=\(response.statusCode) parse=false")
+                return nil
+            }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=openid http=\(response.statusCode) parse=true")
+            return MatrixRTCOpenIDToken.parse(object)
+        case .success(let response):
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=openid http=\(response.statusCode) parse=false")
+            return nil
+        case .failure:
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=openid http=0 parse=false")
+            return nil
+        }
+    }
+
+    func requestLiveKitJWT(liveKitServiceURL: URL,
+                           roomID: String,
+                           deviceID: String,
+                           openIDToken: MatrixRTCOpenIDToken) async -> MatrixRTCLiveKitJWT? {
+        let url = liveKitServiceURL.appending(path: "sfu/get")
+        let bodyObject: [String: Any] = [
+            "room": roomID,
+            "device_id": deviceID,
+            "openid_token": openIDToken.jsonObject
+        ]
+        guard let body = try? JSONSerialization.data(withJSONObject: bodyObject) else {
+            return nil
+        }
+
+        switch await sendJSON(method: "POST", url: url, accessToken: nil, body: body) {
+        case .success(let response) where (200...299).contains(response.statusCode):
+            let parsed = MatrixRTCLiveKitJWT.parse(response.data)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=sfu_get http=\(response.statusCode) parse=\(parsed != nil)")
+            return parsed
+        case .success(let response):
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=sfu_get http=\(response.statusCode) parse=false")
+            return nil
+        case .failure:
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=sfu_get http=0 parse=false")
+            return nil
+        }
+    }
+
+    func putMembership(homeserverURL: URL,
+                       roomID: String,
+                       accessToken: String,
+                       membership: MatrixRTCNativeMembership,
+                       content: [String: Any]) async -> Bool {
+        let url = homeserverURL
+            .appending(path: "/_matrix/client/v3/rooms")
+            .appending(path: roomID)
+            .appending(path: "state")
+            .appending(path: "org.matrix.msc3401.call.member")
+            .appending(path: membership.stateKey)
+        guard let body = try? JSONSerialization.data(withJSONObject: content) else {
+            return false
+        }
+
+        switch await sendJSON(method: "PUT", url: url, accessToken: accessToken, body: body) {
+        case .success(let response):
+            let succeeded = (200...299).contains(response.statusCode)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=membership http=\(response.statusCode) ok=\(succeeded)")
+            return succeeded
+        case .failure:
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=membership http=0 ok=false")
+            return false
+        }
+    }
+
+    private func sendJSON(method: String, url: URL, accessToken: String?, body: Data?) async -> Result<MatrixRTCHTTPResponse, Error> {
+        var headers = ["Content-Type": "application/json"]
+        if let accessToken, !accessToken.isEmpty {
+            headers["Authorization"] = "Bearer \(accessToken)"
+        }
+        return await httpClient.send(method: method, url: url, headers: headers, body: body)
+    }
+}
+
+
+struct MatrixRTCWidgetEncryptionKey {
+    let identity: String
+    let keyBase64: String
+    let index: Int32
+}
+
+@MainActor
+final class MatrixRTCNativeWidgetBridge {
+    private let widgetDriver: ElementCallWidgetDriverProtocol
+    private var cancellables = Set<AnyCancellable>()
+    private var continuations = [String: CheckedContinuation<[String: Any]?, Never>]()
+    private var encryptionKeyHandler: ((MatrixRTCWidgetEncryptionKey) -> Void)?
+
+    init(widgetDriver: ElementCallWidgetDriverProtocol) {
+        self.widgetDriver = widgetDriver
+        widgetDriver.messagePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.handleIncomingMessage(message)
+            }
+            .store(in: &cancellables)
+    }
+
+    func start(baseURL: URL, clientID: String) async -> Bool {
+        switch await widgetDriver.start(baseURL: baseURL,
+                                        clientID: clientID,
+                                        colorScheme: .dark,
+                                        rageshakeURL: nil,
+                                        analyticsConfiguration: nil) {
+        case .success:
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_start ok=true")
+            return true
+        case .failure:
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_start ok=false")
+            return false
+        }
+    }
+
+    func requestOpenIDToken() async -> MatrixRTCOpenIDToken? {
+        guard let response = await send(action: "get_openid", data: [:]) else {
+            return nil
+        }
+
+        if let state = response["state"] as? String, state != "allowed" {
+            return nil
+        }
+
+        return MatrixRTCOpenIDToken.parse(response)
+    }
+
+    func sendMembership(_ membership: MatrixRTCNativeMembership, content: [String: Any]) async -> Bool {
+        let data: [String: Any] = [
+            "type": "org.matrix.msc3401.call.member",
+            "state_key": membership.stateKey,
+            "content": content
+        ]
+        return await send(action: "send_event", data: data) != nil
+    }
+
+    func sendEncryptionKey(_ keyBase64: String,
+                           index: Int32,
+                           membership: MatrixRTCNativeMembership,
+                           roomID: String,
+                           peerUserID: String,
+                           peerDeviceID: String) async -> Bool {
+        let content: [String: Any] = [
+            "keys": [
+                "index": index,
+                "key": keyBase64
+            ],
+            "room_id": roomID,
+            "member": [
+                "claimed_device_id": membership.deviceID,
+                "id": membership.membershipID
+            ],
+            "session": [
+                "call_id": "",
+                "application": "m.call",
+                "scope": "m.room"
+            ]
+        ]
+        let data: [String: Any] = [
+            "type": "io.element.call.encryption_keys",
+            "encrypted": true,
+            "messages": [
+                peerUserID: [
+                    peerDeviceID: content
+                ]
+            ]
+        ]
+        return await send(action: "send_to_device", data: data) != nil
+    }
+
+    func listenForEncryptionKeys(_ handler: @escaping (MatrixRTCWidgetEncryptionKey) -> Void) {
+        encryptionKeyHandler = handler
+    }
+
+    func stop() {
+        encryptionKeyHandler = nil
+        continuations.values.forEach { $0.resume(returning: nil) }
+        continuations.removeAll()
+        cancellables.removeAll()
+    }
+
+    private func send(action: String, data: [String: Any]) async -> [String: Any]? {
+        let requestID = UUID().uuidString
+        let payload: [String: Any] = [
+            "api": "fromWidget",
+            "action": action,
+            "widgetId": widgetDriver.widgetID,
+            "requestId": requestID,
+            "data": data
+        ]
+
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: jsonData, encoding: .utf8) else {
+            return nil
+        }
+
+        return await withCheckedContinuation { continuation in
+            continuations[requestID] = continuation
+            Task {
+                _ = await widgetDriver.handleMessage(json)
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                finish(requestID: requestID, response: nil)
+            }
+        }
+    }
+
+    private func handleIncomingMessage(_ message: String) {
+        guard let data = message.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return
+        }
+
+        if let requestID = object["requestId"] as? String,
+           object["response"] != nil {
+            let response = object["response"] as? [String: Any]
+            finish(requestID: requestID, response: response)
+        }
+
+        if let key = Self.parseEncryptionKey(object) {
+            encryptionKeyHandler?(key)
+        }
+    }
+
+    private func finish(requestID: String, response: [String: Any]?) {
+        guard let continuation = continuations.removeValue(forKey: requestID) else {
+            return
+        }
+        continuation.resume(returning: response)
+    }
+
+    private static func parseEncryptionKey(_ object: [String: Any]) -> MatrixRTCWidgetEncryptionKey? {
+        let action = object["action"] as? String
+        guard action == "send_to_device" || action == "to_device" else {
+            return nil
+        }
+
+        let data = object["data"] as? [String: Any] ?? object
+        let eventType = data["type"] as? String
+        guard eventType == "io.element.call.encryption_keys" else {
+            return nil
+        }
+
+        let content = data["content"] as? [String: Any] ?? data
+        let sender = data["sender"] as? String
+        let claimedDeviceID = (content["member"] as? [String: Any])?["claimed_device_id"] as? String
+            ?? content["device_id"] as? String
+        guard let sender, let claimedDeviceID else {
+            return nil
+        }
+
+        if let keys = content["keys"] as? [String: Any],
+           let key = keys["key"] as? String {
+            let index = (keys["index"] as? NSNumber)?.int32Value ?? 0
+            return .init(identity: "\(sender):\(claimedDeviceID)", keyBase64: key, index: index)
+        }
+
+        if let keys = content["keys"] as? [[String: Any]],
+           let first = keys.first,
+           let key = first["key"] as? String {
+            let index = (first["index"] as? NSNumber)?.int32Value ?? 0
+            return .init(identity: "\(sender):\(claimedDeviceID)", keyBase64: key, index: index)
+        }
+
+        return nil
+    }
+}
+
+
+@MainActor
+protocol MatrixRTCNativeLiveKitConnecting: AnyObject {
+    func connect(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool
+    func setRemoteParticipantKey(_ keyBase64: String, identity: String, index: Int32)
+    func setMicrophoneEnabled(_ enabled: Bool) async
+    func disconnect() async
+}
+
+@MainActor
+final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
+    private var room: Room?
+    private var keyProvider: BaseKeyProvider?
+
+    func connect(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool {
+        await disconnect()
+
+        guard Self.isSupportedLiveKitURL(serverURL) else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=livekit ok=false reason=url")
+            return false
+        }
+
+        let options = KeyProviderOptions(sharedKey: false, ratchetWindowSize: 10, keyRingSize: 256)
+        let keyProvider = BaseKeyProvider(options: options)
+        keyProvider.setKey(key: localKeyBase64, participantId: localIdentity, index: 0)
+        self.keyProvider = keyProvider
+
+        let roomOptions = RoomOptions(encryptionOptions: EncryptionOptions(keyProvider: keyProvider))
+        let connectOptions = ConnectOptions(autoSubscribe: true, enableMicrophone: false)
+        let room = Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        self.room = room
+
+        do {
+            try await room.connect(url: serverURL.absoluteString,
+                                   token: token,
+                                   connectOptions: connectOptions,
+                                   roomOptions: roomOptions)
+            try await room.localParticipant.setMicrophone(enabled: true)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=livekit ok=true")
+            return true
+        } catch {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=livekit ok=false reason=connect")
+            await disconnect()
+            return false
+        }
+    }
+
+    func setRemoteParticipantKey(_ keyBase64: String, identity: String, index: Int32) {
+        keyProvider?.setKey(key: keyBase64, participantId: identity, index: index)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index)")
+    }
+
+    func setMicrophoneEnabled(_ enabled: Bool) async {
+        try? await room?.localParticipant.setMicrophone(enabled: enabled)
+    }
+
+    func disconnect() async {
+        let currentRoom = room
+        room = nil
+        keyProvider = nil
+        await currentRoom?.disconnect()
+    }
+
+    private static func isSupportedLiveKitURL(_ url: URL) -> Bool {
+        guard url.host?.isEmpty == false else {
+            return false
+        }
+
+        switch url.scheme?.lowercased() {
+        case "ws", "wss", "http", "https":
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+
+@MainActor
+final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
+    private let signalingClient: MatrixRTCNativeSignalingClient
+    private let liveKitClient: MatrixRTCNativeLiveKitConnecting
+    private let widgetBridgeFactory: (ElementCallWidgetDriverProtocol) -> MatrixRTCNativeWidgetBridge
+    private let elementCallBaseURL: URL
+    private let clientID: String
+
+    private(set) var activeRoomID: String?
+    private(set) var state: MatrixRTCNativeAudioState = .inactive
+
+    private var joinGeneration: UInt64 = 0
+    private var widgetBridge: MatrixRTCNativeWidgetBridge?
+    private var membership: MatrixRTCNativeMembership?
+    private var accessToken: String?
+    private var homeserverURL: URL?
+    private var roomID: String?
+    private var joinTask: Task<Void, Never>?
+
+    init(signalingClient: MatrixRTCNativeSignalingClient = MatrixRTCNativeSignalingClient(),
+         liveKitClient: MatrixRTCNativeLiveKitConnecting = MatrixRTCNativeLiveKitClient(),
+         widgetBridgeFactory: @escaping (ElementCallWidgetDriverProtocol) -> MatrixRTCNativeWidgetBridge = { MatrixRTCNativeWidgetBridge(widgetDriver: $0) },
+         elementCallBaseURL: URL,
+         clientID: String) {
+        self.signalingClient = signalingClient
+        self.liveKitClient = liveKitClient
+        self.widgetBridgeFactory = widgetBridgeFactory
+        self.elementCallBaseURL = elementCallBaseURL
+        self.clientID = clientID
+    }
+
+    func joinIncomingAudio(roomID: String, clientProxy: ClientProxyProtocol) async {
+        if activeRoomID == roomID, state != .inactive {
+            return
+        }
+
+        leave()
+        joinGeneration += 1
+        let generation = joinGeneration
+        activeRoomID = roomID
+        self.roomID = roomID
+        state = .connecting
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join")
+
+        joinTask = Task { [weak self] in
+            await self?.performJoin(roomID: roomID, clientProxy: clientProxy, generation: generation)
+        }
+        await joinTask?.value
+    }
+
+    func setMicrophoneEnabled(_ enabled: Bool) {
+        Task {
+            await liveKitClient.setMicrophoneEnabled(enabled)
+        }
+    }
+
+    func leave() {
+        joinGeneration += 1
+        joinTask?.cancel()
+        joinTask = nil
+
+        let membershipToClear = membership
+        let accessTokenToUse = accessToken
+        let homeserverURLToUse = homeserverURL
+        let roomIDToClear = roomID
+        membership = nil
+        accessToken = nil
+        homeserverURL = nil
+        roomID = nil
+
+        widgetBridge?.stop()
+        widgetBridge = nil
+
+        Task { [liveKitClient, signalingClient] in
+            await liveKitClient.disconnect()
+            if let membershipToClear, let accessTokenToUse, let homeserverURLToUse, let roomIDToClear {
+                _ = await signalingClient.putMembership(homeserverURL: homeserverURLToUse,
+                                                        roomID: roomIDToClear,
+                                                        accessToken: accessTokenToUse,
+                                                        membership: membershipToClear,
+                                                        content: [:])
+            }
+        }
+
+        activeRoomID = nil
+        state = .inactive
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=leave")
+    }
+
+    private func performJoin(roomID: String, clientProxy: ClientProxyProtocol, generation: UInt64) async {
+        guard let session = await sessionContext(roomID: roomID, clientProxy: clientProxy, generation: generation) else {
+            return
+        }
+
+        let widgetBridge = widgetBridgeFactory(session.widgetDriver)
+        let widgetStarted = await widgetBridge.start(baseURL: elementCallBaseURL, clientID: clientID)
+        guard isCurrent(generation) else {
+            widgetBridge.stop()
+            return
+        }
+
+        let credentials = await mediaCredentials(session: session, widgetBridge: widgetStarted ? widgetBridge : nil)
+        guard let credentials else {
+            widgetBridge.stop()
+            failIfCurrent(generation: generation)
+            return
+        }
+        guard isCurrent(generation) else {
+            widgetBridge.stop()
+            return
+        }
+
+        let membershipPublished = await publishMembership(session: session, widgetBridge: widgetStarted ? widgetBridge : nil)
+        guard membershipPublished else {
+            widgetBridge.stop()
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=membership")
+            failIfCurrent(generation: generation)
+            return
+        }
+
+        let localKey = Self.randomKeyBase64()
+        widgetBridge.listenForEncryptionKeys { [weak self] key in
+            Task { @MainActor in
+                guard let self, self.joinGeneration == generation else { return }
+                self.liveKitClient.setRemoteParticipantKey(key.keyBase64, identity: key.identity, index: key.index)
+            }
+        }
+
+        let connected = await liveKitClient.connect(serverURL: credentials.jwt.serverURL,
+                                                    token: credentials.jwt.token,
+                                                    localIdentity: session.membership.liveKitIdentity,
+                                                    localKeyBase64: localKey)
+        guard connected, isCurrent(generation) else {
+            if connected {
+                await liveKitClient.disconnect()
+            }
+            widgetBridge.stop()
+            if isCurrent(generation) {
+                failIfCurrent(generation: generation)
+            }
+            return
+        }
+
+        if widgetStarted, let peerUserID = Self.peerUserID(in: session.roomProxy, ownUserID: session.userID) {
+            _ = await widgetBridge.sendEncryptionKey(localKey,
+                                                     index: 0,
+                                                     membership: session.membership,
+                                                     roomID: roomID,
+                                                     peerUserID: peerUserID,
+                                                     peerDeviceID: "*")
+        }
+
+        self.widgetBridge = widgetBridge
+        membership = session.membership
+        accessToken = session.accessToken
+        homeserverURL = session.homeserverURL
+        self.roomID = roomID
+        state = .connected
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=true")
+    }
+
+    private struct SessionContext {
+        let userID: String
+        let accessToken: String
+        let homeserverURL: URL
+        let roomProxy: JoinedRoomProxyProtocol
+        let widgetDriver: ElementCallWidgetDriverProtocol
+        let membership: MatrixRTCNativeMembership
+    }
+
+    private struct MediaCredentials {
+        let jwt: MatrixRTCLiveKitJWT
+    }
+
+    private func sessionContext(roomID: String, clientProxy: ClientProxyProtocol, generation: UInt64) async -> SessionContext? {
+        guard let deviceID = clientProxy.deviceID,
+              let homeserverURL = URL(string: clientProxy.homeserver) else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=session")
+            failIfCurrent(generation: generation)
+            return nil
+        }
+
+        guard let accessToken = await matrixAccessToken(from: clientProxy), !accessToken.isEmpty else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=token")
+            failIfCurrent(generation: generation)
+            return nil
+        }
+
+        guard case let .joined(roomProxy) = await clientProxy.roomForIdentifier(roomID) else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=room")
+            failIfCurrent(generation: generation)
+            return nil
+        }
+
+        guard isCurrent(generation) else {
+            return nil
+        }
+
+        let liveKitServiceURL = homeserverURL.appending(path: "/livekit/jwt")
+        let membership = MatrixRTCNativeMembership(userID: clientProxy.userID,
+                                                   deviceID: deviceID,
+                                                   membershipID: UUID().uuidString,
+                                                   liveKitServiceURL: liveKitServiceURL)
+        let widgetDriver = roomProxy.elementCallWidgetDriver(deviceID: deviceID)
+        (widgetDriver as? ElementCallStartModeConfigurable)?.startMode = .audio
+        return .init(userID: clientProxy.userID,
+                     accessToken: accessToken,
+                     homeserverURL: homeserverURL,
+                     roomProxy: roomProxy,
+                     widgetDriver: widgetDriver,
+                     membership: membership)
+    }
+
+    private func mediaCredentials(session: SessionContext, widgetBridge: MatrixRTCNativeWidgetBridge?) async -> MediaCredentials? {
+        let widgetOpenID = await widgetBridge?.requestOpenIDToken()
+        let openIDToken = widgetOpenID ?? await signalingClient.requestOpenIDToken(homeserverURL: session.homeserverURL,
+                                                                                   userID: session.userID,
+                                                                                   accessToken: session.accessToken)
+        guard let openIDToken else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=openid")
+            return nil
+        }
+
+        let jwt = await signalingClient.requestLiveKitJWT(liveKitServiceURL: session.membership.liveKitServiceURL,
+                                                          roomID: session.roomProxy.id,
+                                                          deviceID: session.membership.deviceID,
+                                                          openIDToken: openIDToken)
+        guard let jwt else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=jwt")
+            return nil
+        }
+
+        return .init(jwt: jwt)
+    }
+
+    private func publishMembership(session: SessionContext, widgetBridge: MatrixRTCNativeWidgetBridge?) async -> Bool {
+        let content = session.membership.stateContent()
+        if let widgetBridge, await widgetBridge.sendMembership(session.membership, content: content) {
+            return true
+        }
+
+        return await signalingClient.putMembership(homeserverURL: session.homeserverURL,
+                                                   roomID: session.roomProxy.id,
+                                                   accessToken: session.accessToken,
+                                                   membership: session.membership,
+                                                   content: content)
+    }
+
+    private func matrixAccessToken(from clientProxy: ClientProxyProtocol) async -> String? {
+        if let provider = clientProxy as? DirectCallMatrixAccessTokenProviding {
+            return await provider.matrixAccessToken()
+        }
+        return (clientProxy as? ClientProxy)?.accessToken
+    }
+
+    private func isCurrent(_ generation: UInt64) -> Bool {
+        !Task.isCancelled && joinGeneration == generation
+    }
+
+    private func failIfCurrent(generation: UInt64) {
+        guard joinGeneration == generation else { return }
+        activeRoomID = nil
+        state = .inactive
+    }
+
+    private static func randomKeyBase64() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return Data(bytes).base64EncodedString()
+    }
+
+    private static func peerUserID(in roomProxy: JoinedRoomProxyProtocol, ownUserID: String) -> String? {
+        roomProxy.membersPublisher.value.first { $0.userID != ownUserID && !$0.userID.isEmpty }?.userID
+    }
+}
