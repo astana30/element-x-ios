@@ -224,6 +224,21 @@ struct SalemXProductionDispatchCapabilityConfiguration: CustomStringConvertible 
     }
 }
 
+enum MatrixRTCNativeAudioState: Equatable {
+    case inactive
+    case connecting
+    case connected
+}
+
+protocol MatrixRTCNativeAudioJoining: AnyObject {
+    var activeRoomID: String? { get }
+    var state: MatrixRTCNativeAudioState { get }
+
+    func joinIncomingAudio(roomID: String, clientProxy: ClientProxyProtocol) async
+    func setMicrophoneEnabled(_ enabled: Bool)
+    func leave()
+}
+
 // sourcery: AutoMockable
 protocol ElementCallServiceProtocol {
     var actions: AnyPublisher<ElementCallServiceAction, Never> { get }

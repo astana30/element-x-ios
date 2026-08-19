@@ -95,9 +95,10 @@ final class MatrixRTCNativeAudioTests {
         let controller = try Self.source(named: "ElementX/Sources/Services/ElementCall/MatrixRTCNativeAudioController.swift")
         let liveKit = try Self.source(named: "ElementX/Sources/Services/ElementCall/MatrixRTCNativeLiveKitClient.swift")
         let signaling = try Self.source(named: "ElementX/Sources/Services/ElementCall/MatrixRTCNativeSignalingClient.swift")
+        let callProtocol = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallServiceProtocol.swift")
         let callScreen = try Self.source(named: "ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift")
 
-        for source in [controller, liveKit, signaling] {
+        for source in [controller, liveKit, signaling, callProtocol] {
             #expect(!source.contains("DirectCallEngine"))
             #expect(!source.contains("LiveKitDirectCall"))
             #expect(!source.contains("ProductionDirectCallLiveKitTokenClient"))
@@ -111,10 +112,13 @@ final class MatrixRTCNativeAudioTests {
 
     @Test
     func nativeAudioSourcesAreInTheSalemXXcodeTarget() throws {
+        let protocolSource = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallServiceProtocol.swift")
+        #expect(protocolSource.contains("enum MatrixRTCNativeAudioState"))
+        #expect(protocolSource.contains("protocol MatrixRTCNativeAudioJoining"))
+
         let pbxproj = try Self.source(named: "SalemX.xcodeproj/project.pbxproj")
         for filename in [
             "MatrixRTCNativeAudioController.swift",
-            "MatrixRTCNativeAudioJoining.swift",
             "MatrixRTCNativeLiveKitClient.swift",
             "MatrixRTCNativeSignalingClient.swift",
             "MatrixRTCNativeWidgetBridge.swift",

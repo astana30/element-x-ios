@@ -453,7 +453,6 @@
 		4BB844AF070A195D36116161 /* ElementCallWidgetDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88E289DCC44B86427557B33 /* ElementCallWidgetDriver.swift */; };
 		4BB9A0CE070A195D36116162 /* CallVoiceAudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C3E91A04B2D4E6F80A1C5D9 /* CallVoiceAudioSession.swift */; };
 		4BB9A0CE070A195D36116163 /* MatrixRTCNativeAudioController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DA /* MatrixRTCNativeAudioController.swift */; };
-		4BB9A0CE070A195D36116164 /* MatrixRTCNativeAudioJoining.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DB /* MatrixRTCNativeAudioJoining.swift */; };
 		4BB9A0CE070A195D36116165 /* MatrixRTCNativeLiveKitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DC /* MatrixRTCNativeLiveKitClient.swift */; };
 		4BB9A0CE070A195D36116166 /* MatrixRTCNativeSignalingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DD /* MatrixRTCNativeSignalingClient.swift */; };
 		4BB9A0CE070A195D36116167 /* MatrixRTCNativeWidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DE /* MatrixRTCNativeWidgetBridge.swift */; };
@@ -2750,7 +2749,6 @@
 		C96D53B756BB780F85A41F75 /* CXProviderProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CXProviderProtocol.swift; sourceTree = "<group>"; };
 		7C3E91A04B2D4E6F80A1C5D9 /* CallVoiceAudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallVoiceAudioSession.swift; sourceTree = "<group>"; };
 		7C4E91A04B2D4E6F80A1C5DA /* MatrixRTCNativeAudioController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeAudioController.swift; sourceTree = "<group>"; };
-		7C4E91A04B2D4E6F80A1C5DB /* MatrixRTCNativeAudioJoining.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeAudioJoining.swift; sourceTree = "<group>"; };
 		7C4E91A04B2D4E6F80A1C5DC /* MatrixRTCNativeLiveKitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeLiveKitClient.swift; sourceTree = "<group>"; };
 		7C4E91A04B2D4E6F80A1C5DD /* MatrixRTCNativeSignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeSignalingClient.swift; sourceTree = "<group>"; };
 		7C4E91A04B2D4E6F80A1C5DE /* MatrixRTCNativeWidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeWidgetBridge.swift; sourceTree = "<group>"; };
@@ -3338,7 +3336,6 @@
 				F6B23D410CA42762229CFBEE /* ElementCallWidgetDriverProtocol.swift */,
 				EABADC0AB3C5C00DF4171F21 /* GenericCallLinkWidgetDriver.swift */,
 				7C4E91A04B2D4E6F80A1C5DA /* MatrixRTCNativeAudioController.swift */,
-				7C4E91A04B2D4E6F80A1C5DB /* MatrixRTCNativeAudioJoining.swift */,
 				7C4E91A04B2D4E6F80A1C5DC /* MatrixRTCNativeLiveKitClient.swift */,
 				7C4E91A04B2D4E6F80A1C5DD /* MatrixRTCNativeSignalingClient.swift */,
 				7C4E91A04B2D4E6F80A1C5DE /* MatrixRTCNativeWidgetBridge.swift */,
@@ -8390,7 +8387,6 @@
 				7DCD683857258787B94FC6D4 /* MapURLs.swift in Sources */,
 				882A1F6899F8D119A5FB3861 /* MatrixEntityRegex.swift in Sources */,
 				4BB9A0CE070A195D36116163 /* MatrixRTCNativeAudioController.swift in Sources */,
-				4BB9A0CE070A195D36116164 /* MatrixRTCNativeAudioJoining.swift in Sources */,
 				4BB9A0CE070A195D36116165 /* MatrixRTCNativeLiveKitClient.swift in Sources */,
 				4BB9A0CE070A195D36116166 /* MatrixRTCNativeSignalingClient.swift in Sources */,
 				4BB9A0CE070A195D36116167 /* MatrixRTCNativeWidgetBridge.swift in Sources */,
@@ -9489,7 +9485,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
@@ -10013,7 +10009,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
@@ -10091,7 +10087,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
