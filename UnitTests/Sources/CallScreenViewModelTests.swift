@@ -1197,29 +1197,41 @@ extension CallScreenViewModelTests {
     }
 
     @Test
-    func audioCallLeavesWebRTCAudioSessionAlone() throws {
+    func audioCallAppliesVoiceChatCategoryOnceWithoutFightingWebRTC() throws {
         let callScreen = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift")
         let session = try repositorySource(named: "ElementX/Sources/Services/ElementCall/CallVoiceAudioSession.swift")
-        #expect(session.contains("leave_webrtc=true"))
-        #expect(!session.contains("overrideOutputAudioPort"))
-        #expect(!session.contains("setCategory"))
+        let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+        #expect(session.contains("voicechat_once=true"))
+        #expect(session.contains("try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])"))
+        #expect(session.contains("try session.overrideOutputAudioPort(speakerEnabled ? .speaker : .none)"))
+        #expect(session.contains("static func lockAfterCapture()"))
         #expect(!session.contains("setActive("))
-        #expect(!session.contains(".allowBluetoothHFP"))
-        #expect(!session.contains(".defaultToSpeaker"))
-        #expect(callScreen.contains("CallVoiceAudioSession.logCurrentRoute"))
+        #expect(!session.contains("options: [.defaultToSpeaker"))
+        #expect(!session.contains("options: [.allowBluetoothHFP, .defaultToSpeaker]"))
+        #expect(callScreen.contains("CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()"))
+        #expect(callScreen.contains("CallVoiceAudioSession.lockAfterCapture()"))
         #expect(callScreen.contains("CallVoiceAudioSession.applyOutputPort(speakerEnabled:"))
+        #expect(callScreen.contains("applyPreferredAudioRouteIfNeeded(force: true, userInitiated: true)"))
+        #expect(callScreen.contains("guard userInitiated else"))
         #expect(!callScreen.contains("CallVoiceAudioSession.configure"))
         #expect(callScreen.contains("guard deviceID == Self.earpieceID else"))
         #expect(!callScreen.contains(".milliseconds(300)"))
         #expect(!callScreen.contains(".seconds(4)"))
         #expect(!callScreen.contains("Failed updating call audio route with error"))
+        #expect(!callService.contains("CallVoiceAudioSession.applyOutputPort(speakerEnabled: false)"))
+        let prepareIndex = try #require(callScreen.range(of: "CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()")?.lowerBound)
+        let setupCallIndex = try #require(callScreen.range(of: "setupCall()")?.lowerBound)
+        #expect(prepareIndex < setupCallIndex)
+        let permissionIndex = try #require(callScreen.range(of: "case .mediaCapturePermissionGranted:")?.lowerBound)
+        let lockIndex = try #require(callScreen.range(of: "CallVoiceAudioSession.lockAfterCapture()")?.lowerBound)
+        #expect(permissionIndex < lockIndex)
     }
 
     @Test
     func appStoreLinePresentsIncomingCallsFromMatrixRTCPresence() throws {
         let appCoordinator = try repositorySource(named: "ElementX/Sources/Application/AppCoordinator.swift")
         let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
-        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session"))
+        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session voicechat-category-once"))
         #expect(callService.contains("[MATRIXRTC-PRESENCE-INCOMING]"))
         #expect(callService.contains("source=matrixrtc_presence"))
         #expect(callService.contains("Production dispatch confirming local MatrixRTC membership after \\(source)."))

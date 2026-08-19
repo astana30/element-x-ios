@@ -1775,7 +1775,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             || incomingCallID?.startMode == .audio
             || ongoingCallID?.startMode == .audio
             || pendingLegacyAnswerCallID?.startMode == .audio {
-            CallVoiceAudioSession.applyOutputPort(speakerEnabled: false)
+            CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=callkit_activated")
         }
         resumePendingLegacyAnswerIfApplicationIsActive()

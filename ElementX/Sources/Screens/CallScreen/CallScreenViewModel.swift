@@ -181,10 +181,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             }
             .store(in: &cancellables)
         
-        setupCall()
         if shouldControlAudioRoute {
             CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()
         }
+        setupCall()
     }
     
     override func process(viewAction: CallScreenViewAction) {
@@ -207,7 +207,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .toggleSpeakerphone:
             handleSpeakerphoneToggle()
         case .mediaCapturePermissionGranted:
-            schedulePreferredAudioRouteEnforcement()
+            if shouldControlAudioRoute {
+                CallVoiceAudioSession.lockAfterCapture()
+            }
         case .outputDeviceSelected(deviceID: let deviceID):
             handleOutputDeviceSelected(deviceID: deviceID)
         case .widgetAction(let message):
@@ -628,7 +630,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
         
         preferredAudioRoute = state.isSpeakerphoneEnabled ? .earpiece : .speaker
-        applyPreferredAudioRouteIfNeeded(force: true)
+        applyPreferredAudioRouteIfNeeded(force: true, userInitiated: true)
     }
 
     private func toggleMicrophone() async {
@@ -650,7 +652,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         CallVoiceAudioSession.logCurrentRoute(speakerEnabled: state.isSpeakerphoneEnabled)
     }
     
-    private func applyPreferredAudioRouteIfNeeded(force: Bool = false) {
+    private func applyPreferredAudioRouteIfNeeded(force: Bool = false, userInitiated: Bool = false) {
         guard let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first else {
             return
         }
@@ -665,6 +667,13 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             return
         }
         lastAudioRouteApply = Date()
+
+        guard userInitiated else {
+            state.isSpeakerphoneEnabled = currentOutput.portType == .builtInSpeaker
+            UIDevice.current.isProximityMonitoringEnabled = currentOutput.portType == .builtInReceiver
+            CallVoiceAudioSession.logCurrentRoute(speakerEnabled: state.isSpeakerphoneEnabled)
+            return
+        }
         
         switch preferredAudioRoute {
         case .systemDefault:
@@ -673,14 +682,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .speaker:
             setSpeakerphoneEnabled(true)
         case .earpiece:
-            switch currentOutput.portType {
-            case .builtInSpeaker, .builtInReceiver:
-                setSpeakerphoneEnabled(false)
-            default:
-                CallVoiceAudioSession.restoreEarpieceIfNeeded()
-                state.isSpeakerphoneEnabled = false
-                UIDevice.current.isProximityMonitoringEnabled = false
-            }
+            setSpeakerphoneEnabled(false)
         }
     }
     
