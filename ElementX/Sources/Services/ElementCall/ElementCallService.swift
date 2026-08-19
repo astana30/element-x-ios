@@ -1098,7 +1098,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     @MainActor private var productionDispatchCapabilityRegistrationInFlight: (appSessionGeneration: String, tokenRevision: UInt64)?
     @MainActor private var productionDispatchCapabilityRetryCount = 0
     @MainActor private var productionDispatchReceiverConsumptions = Set<UUID>()
-    @MainActor private var pendingProductionDispatchInputByCallKitID = [UUID: ProductionDispatchReceiverInput]()
+    private var pendingProductionDispatchInputByCallKitID = [UUID: ProductionDispatchReceiverInput]()
     @MainActor private var productionDispatchObservations = [UUID: SalemXStockElementCallObservationState]()
     nonisolated(unsafe) private var productionDispatchObservedRoomIDs = Set<String>()
     
@@ -1851,18 +1851,25 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         update.remoteHandle = .init(type: .generic, value: "salemx-call")
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-CALLKIT] room_id=\(callID.roomID) start_mode=audio has_video=false caller_name_source=pending_dispatch")
 
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
+        let didFailToReport = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { error in
                 if let error {
                     MXLog.error("Failed reporting new incoming call with error: \(error)")
-                    self?.pendingProductionDispatchInputByCallKitID.removeValue(forKey: callID.callKitID)
-                    self?.clearIncomingCallState()
-                } else {
-                    self?.actionsSubject.send(.receivedIncomingCallRequest)
+                    continuation.resume(returning: true)
+                    return
                 }
-                continuation.resume()
+                continuation.resume(returning: false)
             }
         }
+
+        if didFailToReport {
+            pendingProductionDispatchInputByCallKitID.removeValue(forKey: callID.callKitID)
+            clearIncomingCallState()
+            completion()
+            return
+        }
+
+        actionsSubject.send(.receivedIncomingCallRequest)
 
         guard incomingCallID?.callKitID == callID.callKitID else {
             completion()
