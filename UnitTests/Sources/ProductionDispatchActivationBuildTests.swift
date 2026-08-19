@@ -24,4 +24,11 @@ struct ProductionDispatchActivationBuildTests {
         AppSettings.applyProductionDispatchActivationOverride(to: appSettings)
         #expect(appSettings.salemxProductionDispatchV1Enabled == AppSettings.salemxProductionDispatchV1ActivationBuild)
     }
+
+    @Test
+    func sandboxPusherAppIDsMatchDevelopmentSigning() {
+        #expect(AppSettings().pusherAppID.hasSuffix(".ios.dev"))
+        #expect(AppSettings().voIPPusherAppID.hasSuffix(".ios.voip.dev"))
+        #expect(!AppSettings().pusherAppID.hasSuffix(".ios.prod"))
+    }
 }

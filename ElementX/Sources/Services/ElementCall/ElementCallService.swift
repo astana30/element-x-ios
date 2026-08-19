@@ -2521,7 +2521,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                                                               profileTag: voIPPusherProfileTag(),
                                                               lang: Bundle.app.preferredLocalizations.first ?? "en")
             try await clientProxy.setPusher(with: configuration)
-            MXLog.info("Set VoIP pusher succeeded")
+            MXLog.info("Set VoIP pusher succeeded app_id=\(appSettings.voIPPusherAppID)")
             guard self.voIPPushToken == voIPPushToken,
                   registeredVoIPPushToken == voIPPushToken else {
                 return

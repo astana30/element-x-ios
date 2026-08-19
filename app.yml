@@ -3,6 +3,6 @@ settings:
   PRODUCTION_APP_NAME: SalemX
   APP_GROUP_IDENTIFIER: group.kz.salemx.msg.dev
   BASE_BUNDLE_IDENTIFIER: kz.salemx.msg
-  PUSH_GATEWAY_BASE_URL: https://matrix.org
+  PUSH_GATEWAY_BASE_URL: https://matrix.mertis.kz
   ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: "colors/accent-color"
   DEVELOPMENT_TEAM: M639Y9MFR2

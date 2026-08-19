@@ -319,18 +319,19 @@ final class AppSettings: @unchecked Sendable {
     // MARK: - Notifications
     
     var pusherAppID: String {
-        #if DEBUG
-        InfoPlistReader.main.baseBundleIdentifier + ".ios.dev"
-        #else
-        InfoPlistReader.main.baseBundleIdentifier + ".ios.prod"
-        #endif
+        InfoPlistReader.main.baseBundleIdentifier + (Self.usesSandboxPusherAppIDs ? ".ios.dev" : ".ios.prod")
     }
     
     var voIPPusherAppID: String {
-        #if DEBUG
-        InfoPlistReader.main.baseBundleIdentifier + ".ios.voip.dev"
+        InfoPlistReader.main.baseBundleIdentifier + (Self.usesSandboxPusherAppIDs ? ".ios.voip.dev" : ".ios.voip.prod")
+    }
+
+    /// DispatchActivation is a release-style config with development signing, so it must keep the sandbox pusher IDs.
+    private static var usesSandboxPusherAppIDs: Bool {
+        #if DEBUG || SALEMX_PRODUCTION_DISPATCH_ACTIVATION
+        true
         #else
-        InfoPlistReader.main.baseBundleIdentifier + ".ios.voip.prod"
+        false
         #endif
     }
     
