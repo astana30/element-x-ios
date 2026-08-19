@@ -4412,6 +4412,13 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             return true
         }
 
+        if incomingCallID.startMode == .audio,
+           nativeAudioController.activeRoomID == incomingCallID.roomID,
+           nativeAudioController.isActive {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] reason=native_audio")
+            return true
+        }
+
         guard let clientProxy else {
             MXLog.warning("Incoming answer guard missing ClientProxy for room \(incomingCallID.roomID)")
             return true

@@ -144,6 +144,37 @@ final class MatrixRTCNativeAudioTests {
         #expect(handoff.contains("skipped=already_active"))
         #expect(handoff.contains("private func publishMembership(session: SessionContext) async -> Bool"))
         #expect(!handoff.contains("widgetBridge.sendMembership"))
+        #expect(handoff.contains("action: \"content_loaded\""))
+        #expect(handoff.contains("stage=widget_caps"))
+        #expect(handoff.contains("stage=remote_key"))
+        #expect(handoff.contains("stage=local_key"))
+        #expect(handoff.contains("org.matrix.msc3819.receive.to_device:io.element.call.encryption_keys"))
+    }
+
+    @Test
+    func widgetToDeviceMessageParsesElementCallEncryptionKeys() {
+        let key = MatrixRTCWidgetEncryptionKey.parseWidgetMessage([
+            "api": "toWidget",
+            "action": "send_to_device",
+            "data": [
+                "type": "io.element.call.encryption_keys",
+                "sender": "@alice:example.com",
+                "content": [
+                    "keys": [
+                        "index": 0,
+                        "key": "remote-key"
+                    ],
+                    "member": [
+                        "claimed_device_id": "DEVICE",
+                        "id": "party"
+                    ]
+                ]
+            ]
+        ])
+
+        #expect(key?.identity == "@alice:example.com:DEVICE")
+        #expect(key?.keyBase64 == "remote-key")
+        #expect(key?.index == 0)
     }
 
     @Test
