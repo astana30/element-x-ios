@@ -274,7 +274,9 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
         case .success(let response):
             if Task.isCancelled { return .failure(.cancelled) }
             guard (200..<300).contains(response.statusCode) else {
-                return .failure(httpError(response))
+                let error = httpError(response)
+                MXLog.error("Production dispatch HTTP failed path=\(path) status=\(response.statusCode) error=\(error)")
+                return .failure(error)
             }
             do {
                 return try .success(decoder.decode(Response.self, from: response.data))

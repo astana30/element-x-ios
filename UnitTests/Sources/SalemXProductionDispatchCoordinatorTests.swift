@@ -300,7 +300,7 @@ struct SalemXProductionDispatchCoordinatorTests {
         }
 
         #expect(outcome == .sent(client.dispatchID))
-        #expect(recorder.events == ["arm", "stock", "confirm", "membership", "prepare", "claim", "send"])
+        #expect(recorder.events == ["arm", "stock", "membership", "prepare", "claim", "send"])
         #expect(lifecycleProvider.armCount == 1)
     }
 

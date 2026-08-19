@@ -220,7 +220,6 @@ private final class SalemXProductionDispatchElementCallLifecycle: SalemXProducti
             return .failure(.unavailable)
         }
         self.stockCallPresentation = stockCallPresentation
-        lifecycleProvider.confirmOutgoingCallMembershipAfterCallScreenPresentation(handle)
 
         switch await lifecycleProvider.awaitMembershipConfirmation(handle) {
         case .success(let context):
