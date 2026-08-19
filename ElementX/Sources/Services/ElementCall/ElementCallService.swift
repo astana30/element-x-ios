@@ -913,6 +913,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         static let duplicateSuppression: TimeInterval = 1
     }
 
+    private enum ProductionDispatchPushConstants {
+        static let pendingRoomIDPrefix = "salemx-pending:"
+        static let unansweredTimeout: Duration = .seconds(90)
+    }
+
     private enum IncomingCallOrigin: Equatable {
         case push
         case sessionGlobal
@@ -955,6 +960,16 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         func withRemoteCallID(_ remoteCallID: String?) -> CallID {
+            CallID(callKitID: callKitID,
+                   roomID: roomID,
+                   rtcNotificationID: rtcNotificationID,
+                   remoteCallID: remoteCallID,
+                   startMode: startMode,
+                   startedAt: startedAt,
+                   origin: origin)
+        }
+
+        func withRoomID(_ roomID: String) -> CallID {
             CallID(callKitID: callKitID,
                    roomID: roomID,
                    rtcNotificationID: rtcNotificationID,
@@ -1083,6 +1098,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     @MainActor private var productionDispatchCapabilityRegistrationInFlight: (appSessionGeneration: String, tokenRevision: UInt64)?
     @MainActor private var productionDispatchCapabilityRetryCount = 0
     @MainActor private var productionDispatchReceiverConsumptions = Set<UUID>()
+    @MainActor private var pendingProductionDispatchInputByCallKitID = [UUID: ProductionDispatchReceiverInput]()
     @MainActor private var productionDispatchObservations = [UUID: SalemXStockElementCallObservationState]()
     nonisolated(unsafe) private var productionDispatchObservedRoomIDs = Set<String>()
     
@@ -1227,7 +1243,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         applicationBecameActiveCancellable = applicationActivityProvider.didBecomeActivePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
-                self?.resumePendingLegacyAnswerIfApplicationIsActive()
+                self?.resumePendingLegacyAnswer()
             }
     }
     
@@ -1245,10 +1261,13 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         productionDispatchCapabilityRetryCount = 0
         if configuration == nil {
             productionDispatchReceiverConsumptions.removeAll()
+            return
         }
 
-        guard configuration != nil else { return }
-        Task { @MainActor in await registerVoIPPusherIfNeeded() }
+        Task { @MainActor in
+            await consumePendingProductionDispatchIfPossible()
+            await registerVoIPPusherIfNeeded()
+        }
     }
 
     @MainActor
@@ -1631,15 +1650,18 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
         if appSettings.salemxProductionDispatchV1Enabled {
             guard let input = Self.productionDispatchReceiverInput(from: payload.dictionaryPayload) else {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-DROP] reason=invalid_envelope")
+                MXLog.error("Incoming VoIP call is missing a production dispatch envelope.")
                 completion()
                 return
             }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-RECEIVED] dispatch_id=\(input.dispatchID.uuidString)")
             Task { @MainActor [weak self] in
                 guard let self else {
                     completion()
                     return
                 }
-                await self.consumeProductionDispatchReceiverInput(input, completion: completion)
+                await self.reportProductionDispatchCallKitThenConsume(input, completion: completion)
             }
             return
         }
@@ -1769,13 +1791,111 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         return .init(dispatchID: dispatchID, receiverReference: receiverReference)
     }
 
+    private static func pendingProductionDispatchRoomID(for dispatchID: UUID) -> String {
+        ProductionDispatchPushConstants.pendingRoomIDPrefix + dispatchID.uuidString
+    }
+
+    private static func isPendingProductionDispatchRoomID(_ roomID: String) -> Bool {
+        roomID.hasPrefix(ProductionDispatchPushConstants.pendingRoomIDPrefix)
+    }
+
+    private func scheduleIncomingUnansweredCallTimeout(callKitID: UUID, duration: Duration) {
+        endUnansweredCallTask?.cancel()
+        endUnansweredCallTask = Task { [weak self] in
+            try? await self?.timeProvider.clock.sleep(for: duration)
+
+            guard let self, !Task.isCancelled else {
+                return
+            }
+
+            if let incomingCallID, incomingCallID.callKitID == callKitID {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-RECIPIENT-TIMEOUT] room_id=\(incomingCallID.roomID) callkit_id=\(incomingCallID.callKitID)")
+                reportEndedCall(incomingCallID: incomingCallID, reason: .unanswered)
+            }
+        }
+    }
+
     @MainActor
-    private func consumeProductionDispatchReceiverInput(_ input: ProductionDispatchReceiverInput,
-                                                        completion: @escaping () -> Void) async {
-        guard productionDispatchReceiverConsumptions.insert(input.dispatchID).inserted,
-              let configuration = productionDispatchCapabilityConfiguration,
-              !configuration.appSessionGeneration.isEmpty else {
+    private func reportProductionDispatchCallKitThenConsume(_ input: ProductionDispatchReceiverInput,
+                                                           completion: @escaping () -> Void) async {
+        if pendingProductionDispatchInputByCallKitID.values.contains(where: { $0.dispatchID == input.dispatchID })
+            || productionDispatchReceiverConsumptions.contains(input.dispatchID) {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-DROP] reason=duplicate_dispatch dispatch_id=\(input.dispatchID.uuidString)")
             completion()
+            return
+        }
+
+        guard incomingCallID == nil, ongoingCallID == nil else {
+            MXLog.warning("A call is already active, ignoring incoming production dispatch")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-DROP] reason=call_already_active dispatch_id=\(input.dispatchID.uuidString)")
+            completion()
+            return
+        }
+
+        let nowDate = timeProvider.now()
+        let callID = CallID(callKitID: UUID(),
+                            roomID: Self.pendingProductionDispatchRoomID(for: input.dispatchID),
+                            rtcNotificationID: nil,
+                            remoteCallID: nil,
+                            startMode: .audio,
+                            startedAt: nowDate,
+                            origin: .push)
+        isCallKitAudioSessionActive = false
+        pendingLegacyAnswerCallID = nil
+        incomingCallID = callID
+        pendingProductionDispatchInputByCallKitID[callID.callKitID] = input
+
+        let update = CXCallUpdate()
+        update.hasVideo = false
+        update.localizedCallerName = "SalemX audio call"
+        update.remoteHandle = .init(type: .generic, value: "salemx-call")
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-CALLKIT] room_id=\(callID.roomID) start_mode=audio has_video=false caller_name_source=pending_dispatch")
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
+                if let error {
+                    MXLog.error("Failed reporting new incoming call with error: \(error)")
+                    self?.pendingProductionDispatchInputByCallKitID.removeValue(forKey: callID.callKitID)
+                    self?.clearIncomingCallState()
+                } else {
+                    self?.actionsSubject.send(.receivedIncomingCallRequest)
+                }
+                continuation.resume()
+            }
+        }
+
+        guard incomingCallID?.callKitID == callID.callKitID else {
+            completion()
+            return
+        }
+
+        scheduleIncomingUnansweredCallTimeout(callKitID: callID.callKitID,
+                                              duration: ProductionDispatchPushConstants.unansweredTimeout)
+
+        if productionDispatchCapabilityConfiguration != nil {
+            await consumePendingProductionDispatchIfPossible()
+        } else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-WAIT-SESSION] dispatch_id=\(input.dispatchID.uuidString)")
+            MXLog.info("Production dispatch PushKit is waiting for a restored session before consume")
+        }
+        completion()
+    }
+
+    @MainActor
+    private func consumePendingProductionDispatchIfPossible() async {
+        guard let currentIncoming = incomingCallID,
+              let input = pendingProductionDispatchInputByCallKitID[currentIncoming.callKitID] else {
+            return
+        }
+
+        guard let configuration = productionDispatchCapabilityConfiguration,
+              !configuration.appSessionGeneration.isEmpty else {
+            MXLog.info("Production dispatch PushKit is waiting for a restored session before consume")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-WAIT-SESSION] dispatch_id=\(input.dispatchID.uuidString)")
+            return
+        }
+
+        guard productionDispatchReceiverConsumptions.insert(input.dispatchID).inserted else {
             return
         }
 
@@ -1783,22 +1903,46 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                                                                      receiverReference: input.receiverReference,
                                                                      appSessionGeneration: configuration.appSessionGeneration)
         let result = await configuration.client.consume(request)
+        guard incomingCallID?.callKitID == currentIncoming.callKitID else {
+            return
+        }
+
         guard !Task.isCancelled,
               productionDispatchCapabilityConfiguration?.appSessionGeneration == configuration.appSessionGeneration,
               case .success(let response) = result,
               response.direction == "incoming",
               response.intent == .audio,
               response.expiresAtMS > Int64(timeProvider.now().timeIntervalSince1970 * 1000) else {
-            completion()
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-DROP] reason=consume_failed dispatch_id=\(input.dispatchID.uuidString)")
+            MXLog.error("Production dispatch consume failed after CallKit was reported")
+            reportEndedCall(incomingCallID: incomingCallID ?? currentIncoming, reason: .failed)
             return
         }
 
-        handleIncomingPushPayload([
-            ElementCallServiceNotificationKey.roomID.rawValue: response.roomID,
-            ElementCallServiceNotificationKey.roomDisplayName.rawValue: "SalemX audio call",
-            ElementCallServiceNotificationKey.callIntent.rawValue: "audio",
-            ElementCallServiceNotificationKey.expirationDate.rawValue: Date(timeIntervalSince1970: TimeInterval(response.expiresAtMS) / 1000)
-        ], requiresRTCNotificationID: false, completion: completion)
+        pendingProductionDispatchInputByCallKitID.removeValue(forKey: currentIncoming.callKitID)
+        let bound = currentIncoming.withRoomID(response.roomID)
+        incomingCallID = bound
+        if pendingLegacyAnswerCallID?.callKitID == bound.callKitID {
+            pendingLegacyAnswerCallID = bound
+        }
+        cachedRemoteCallIDByRoomID.removeValue(forKey: response.roomID)
+        openCallSession(roomID: response.roomID,
+                        callKitID: bound.callKitID,
+                        direction: .incoming,
+                        remoteCallID: bound.remoteCallID)
+        if pendingLegacyAnswerCallID?.callKitID == bound.callKitID {
+            applySessionEvent(type: .accept, roomID: bound.roomID)
+        }
+
+        let expirationDate = Date(timeIntervalSince1970: TimeInterval(response.expiresAtMS) / 1000)
+        let remaining = expirationDate.timeIntervalSince1970 - timeProvider.now().timeIntervalSince1970
+        scheduleIncomingUnansweredCallTimeout(callKitID: bound.callKitID,
+                                              duration: .seconds(min(max(remaining, 0), 90)))
+
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH] room_id=\(response.roomID) payload_fields=production_dispatch " +
+            "parsed_intent_key=nil parsed_intent_value=nil parsed_intent_start_mode=audio incoming_start_mode=audio")
+        MXLog.info("Production dispatch consume succeeded after CallKit report")
+        resumePendingLegacyAnswer()
     }
     
     // MARK: - CXProviderDelegate
@@ -1823,7 +1967,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=callkit_activated")
         }
-        resumePendingLegacyAnswerIfApplicationIsActive()
+        resumePendingLegacyAnswer()
     }
     
     func providerDidReset(_ provider: CXProvider) {
@@ -1861,9 +2005,16 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER] room_id=\(incomingCallID.roomID) callkit_id=\(incomingCallID.callKitID) start_mode=\(incomingCallID.startMode)")
         
-        guard applySessionEvent(type: .accept, roomID: incomingCallID.roomID) else {
+        if pendingLegacyAnswerCallID?.callKitID == incomingCallID.callKitID {
             action.fulfill()
             return
+        }
+
+        if !Self.isPendingProductionDispatchRoomID(incomingCallID.roomID) {
+            guard applySessionEvent(type: .accept, roomID: incomingCallID.roomID) else {
+                action.fulfill()
+                return
+            }
         }
         
         // Fixes broken videos on EC web when a CallKit session is established.
@@ -1890,25 +2041,28 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=answer")
         }
         action.fulfill()
-        resumePendingLegacyAnswerIfApplicationIsActive(provider: provider)
+        resumePendingLegacyAnswer(provider: provider)
     }
 
-    private func resumePendingLegacyAnswerIfApplicationIsActive(provider: (any CXProviderProtocol)? = nil) {
+    private func resumePendingLegacyAnswer(provider: (any CXProviderProtocol)? = nil) {
         Task { @MainActor [weak self] in
             guard let self, pendingLegacyAnswerCallID != nil else {
                 return
             }
 
-            let isApplicationActive = applicationActivityProvider.isActive()
-            guard isApplicationActive || isCallKitAudioSessionActive else {
-                MXLog.info("Delaying answered call presentation until CallKit activates audio or the application becomes active")
-                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-ACTIVE] application_active=false callkit_audio_active=false")
+            guard let incomingCallID, incomingCallID.callKitID == pendingLegacyAnswerCallID?.callKitID else {
                 return
             }
 
-            let reason = isCallKitAudioSessionActive ? "callkit_activated" : "application_active"
-            MXLog.info("Resuming answered call because \(reason)")
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason=\(reason) application_active=\(isApplicationActive) callkit_audio_active=\(isCallKitAudioSessionActive)")
+            if Self.isPendingProductionDispatchRoomID(incomingCallID.roomID) {
+                MXLog.info("Delaying answered call presentation until production dispatch consume binds the room")
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-CONSUME] callkit_id=\(incomingCallID.callKitID)")
+                return
+            }
+
+            let isApplicationActive = applicationActivityProvider.isActive()
+            MXLog.info("Resuming answered call because answer")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason=answer application_active=\(isApplicationActive) callkit_audio_active=\(isCallKitAudioSessionActive)")
             resumePendingLegacyAnswerPresentation(provider: provider)
         }
     }
@@ -1936,12 +2090,22 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 return
             }
 
-            if pendingLegacyAnswerCallID.startMode == .video {
-                (provider ?? self.callProvider).reportCall(with: pendingLegacyAnswerCallID.callKitID, endedAt: nil, reason: .remoteEnded)
+            guard let presentedCallID = self.incomingCallID, presentedCallID.callKitID == pendingLegacyAnswerCallID.callKitID else {
+                return
             }
 
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-START-CALL-SEND] room_id=\(pendingLegacyAnswerCallID.roomID) start_mode=\(pendingLegacyAnswerCallID.startMode)")
-            self.actionsSubject.send(.startCall(roomID: pendingLegacyAnswerCallID.roomID, startMode: pendingLegacyAnswerCallID.startMode))
+            if Self.isPendingProductionDispatchRoomID(presentedCallID.roomID) {
+                self.pendingLegacyAnswerCallID = presentedCallID
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-CONSUME] callkit_id=\(presentedCallID.callKitID)")
+                return
+            }
+
+            if presentedCallID.startMode == .video {
+                (provider ?? self.callProvider).reportCall(with: presentedCallID.callKitID, endedAt: nil, reason: .remoteEnded)
+            }
+
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-START-CALL-SEND] room_id=\(presentedCallID.roomID) start_mode=\(presentedCallID.startMode)")
+            self.actionsSubject.send(.startCall(roomID: presentedCallID.roomID, startMode: presentedCallID.startMode))
             self.endUnansweredCallTask?.cancel()
         }
     }
@@ -4429,6 +4593,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private func clearIncomingCallState(cancelEmbeddedAnswer: Bool = true) {
         if cancelEmbeddedAnswer {
             cancelEmbeddedMatrixRTCAnswer(for: incomingCallID?.callKitID)
+        }
+        if let callKitID = incomingCallID?.callKitID {
+            pendingProductionDispatchInputByCallKitID.removeValue(forKey: callKitID)
         }
         incomingCallTimelineCancellable = nil
         declineListenerHandle?.cancel()

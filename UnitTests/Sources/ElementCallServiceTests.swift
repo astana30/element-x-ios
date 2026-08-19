@@ -344,7 +344,7 @@ final class ElementCallServiceTests {
     }
 
     @Test
-    func productionDispatchValidPushConsumesExactlyOnceBeforeExistingCallKitIngress() async {
+    func productionDispatchValidPushReportsCallKitThenConsumesExactlyOnce() async {
         appSettings.salemxProductionDispatchV1Enabled = true
         let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
         dispatchClient.consumeResult = .success(productionDispatchConsumeResponse())
@@ -358,9 +358,9 @@ final class ElementCallServiceTests {
             }
         }
 
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
         #expect(dispatchClient.consumeRequests.count == 1)
         #expect(dispatchClient.consumeRequests.first?.appSessionGeneration == "opaque-generation")
-        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
 
         await withCheckedContinuation { continuation in
             service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: payload, for: .voIP) {
@@ -373,10 +373,33 @@ final class ElementCallServiceTests {
     }
 
     @Test
-    func productionDispatchInvalidOrFailedPushCompletesWithoutCallKit() async throws {
+    func productionDispatchReportsCallKitBeforeSessionRestoreThenConsumes() async {
         appSettings.salemxProductionDispatchV1Enabled = true
         let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
-        dispatchClient.consumeResult = .failure(.http(.authentication, .unknown))
+        dispatchClient.consumeResult = .success(productionDispatchConsumeResponse())
+
+        await withCheckedContinuation { continuation in
+            service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: productionDispatchPayload(), for: .voIP) {
+                continuation.resume()
+            }
+        }
+
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        #expect(dispatchClient.consumeRequests.isEmpty)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                            appSessionGeneration: "opaque-generation"))
+        #expect(await waitUntil { dispatchClient.consumeRequests.count == 1 })
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        await service.declineIncomingCall()
+    }
+
+    @Test
+    func productionDispatchInvalidEnvelopeCompletesWithoutCallKit() async throws {
+        appSettings.salemxProductionDispatchV1Enabled = true
+        let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
         service.configureProductionDispatchCapability(.init(client: dispatchClient,
                                                             appSessionGeneration: "opaque-generation"))
 
@@ -387,6 +410,7 @@ final class ElementCallServiceTests {
             }
         }
         #expect(dispatchClient.consumeRequests.isEmpty)
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
 
         let missingDispatchIDPayload = productionDispatchPayload()
         var envelope = try #require(missingDispatchIDPayload.dict[SalemXProductionDispatchNotificationKey.envelope.rawValue] as? [String: Any])
@@ -398,6 +422,16 @@ final class ElementCallServiceTests {
             }
         }
         #expect(dispatchClient.consumeRequests.isEmpty)
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+    }
+
+    @Test
+    func productionDispatchFailedConsumeEndsReportedCallKit() async {
+        appSettings.salemxProductionDispatchV1Enabled = true
+        let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
+        dispatchClient.consumeResult = .failure(.http(.authentication, .unknown))
+        service.configureProductionDispatchCapability(.init(client: dispatchClient,
+                                                            appSessionGeneration: "opaque-generation"))
 
         await withCheckedContinuation { continuation in
             service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: productionDispatchPayload(), for: .voIP) {
@@ -405,11 +439,12 @@ final class ElementCallServiceTests {
             }
         }
         #expect(dispatchClient.consumeRequests.count == 1)
-        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        #expect(await waitForEndedCall(reason: .failed))
     }
 
     @Test
-    func productionDispatchDisabledResponseCompletesOnceWithoutCallKit() async {
+    func productionDispatchDisabledResponseEndsReportedCallKitOnce() async {
         appSettings.salemxProductionDispatchV1Enabled = true
         let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
         dispatchClient.consumeResult = .failure(.http(.notFound, .disabled))
@@ -426,11 +461,12 @@ final class ElementCallServiceTests {
 
         #expect(dispatchClient.consumeRequests.count == 1)
         #expect(completionCount == 1)
-        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        #expect(await waitForEndedCall(reason: .failed))
     }
 
     @Test
-    func productionDispatchStaleAndInvalidResponsesFailClosed() async {
+    func productionDispatchStaleAndInvalidResponsesEndReportedCallKit() async {
         appSettings.salemxProductionDispatchV1Enabled = true
         let dispatchClient = SalemXProductionDispatchCapabilityClientSpy()
         service.configureProductionDispatchCapability(.init(client: dispatchClient,
@@ -453,7 +489,9 @@ final class ElementCallServiceTests {
         }
 
         #expect(dispatchClient.consumeRequests.count == 2)
-        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 2)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 2)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .failed)
     }
 
     @Test
@@ -486,7 +524,8 @@ final class ElementCallServiceTests {
 
         #expect(dispatchClient.consumeRequests.count == 1)
         #expect(completionCount == 1)
-        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
+        #expect(await waitForEndedCall(reason: .failed))
     }
 
     @Test
@@ -3675,6 +3714,18 @@ final class ElementCallServiceTests {
     private func waitForEndedCall(reason: CXCallEndedReason) async -> Bool {
         for _ in 0..<10 {
             if callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == reason {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+
+        return false
+    }
+
+    private func waitUntil(_ condition: @escaping () -> Bool) async -> Bool {
+        for _ in 0..<30 {
+            if condition() {
                 return true
             }
 

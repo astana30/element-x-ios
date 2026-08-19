@@ -1349,6 +1349,12 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(source.contains("keptAliveAudioCallKitID = incomingCallID.callKitID"))
         #expect(source.contains("Incoming answer guard skipped for PushKit wake"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] origin=push"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason=answer"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-CONSUME]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-RECEIVED]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-WAIT-SESSION]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-DROP] reason=invalid_envelope"))
+        #expect(!source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-ACTIVE]"))
         #expect(source.contains("incomingCallID.origin != .push"))
         #expect(source.contains("origin: .push"))
         #expect(source.contains("private static func matrixEventID(from value: String?)"))
@@ -1374,15 +1380,14 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         service.handleAnswerCallAction(action, provider: callProvider)
 
         #expect(action.fulfillCount == 1)
-        try? await Task.sleep(for: .milliseconds(80))
-        #expect(!observedActions.contains { if case .startCall = $0 { true } else { false } })
-        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
-
-        service.handleCallProviderAudioSessionActivation()
-
         #expect(await waitUntil {
             observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
         })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.handleCallProviderAudioSessionActivation()
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1)
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
         #expect(activity.isActive == false)
     }
@@ -2251,6 +2256,33 @@ private final class ApplicationActivitySpy {
 }
 
 extension SalemXEmbeddedCallAnswerBridgeServiceTests {
+    @Test
+    func answeredLockedAudioCallStartsWithoutUnlockOrCallKitAudio() async throws {
+        let activity = ApplicationActivitySpy(isActive: false)
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          applicationActivityProvider: activity.provider)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == false)
+    }
+
     private func makeAnswerBridgeService(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
                                                                                                             answerTimeout: .seconds(1)),
                                          bootstrapResolver: BootstrapResolverSpy,
