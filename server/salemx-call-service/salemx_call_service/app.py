@@ -9,6 +9,7 @@ import logging
 import secrets
 import time
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from os import environ
 from typing import Any, Callable, Optional
 from uuid import UUID
@@ -688,7 +689,8 @@ def create_app(config: ServiceConfig | None = None,
                 if not apns_accepted:
                     raise CallServiceError(status_code=502,
                                            errcode="M_DIRECT_CALL_APNS_DELIVERY_FAILED",
-                                           error="APNs delivery failed.")
+                                           error="APNs delivery failed.",
+                                           diagnostics=_redacted_apns_delivery_diagnostics(body))
                 return JSONResponse(status_code=200, content=_stored_dispatch_success())
             version = payload.get("version")
             if version != 1:
@@ -1540,10 +1542,36 @@ def _preferred_receiver_token_record(
     recipient: str,
     token_store: PushKitTokenStoreProtocol,
 ) -> PushKitTokenRecord | None:
-    return (
-        token_store.retrieve_latest_for_user(recipient, "production")
-        or token_store.retrieve_latest_for_user(recipient, "development")
+    candidates: list[PushKitTokenRecord] = []
+    for environment in ("production", "development"):
+        record = token_store.retrieve_latest_for_user(recipient, environment)
+        if record is not None:
+            candidates.append(record)
+    if not candidates:
+        return None
+    capable = [record for record in candidates if record.supports_direct_audio_v1()]
+    return max(capable or candidates, key=_record_updated_at)
+
+
+def _record_updated_at(record: PushKitTokenRecord) -> datetime:
+    updated_at = record.updated_at
+    if updated_at.tzinfo is None:
+        return updated_at.replace(tzinfo=timezone.utc)
+    return updated_at.astimezone(timezone.utc)
+
+
+def _redacted_apns_delivery_diagnostics(body: dict[str, object]) -> dict[str, object]:
+    allowed = (
+        "blocked_reason",
+        "apns_environment",
+        "background_apns_failure_reason",
+        "pushkit_upload_token_is_hex",
+        "pushkit_upload_environment",
+        "pushkit_upload_record_updated_age_bucket",
+        "persisted_pushkit_token_lookup_result",
+        "APNs_sent",
     )
+    return {key: body[key] for key in allowed if key in body}
 
 
 def _call_bootstrap_payload(
