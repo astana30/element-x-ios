@@ -2564,7 +2564,6 @@ struct MatrixRTCWidgetEncryptionKey {
     let index: Int32
 }
 
-@MainActor
 final class MatrixRTCNativeWidgetBridge {
     private let widgetDriver: ElementCallWidgetDriverProtocol
     private var cancellables = Set<AnyCancellable>()
@@ -2751,7 +2750,6 @@ final class MatrixRTCNativeWidgetBridge {
 }
 
 
-@MainActor
 protocol MatrixRTCNativeLiveKitConnecting: AnyObject {
     func connect(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool
     func setRemoteParticipantKey(_ keyBase64: String, identity: String, index: Int32)
@@ -2759,7 +2757,6 @@ protocol MatrixRTCNativeLiveKitConnecting: AnyObject {
     func disconnect() async
 }
 
-@MainActor
 final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
     private var room: Room?
     private var keyProvider: BaseKeyProvider?
@@ -2772,6 +2769,14 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
             return false
         }
 
+        return await connectOnMainActor(serverURL: serverURL,
+                                        token: token,
+                                        localIdentity: localIdentity,
+                                        localKeyBase64: localKeyBase64)
+    }
+
+    @MainActor
+    private func connectOnMainActor(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool {
         let options = KeyProviderOptions(sharedKey: false, ratchetWindowSize: 10, keyRingSize: 256)
         let keyProvider = BaseKeyProvider(options: options)
         keyProvider.setKey(key: localKeyBase64, participantId: localIdentity, index: 0)
@@ -2803,10 +2808,20 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
     }
 
     func setMicrophoneEnabled(_ enabled: Bool) async {
-        try? await room?.localParticipant.setMicrophone(enabled: enabled)
+        await setMicrophoneEnabledOnMainActor(enabled)
     }
 
     func disconnect() async {
+        await disconnectOnMainActor()
+    }
+
+    @MainActor
+    private func setMicrophoneEnabledOnMainActor(_ enabled: Bool) async {
+        try? await room?.localParticipant.setMicrophone(enabled: enabled)
+    }
+
+    @MainActor
+    private func disconnectOnMainActor() async {
         let currentRoom = room
         room = nil
         keyProvider = nil
@@ -2828,7 +2843,6 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
 }
 
 
-@MainActor
 final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     private let signalingClient: MatrixRTCNativeSignalingClient
     private let liveKitClient: MatrixRTCNativeLiveKitConnecting
