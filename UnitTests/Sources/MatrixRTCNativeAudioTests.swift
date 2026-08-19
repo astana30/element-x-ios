@@ -135,6 +135,8 @@ final class MatrixRTCNativeAudioTests {
         #expect(handoff.contains("final class MatrixRTCNativeLiveKitClient"))
         #expect(handoff.contains("struct MatrixRTCNativeSignalingClient"))
         #expect(handoff.contains("final class MatrixRTCNativeWidgetBridge"))
+        #expect(!handoff.contains("?? await"))
+        #expect(!handoff.contains("if let widgetBridge, await"))
     }
 
     @Test

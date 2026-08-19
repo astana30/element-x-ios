@@ -3057,9 +3057,14 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
 
     private func mediaCredentials(session: SessionContext, widgetBridge: MatrixRTCNativeWidgetBridge?) async -> MediaCredentials? {
         let widgetOpenID = await widgetBridge?.requestOpenIDToken()
-        let openIDToken = widgetOpenID ?? await signalingClient.requestOpenIDToken(homeserverURL: session.homeserverURL,
-                                                                                   userID: session.userID,
-                                                                                   accessToken: session.accessToken)
+        let openIDToken: MatrixRTCOpenIDToken?
+        if let widgetOpenID {
+            openIDToken = widgetOpenID
+        } else {
+            openIDToken = await signalingClient.requestOpenIDToken(homeserverURL: session.homeserverURL,
+                                                                   userID: session.userID,
+                                                                   accessToken: session.accessToken)
+        }
         guard let openIDToken else {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=openid")
             return nil
@@ -3079,8 +3084,11 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
 
     private func publishMembership(session: SessionContext, widgetBridge: MatrixRTCNativeWidgetBridge?) async -> Bool {
         let content = session.membership.stateContent()
-        if let widgetBridge, await widgetBridge.sendMembership(session.membership, content: content) {
-            return true
+        if let widgetBridge {
+            let sent = await widgetBridge.sendMembership(session.membership, content: content)
+            if sent {
+                return true
+            }
         }
 
         return await signalingClient.putMembership(homeserverURL: session.homeserverURL,
