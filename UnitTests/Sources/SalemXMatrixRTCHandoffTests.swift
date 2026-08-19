@@ -1238,6 +1238,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
 
         #expect(action.fulfillCount == 1)
         #expect(action.failCount == 0)
+        service.handleCallProviderAudioSessionActivation()
         #expect(await waitUntil {
             observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
         })
@@ -1316,7 +1317,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
-    func answeredAudioCallStartsWithoutWaitingForCallKitAudioActivation() async throws {
+    func answeredAudioCallWaitsForCallKitAudioBeforeStarting() async throws {
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
         service = makeAnswerBridgeService(configuration: .init(),
@@ -1333,6 +1334,11 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         service.handleAnswerCallAction(action, provider: callProvider)
 
         #expect(action.fulfillCount == 1)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.handleCallProviderAudioSessionActivation()
         #expect(await waitUntil {
             observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
         })
@@ -1352,8 +1358,10 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(source.contains("keptAliveAudioCallKitID = incomingCallID.callKitID"))
         #expect(source.contains("Incoming answer guard skipped for PushKit wake"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] origin=push"))
-        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason=answer"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason="))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-CONSUME]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-AUDIO]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-AUDIO-TIMEOUT]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-RECEIVED]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-WAIT-SESSION]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-DROP] reason=invalid_envelope"))
@@ -1383,14 +1391,14 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         service.handleAnswerCallAction(action, provider: callProvider)
 
         #expect(action.fulfillCount == 1)
-        #expect(await waitUntil {
-            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
-        })
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 0)
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
 
         service.handleCallProviderAudioSessionActivation()
-        try? await Task.sleep(for: .milliseconds(80))
-        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1)
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
         #expect(activity.isActive == false)
     }
@@ -1445,7 +1453,8 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         let bootstrapResolver = BootstrapResolverSpy()
         service = makeAnswerBridgeService(configuration: .init(),
                                           bootstrapResolver: bootstrapResolver,
-                                          answerBridge: answerBridge)
+                                          answerBridge: answerBridge,
+                                          callKitAudioActivationStartTimeout: .milliseconds(50))
 
         var observedActions = [ElementCallServiceAction]()
         service.actions
@@ -2260,7 +2269,7 @@ private final class ApplicationActivitySpy {
 
 extension SalemXEmbeddedCallAnswerBridgeServiceTests {
     @Test
-    func answeredLockedAudioCallStartsWithoutUnlockOrCallKitAudio() async throws {
+    func answeredLockedAudioCallStartsWhenCallKitAudioActivatesWithoutUnlock() async throws {
         let activity = ApplicationActivitySpy(isActive: false)
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
@@ -2279,6 +2288,9 @@ extension SalemXEmbeddedCallAnswerBridgeServiceTests {
         service.handleAnswerCallAction(action, provider: callProvider)
 
         #expect(action.fulfillCount == 1)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 0)
+        service.handleCallProviderAudioSessionActivation()
         #expect(await waitUntil {
             observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
         })
@@ -2312,6 +2324,39 @@ extension SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(audioSession.setCategoryModeOptionsReceivedArguments?.mode == .voiceChat)
         #expect(audioSession.setCategoryModeOptionsReceivedArguments?.options == [.allowBluetoothHFP])
         #expect(audioSession.setActiveOptionsCallsCount == 0)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 0)
+
+        service.handleCallProviderAudioSessionActivation()
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        #expect(audioSession.setActiveOptionsCallsCount == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == false)
+    }
+
+    @Test
+    func answeredAudioCallStartsAfterAudioTimeoutWhenCallKitDoesNotActivate() async throws {
+        let activity = ApplicationActivitySpy(isActive: false)
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          applicationActivityProvider: activity.provider,
+                                          callKitAudioActivationStartTimeout: .milliseconds(50))
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
         #expect(await waitUntil {
             observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
         })
@@ -2326,7 +2371,8 @@ extension SalemXEmbeddedCallAnswerBridgeServiceTests {
                                          endBridge: EndBridgeSpy? = nil,
                                          timeProvider: TimeProvider? = nil,
                                          applicationActivityProvider: ApplicationActivityProvider? = nil,
-                                         audioSession: AudioSessionProtocol = AudioSessionMock()) -> ElementCallService {
+                                         audioSession: AudioSessionProtocol = AudioSessionMock(),
+                                         callKitAudioActivationStartTimeout: Duration = .milliseconds(1500)) -> ElementCallService {
         ElementCallService(appSettings: appSettings,
                            callProvider: callProvider,
                            timeProvider: timeProvider ?? TimeProvider(clock: ContinuousClock()) { self.currentDate },
@@ -2336,7 +2382,8 @@ extension SalemXEmbeddedCallAnswerBridgeServiceTests {
                            salemXIncomingCallBootstrapResolver: bootstrapResolver,
                            salemXAnswerBridge: answerBridge,
                            salemXEndBridge: endBridge,
-                           audioSession: audioSession)
+                           audioSession: audioSession,
+                           callKitAudioActivationStartTimeout: callKitAudioActivationStartTimeout)
     }
 
     private func prepareOngoingEmbeddedCall(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,

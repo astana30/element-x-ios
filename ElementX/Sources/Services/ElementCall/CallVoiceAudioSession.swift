@@ -26,6 +26,8 @@ enum CallVoiceAudioSession {
 
     /// Sets PlayAndRecord/VoiceChat so CallKit can activate audio on a locked phone.
     /// Does not call `setActive` — CallKit owns activation after the answer action is fulfilled.
+    /// Element Call is started after `didActivate` so WKWebView WebRTC does not
+    /// replace this category before CallKit has taken the session.
     static func configurePlayAndRecordVoiceChatForCallKitAnswer(session: AudioSessionProtocol) {
         do {
             try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])

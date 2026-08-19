@@ -272,7 +272,8 @@ struct TimeProvider {
     var now: () -> Date
 }
 
-/// Lets CallKit answer handoff wait for the app to be active instead of CallKit audio activation.
+/// Exposes whether the app is in the foreground. Audio CallKit answers wait for
+/// `didActivate` rather than unlock; this is still used for logging and consume retries.
 struct ApplicationActivityProvider {
     var isActive: () -> Bool
     var didBecomeActivePublisher: AnyPublisher<Void, Never>
@@ -1142,6 +1143,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private var callSessionSequence: UInt64 = 0
     private var isCallKitAudioSessionActive = false
     private var pendingLegacyAnswerCallID: CallID?
+    private var pendingCallKitAudioStartTimeoutTask: Task<Void, Never>?
+    private var shouldSkipCallKitAudioWait = false
+    private let callKitAudioActivationStartTimeout: Duration
     private var keptAliveAudioCallKitID: UUID?
     private let applicationActivityProvider: ApplicationActivityProvider
     private var applicationBecameActiveCancellable: AnyCancellable?
@@ -1206,7 +1210,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
          salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)? = nil,
          salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)? = nil,
          salemXEndBridge: (any SalemXEmbeddedCallEndBridging)? = nil,
-         audioSession: AudioSessionProtocol = AVAudioSession.sharedInstance()) {
+         audioSession: AudioSessionProtocol = AVAudioSession.sharedInstance(),
+         callKitAudioActivationStartTimeout: Duration = .milliseconds(1500)) {
         pushRegistry = PKPushRegistry(queue: nil)
         
         self.appSettings = appSettings
@@ -1217,6 +1222,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         self.salemXAnswerBridge = salemXAnswerBridge
         self.salemXEndBridge = salemXEndBridge
         self.audioSession = audioSession
+        self.callKitAudioActivationStartTimeout = callKitAudioActivationStartTimeout
         
         if let callProvider {
             self.callProvider = callProvider
@@ -1732,7 +1738,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                             startedAt: nowDate,
                             origin: .push)
         isCallKitAudioSessionActive = false
-        pendingLegacyAnswerCallID = nil
+        resetCallKitAudioAnswerWaitState()
         incomingCallID = callID
         if let rtcNotificationID {
             cacheRTCNotificationID(rtcNotificationID, for: roomID, isOwnEvent: false)
@@ -1844,7 +1850,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                             startedAt: nowDate,
                             origin: .push)
         isCallKitAudioSessionActive = false
-        pendingLegacyAnswerCallID = nil
+        resetCallKitAudioAnswerWaitState()
         incomingCallID = callID
         pendingProductionDispatchInputByCallKitID[callID.callKitID] = input
 
@@ -1969,6 +1975,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     func handleCallProviderAudioSessionActivation() {
         isCallKitAudioSessionActive = true
+        cancelCallKitAudioStartTimeout()
+        shouldSkipCallKitAudioWait = false
         if keptAliveAudioCallKitID != nil
             || incomingCallID?.startMode == .audio
             || ongoingCallID?.startMode == .audio
@@ -2060,6 +2068,49 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         resumePendingLegacyAnswer(provider: provider)
     }
 
+    private func shouldWaitForCallKitAudioBeforeStarting(_ incomingCallID: CallID) -> Bool {
+        incomingCallID.startMode == .audio && !isCallKitAudioSessionActive && !shouldSkipCallKitAudioWait
+    }
+
+    private func legacyAnswerResumeReason() -> String {
+        if shouldSkipCallKitAudioWait, !isCallKitAudioSessionActive {
+            return "audio_timeout"
+        }
+        if isCallKitAudioSessionActive {
+            return "callkit_audio"
+        }
+        return "answer"
+    }
+
+    private func resetCallKitAudioAnswerWaitState() {
+        cancelCallKitAudioStartTimeout()
+        shouldSkipCallKitAudioWait = false
+        pendingLegacyAnswerCallID = nil
+    }
+
+    private func cancelCallKitAudioStartTimeout() {
+        pendingCallKitAudioStartTimeoutTask?.cancel()
+        pendingCallKitAudioStartTimeoutTask = nil
+    }
+
+    private func scheduleCallKitAudioStartTimeoutIfNeeded() {
+        guard pendingCallKitAudioStartTimeoutTask == nil else {
+            return
+        }
+
+        let callKitID = pendingLegacyAnswerCallID?.callKitID
+        pendingCallKitAudioStartTimeoutTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await timeProvider.clock.sleep(for: callKitAudioActivationStartTimeout)
+            guard !Task.isCancelled else { return }
+            guard pendingLegacyAnswerCallID?.callKitID == callKitID else { return }
+            guard !isCallKitAudioSessionActive else { return }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-AUDIO-TIMEOUT] callkit_id=\(callKitID?.uuidString ?? "nil")")
+            shouldSkipCallKitAudioWait = true
+            resumePendingLegacyAnswer()
+        }
+    }
+
     private func resumePendingLegacyAnswer(provider: (any CXProviderProtocol)? = nil) {
         Task { @MainActor [weak self] in
             guard let self, pendingLegacyAnswerCallID != nil else {
@@ -2076,9 +2127,17 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 return
             }
 
+            if shouldWaitForCallKitAudioBeforeStarting(incomingCallID) {
+                let isApplicationActive = applicationActivityProvider.isActive()
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-AUDIO] callkit_id=\(incomingCallID.callKitID) application_active=\(isApplicationActive) callkit_audio_active=\(isCallKitAudioSessionActive)")
+                scheduleCallKitAudioStartTimeoutIfNeeded()
+                return
+            }
+
             let isApplicationActive = applicationActivityProvider.isActive()
-            MXLog.info("Resuming answered call because answer")
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason=answer application_active=\(isApplicationActive) callkit_audio_active=\(isCallKitAudioSessionActive)")
+            let resumeReason = legacyAnswerResumeReason()
+            MXLog.info("Resuming answered call because \(resumeReason)")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason=\(resumeReason) application_active=\(isApplicationActive) callkit_audio_active=\(isCallKitAudioSessionActive)")
             resumePendingLegacyAnswerPresentation(provider: provider)
         }
     }
@@ -2088,6 +2147,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             return
         }
 
+        cancelCallKitAudioStartTimeout()
+        shouldSkipCallKitAudioWait = false
         self.pendingLegacyAnswerCallID = nil
         Task { @MainActor in
             guard self.incomingCallID?.callKitID == pendingLegacyAnswerCallID.callKitID else {
@@ -2708,6 +2769,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         finishResolvingOngoingDeclines()
         ongoingCallID = nil
         ongoingCallTimelineCancellable = nil
+        resetCallKitAudioAnswerWaitState()
 
         if let callKitUUIDToEnd {
             reportCallKitEndedIfNeeded(uuid: callKitUUIDToEnd, reason: callKitEndReason)
@@ -4619,9 +4681,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         declineListenerHandle = nil
         endUnansweredCallTask?.cancel()
         endUnansweredCallTask = nil
-        if pendingLegacyAnswerCallID?.callKitID == incomingCallID?.callKitID {
-            pendingLegacyAnswerCallID = nil
-        }
+        resetCallKitAudioAnswerWaitState()
         incomingCallID = nil
     }
 
