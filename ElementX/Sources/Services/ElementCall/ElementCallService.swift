@@ -1084,6 +1084,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private let callProvider: CXProviderProtocol
     private let timeProvider: TimeProvider
     private let appSettings: AppSettings
+    private let audioSession: AudioSessionProtocol
     private var salemXAnswerBridgeConfiguration: SalemXEmbeddedCallAnswerBridgeConfiguration
     private var salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)?
     private var salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)?
@@ -1204,7 +1205,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
          salemXAnswerBridgeConfiguration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(),
          salemXIncomingCallBootstrapResolver: (any SalemXIncomingCallBootstrapResolving)? = nil,
          salemXAnswerBridge: (any SalemXEmbeddedCallAnswerBridging)? = nil,
-         salemXEndBridge: (any SalemXEmbeddedCallEndBridging)? = nil) {
+         salemXEndBridge: (any SalemXEmbeddedCallEndBridging)? = nil,
+         audioSession: AudioSessionProtocol = AVAudioSession.sharedInstance()) {
         pushRegistry = PKPushRegistry(queue: nil)
         
         self.appSettings = appSettings
@@ -1214,6 +1216,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         self.salemXIncomingCallBootstrapResolver = salemXIncomingCallBootstrapResolver
         self.salemXAnswerBridge = salemXAnswerBridge
         self.salemXEndBridge = salemXEndBridge
+        self.audioSession = audioSession
         
         if let callProvider {
             self.callProvider = callProvider
@@ -1970,8 +1973,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             || incomingCallID?.startMode == .audio
             || ongoingCallID?.startMode == .audio
             || pendingLegacyAnswerCallID?.startMode == .audio {
-            // Log-only: WKWebView WebRTC owns the audio session.
-            CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()
+            configureCallKitAnswerAudioSessionIfNeeded(startMode: .audio)
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=callkit_activated")
         }
         resumePendingLegacyAnswer()
@@ -1997,6 +1999,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         handleEmbeddedMatrixRTCAnswerCallAction(action)
+    }
+
+    private func configureCallKitAnswerAudioSessionIfNeeded(startMode: ElementCallStartMode) {
+        guard startMode == .audio else {
+            return
+        }
+
+        CallVoiceAudioSession.configurePlayAndRecordVoiceChatForCallKitAnswer(session: audioSession)
     }
 
     private func handleLegacyAnswerCallAction(_ action: any SalemXCallKitAnswerActionCompleting, provider: any CXProviderProtocol) {
@@ -2043,8 +2053,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         pendingLegacyAnswerCallID = incomingCallID
         if incomingCallID.startMode == .audio {
             keptAliveAudioCallKitID = incomingCallID.callKitID
-            // Log-only: WKWebView WebRTC owns the audio session.
-            CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()
+            configureCallKitAnswerAudioSessionIfNeeded(startMode: .audio)
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=answer")
         }
         action.fulfill()
@@ -2167,6 +2176,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         appendEmbeddedMatrixRTCAnswerAction(action, actionID: actionID)
+        configureCallKitAnswerAudioSessionIfNeeded(startMode: incomingCallID.startMode)
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
 

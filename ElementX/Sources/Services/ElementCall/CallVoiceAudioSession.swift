@@ -17,8 +17,23 @@ enum CallVoiceAudioSession {
     }
 
     /// Logs the current route without mutating AVAudioSession.
-    /// WKWebView WebRTC owns category, mode, and activation.
+    /// WKWebView WebRTC owns category, mode, and activation after CallKit has
+    /// activated the session. CallKit answer still needs PlayAndRecord/VoiceChat
+    /// configured before `CXAnswerCallAction.fulfill()`.
     static func prepareEarpieceCategoryIfNeeded() {
+        logCurrentRoute(speakerEnabled: false)
+    }
+
+    /// Sets PlayAndRecord/VoiceChat so CallKit can activate audio on a locked phone.
+    /// Does not call `setActive` — CallKit owns activation after the answer action is fulfilled.
+    static func configurePlayAndRecordVoiceChatForCallKitAnswer(session: AudioSessionProtocol) {
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-ANSWER-CATEGORY] category=PlayAndRecord mode=VoiceChat")
+        } catch {
+            MXLog.error("Failed configuring CallKit answer audio category with error: \(error)")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-ANSWER-CATEGORY] failed=true")
+        }
         logCurrentRoute(speakerEnabled: false)
     }
 

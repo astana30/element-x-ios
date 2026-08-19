@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import AVFoundation
 import CallKit
 import Clocks
 import Combine
@@ -1341,9 +1342,11 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     @Test
     func audioAnswerKeepsCallKitAliveWithoutNativeCategoryChanges() throws {
         let source = try SalemXEmbeddedCallAnswerBridgeTests.source(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
-        #expect(source.contains("CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()"))
+        let session = try SalemXEmbeddedCallAnswerBridgeTests.source(named: "ElementX/Sources/Services/ElementCall/CallVoiceAudioSession.swift")
+        #expect(source.contains("CallVoiceAudioSession.configurePlayAndRecordVoiceChatForCallKitAnswer(session: audioSession)"))
+        #expect(session.contains("[CALL-INCOMING-TRACE][APP-AUDIO-ANSWER-CATEGORY]"))
         #expect(!source.contains("CallVoiceAudioSession.applyOutputPort(speakerEnabled: false)"))
-        #expect(!source.contains("CallVoiceAudioSession.configure"))
+        #expect(!source.contains("audioSession.setActive"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=answer"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=callkit_activated"))
         #expect(source.contains("keptAliveAudioCallKitID = incomingCallID.callKitID"))
@@ -2283,13 +2286,47 @@ extension SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(activity.isActive == false)
     }
 
+    @Test
+    func answeredAudioCallConfiguresPlayAndRecordVoiceChatBeforeFulfillWithoutActivating() async throws {
+        let audioSession = AudioSessionMock()
+        let activity = ApplicationActivitySpy(isActive: false)
+        service = ElementCallService(appSettings: appSettings,
+                                     callProvider: callProvider,
+                                     timeProvider: TimeProvider(clock: ContinuousClock()) { self.currentDate },
+                                     applicationActivityProvider: activity.provider,
+                                     salemXAnswerBridgeConfiguration: .init(embeddedMatrixRTCAnswerBridgeEnabled: false),
+                                     audioSession: audioSession)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        #expect(audioSession.setCategoryModeOptionsCallsCount == 1)
+        #expect(audioSession.setCategoryModeOptionsReceivedArguments?.category == .playAndRecord)
+        #expect(audioSession.setCategoryModeOptionsReceivedArguments?.mode == .voiceChat)
+        #expect(audioSession.setCategoryModeOptionsReceivedArguments?.options == [.allowBluetoothHFP])
+        #expect(audioSession.setActiveOptionsCallsCount == 0)
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == false)
+    }
+
     private func makeAnswerBridgeService(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
                                                                                                             answerTimeout: .seconds(1)),
                                          bootstrapResolver: BootstrapResolverSpy,
                                          answerBridge: AnswerBridgeSpy,
                                          endBridge: EndBridgeSpy? = nil,
                                          timeProvider: TimeProvider? = nil,
-                                         applicationActivityProvider: ApplicationActivityProvider? = nil) -> ElementCallService {
+                                         applicationActivityProvider: ApplicationActivityProvider? = nil,
+                                         audioSession: AudioSessionProtocol = AudioSessionMock()) -> ElementCallService {
         ElementCallService(appSettings: appSettings,
                            callProvider: callProvider,
                            timeProvider: timeProvider ?? TimeProvider(clock: ContinuousClock()) { self.currentDate },
@@ -2298,7 +2335,8 @@ extension SalemXEmbeddedCallAnswerBridgeServiceTests {
                            salemXAnswerBridgeConfiguration: configuration,
                            salemXIncomingCallBootstrapResolver: bootstrapResolver,
                            salemXAnswerBridge: answerBridge,
-                           salemXEndBridge: endBridge)
+                           salemXEndBridge: endBridge,
+                           audioSession: audioSession)
     }
 
     private func prepareOngoingEmbeddedCall(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
