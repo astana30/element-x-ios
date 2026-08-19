@@ -515,6 +515,7 @@ final class SalemXProductionDispatchCoordinator {
         let preparedRecord: SalemXProductionDispatchPrepareResponse
         switch await dispatchClient.prepare(prepareRequest) {
         case .success(let response):
+            MXLog.info("Production dispatch prepare succeeded.")
             preparedRecord = response
         case .failure(let error):
             MXLog.error("Production dispatch prepare failed: \(error)")
@@ -531,7 +532,7 @@ final class SalemXProductionDispatchCoordinator {
                                                                         appSessionGeneration: input.appSessionGeneration)
         switch await dispatchClient.claim(referenceRequest) {
         case .success:
-            break
+            MXLog.info("Production dispatch claim succeeded.")
         case .failure(let error):
             MXLog.error("Production dispatch claim failed: \(error)")
             return .failed(coordinatorError(for: error))
@@ -551,6 +552,7 @@ final class SalemXProductionDispatchCoordinator {
             guard isCurrent(generation), !Task.isCancelled else {
                 return .failed(Task.isCancelled ? .cancelled : .staleGeneration)
             }
+            MXLog.info("Production dispatch send succeeded.")
             state = .sent
             return .sent(preparedRecord.dispatchID)
         case .failure(.ambiguousSend):

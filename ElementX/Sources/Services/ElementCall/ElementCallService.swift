@@ -913,6 +913,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         static let duplicateSuppression: TimeInterval = 1
     }
 
+    private enum IncomingCallOrigin: Equatable {
+        case push
+        case sessionGlobal
+        case local
+    }
+
     private struct CallID: Equatable {
         let callKitID: UUID
         let roomID: String
@@ -920,6 +926,43 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         let remoteCallID: String?
         let startMode: ElementCallStartMode
         let startedAt: Date
+        let origin: IncomingCallOrigin
+
+        init(callKitID: UUID,
+             roomID: String,
+             rtcNotificationID: String?,
+             remoteCallID: String?,
+             startMode: ElementCallStartMode,
+             startedAt: Date,
+             origin: IncomingCallOrigin = .local) {
+            self.callKitID = callKitID
+            self.roomID = roomID
+            self.rtcNotificationID = rtcNotificationID
+            self.remoteCallID = remoteCallID
+            self.startMode = startMode
+            self.startedAt = startedAt
+            self.origin = origin
+        }
+
+        func withRTCNotificationID(_ rtcNotificationID: String?) -> CallID {
+            CallID(callKitID: callKitID,
+                   roomID: roomID,
+                   rtcNotificationID: rtcNotificationID,
+                   remoteCallID: remoteCallID,
+                   startMode: startMode,
+                   startedAt: startedAt,
+                   origin: origin)
+        }
+
+        func withRemoteCallID(_ remoteCallID: String?) -> CallID {
+            CallID(callKitID: callKitID,
+                   roomID: roomID,
+                   rtcNotificationID: rtcNotificationID,
+                   remoteCallID: remoteCallID,
+                   startMode: startMode,
+                   startedAt: startedAt,
+                   origin: origin)
+        }
     }
 
     private enum ConsumedDirectCallIdentityComponent: Hashable {
@@ -1661,7 +1704,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                             rtcNotificationID: rtcNotificationID,
                             remoteCallID: nil,
                             startMode: incomingStartMode,
-                            startedAt: nowDate)
+                            startedAt: nowDate,
+                            origin: .push)
         isCallKitAudioSessionActive = false
         pendingLegacyAnswerCallID = nil
         incomingCallID = callID
@@ -2980,10 +3024,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         let nowDate = timeProvider.now()
         let callID = CallID(callKitID: UUID(),
                             roomID: roomID,
-                            rtcNotificationID: rtcNotificationID,
+                            rtcNotificationID: Self.matrixEventID(from: rtcNotificationID),
                             remoteCallID: remoteCallID,
                             startMode: .audio,
-                            startedAt: nowDate)
+                            startedAt: nowDate,
+                            origin: .sessionGlobal)
 
         incomingCallID = callID
         openCallSession(roomID: roomID,
@@ -3061,10 +3106,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         let nowDate = timeProvider.now()
         let callID = CallID(callKitID: UUID(),
                             roomID: roomID,
-                            rtcNotificationID: rtcNotificationID,
+                            rtcNotificationID: Self.matrixEventID(from: rtcNotificationID),
                             remoteCallID: remoteCallID,
                             startMode: startMode,
-                            startedAt: nowDate)
+                            startedAt: nowDate,
+                            origin: .sessionGlobal)
 
         storeBootstrap(callID.callKitID)
         incomingCallID = callID
@@ -3702,7 +3748,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         await observeIncomingCallTimeline(roomProxy: roomProxy, incomingCallID: incomingCallID)
         await observeIncomingCallRoomInfo(roomProxy: roomProxy, incomingCallID: incomingCallID)
         
-        guard let rtcNotificationID = incomingCallID.rtcNotificationID else {
+        guard let rtcNotificationID = Self.matrixEventID(from: incomingCallID.rtcNotificationID) else {
             MXLog.warning("Decline: No RTC notification ID found for the incoming call.")
             return
         }
@@ -4015,7 +4061,21 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         participant == userID || participant.hasPrefix("_\(userID)_")
     }
 
+    private static func matrixEventID(from value: String?) -> String? {
+        guard let value, value.hasPrefix("$") else {
+            return nil
+        }
+
+        return value
+    }
+
     private func isIncomingCallStillAliveBeforeAnswer(_ incomingCallID: CallID) async -> Bool {
+        guard incomingCallID.origin != .push else {
+            MXLog.info("Incoming answer guard skipped for PushKit wake in room \(incomingCallID.roomID)")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] origin=push")
+            return true
+        }
+
         guard let clientProxy else {
             MXLog.warning("Incoming answer guard missing ClientProxy for room \(incomingCallID.roomID)")
             return true
@@ -4172,21 +4232,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         if let ongoingCallID,
            ongoingCallID.roomID == roomID,
            ongoingCallID.rtcNotificationID == nil {
-            self.ongoingCallID = CallID(callKitID: ongoingCallID.callKitID,
-                                        roomID: ongoingCallID.roomID,
-                                        rtcNotificationID: rtcNotificationID,
-                                        remoteCallID: ongoingCallID.remoteCallID,
-                                        startMode: ongoingCallID.startMode,
-                                        startedAt: ongoingCallID.startedAt)
+            self.ongoingCallID = ongoingCallID.withRTCNotificationID(rtcNotificationID)
         }
 
         if let recentlyEndedCallID, recentlyEndedCallID.roomID == roomID, recentlyEndedCallID.rtcNotificationID != rtcNotificationID {
-            self.recentlyEndedCallID = CallID(callKitID: recentlyEndedCallID.callKitID,
-                                              roomID: recentlyEndedCallID.roomID,
-                                              rtcNotificationID: rtcNotificationID,
-                                              remoteCallID: recentlyEndedCallID.remoteCallID,
-                                              startMode: recentlyEndedCallID.startMode,
-                                              startedAt: recentlyEndedCallID.startedAt)
+            self.recentlyEndedCallID = recentlyEndedCallID.withRTCNotificationID(rtcNotificationID)
         }
     }
 
@@ -4196,34 +4246,19 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         if let incomingCallID,
            incomingCallID.roomID == roomID,
            incomingCallID.remoteCallID != remoteCallID {
-            self.incomingCallID = CallID(callKitID: incomingCallID.callKitID,
-                                         roomID: incomingCallID.roomID,
-                                         rtcNotificationID: incomingCallID.rtcNotificationID,
-                                         remoteCallID: remoteCallID,
-                                         startMode: incomingCallID.startMode,
-                                         startedAt: incomingCallID.startedAt)
+            self.incomingCallID = incomingCallID.withRemoteCallID(remoteCallID)
         }
 
         if let ongoingCallID,
            ongoingCallID.roomID == roomID,
            ongoingCallID.remoteCallID != remoteCallID {
-            self.ongoingCallID = CallID(callKitID: ongoingCallID.callKitID,
-                                        roomID: ongoingCallID.roomID,
-                                        rtcNotificationID: ongoingCallID.rtcNotificationID,
-                                        remoteCallID: remoteCallID,
-                                        startMode: ongoingCallID.startMode,
-                                        startedAt: ongoingCallID.startedAt)
+            self.ongoingCallID = ongoingCallID.withRemoteCallID(remoteCallID)
         }
 
         if let recentlyEndedCallID,
            recentlyEndedCallID.roomID == roomID,
            recentlyEndedCallID.remoteCallID != remoteCallID {
-            self.recentlyEndedCallID = CallID(callKitID: recentlyEndedCallID.callKitID,
-                                              roomID: recentlyEndedCallID.roomID,
-                                              rtcNotificationID: recentlyEndedCallID.rtcNotificationID,
-                                              remoteCallID: remoteCallID,
-                                              startMode: recentlyEndedCallID.startMode,
-                                              startedAt: recentlyEndedCallID.startedAt)
+            self.recentlyEndedCallID = recentlyEndedCallID.withRemoteCallID(remoteCallID)
         }
 
         if var activeCallSession, activeCallSession.roomID == roomID {

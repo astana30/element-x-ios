@@ -1361,6 +1361,11 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=answer"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=callkit_activated"))
         #expect(source.contains("keptAliveAudioCallKitID = incomingCallID.callKitID"))
+        #expect(source.contains("Incoming answer guard skipped for PushKit wake"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] origin=push"))
+        #expect(source.contains("incomingCallID.origin != .push"))
+        #expect(source.contains("origin: .push"))
+        #expect(source.contains("private static func matrixEventID(from value: String?)"))
     }
 
     @Test
@@ -1387,6 +1392,50 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(!observedActions.contains { if case .startCall = $0 { true } else { false } })
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
 
+        service.handleCallProviderAudioSessionActivation()
+
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == false)
+    }
+
+    @Test
+    func answeredPushKitAudioCallStartsWithoutRemoteMembership() async throws {
+        let activity = ApplicationActivitySpy(isActive: false)
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          applicationActivityProvider: activity.provider)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: Self.roomID,
+                                                              name: "Room",
+                                                              isDirect: true,
+                                                              hasOngoingCall: false,
+                                                              ownUserID: localUserID))
+        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
+            .failure(.missingTransactionID)
+        }
+        let emptyInfo = makeRoomInfo(participants: [])
+        (emptyInfo as? RoomInfoProxyMock)?.hasRoomCall = false
+        let roomInfoSubscription = EmbeddedRoomInfoSubscriptionHarness(initialValue: emptyInfo)
+        roomInfoSubscription.install(on: room)
+
+        let clientProxy = ClientProxyMock(.init(userID: localUserID, deviceID: "LOCAL_DEVICE"))
+        clientProxy.roomForIdentifierClosure = { _ in .joined(room) }
+        service.setClientProxy(clientProxy)
+
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
         service.handleCallProviderAudioSessionActivation()
 
         #expect(await waitUntil {
