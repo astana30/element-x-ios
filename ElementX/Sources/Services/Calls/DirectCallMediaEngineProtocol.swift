@@ -427,6 +427,13 @@ final class URLSessionDirectCallHTTPTransport: DirectCallHTTPTransportProtocol, 
 @MainActor
 protocol DirectCallMatrixAccessTokenProviding {
     func matrixAccessToken() async -> String?
+    func refreshedMatrixAccessToken() async -> String?
+}
+
+extension DirectCallMatrixAccessTokenProviding {
+    func refreshedMatrixAccessToken() async -> String? {
+        await matrixAccessToken()
+    }
 }
 
 struct DirectCallProductionConfiguration: Equatable, CustomStringConvertible, CustomDebugStringConvertible {

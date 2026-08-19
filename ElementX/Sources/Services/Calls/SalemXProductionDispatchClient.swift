@@ -253,9 +253,20 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
     private func perform<Request: Encodable, Response: Decodable>(path: String,
                                                                   request: Request,
                                                                   ambiguousOnTransportFailure: Bool,
-                                                                  timeoutInterval: TimeInterval? = nil) async -> Result<Response, SalemXProductionDispatchClientError> {
+                                                                  timeoutInterval: TimeInterval? = nil,
+                                                                  authenticationRetryAllowed: Bool = true) async -> Result<Response, SalemXProductionDispatchClientError> {
         guard let endpoint = endpointURL(path: path) else { return .failure(.invalidConfiguration) }
-        guard let accessToken = await accessTokenProvider.matrixAccessToken(), !accessToken.isEmpty else {
+        let accessToken: String
+        if authenticationRetryAllowed {
+            guard let token = await accessTokenProvider.matrixAccessToken(), !token.isEmpty else {
+                return .failure(.accessTokenUnavailable)
+            }
+            accessToken = token
+        } else if let token = await accessTokenProvider.refreshedMatrixAccessToken(), !token.isEmpty {
+            accessToken = token
+        } else if let token = await accessTokenProvider.matrixAccessToken(), !token.isEmpty {
+            accessToken = token
+        } else {
             return .failure(.accessTokenUnavailable)
         }
         let body: Data
@@ -279,6 +290,15 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
                 let errcode = SalemXProductionDispatchErrorSanitizer.loggedErrcode(from: response.data)
                 let errorText = SalemXProductionDispatchErrorSanitizer.loggedErrorText(from: response.data)
                 MXLog.error("Production dispatch HTTP failed path=\(path) status=\(response.statusCode) error=\(error) errcode=\(errcode) error_text=\(errorText)")
+                if authenticationRetryAllowed, case .http(.authentication, _) = error {
+                    if Task.isCancelled { return .failure(.cancelled) }
+                    MXLog.info("Production dispatch retrying once after authentication failure path=\(path)")
+                    return await perform(path: path,
+                                         request: request,
+                                         ambiguousOnTransportFailure: ambiguousOnTransportFailure,
+                                         timeoutInterval: timeoutInterval,
+                                         authenticationRetryAllowed: false)
+                }
                 return .failure(error)
             }
             do {

@@ -1461,6 +1461,11 @@ extension ClientProxy: DirectCallMatrixAccessTokenProviding {
     func matrixAccessToken() async -> String? {
         accessToken
     }
+
+    func refreshedMatrixAccessToken() async -> String? {
+        _ = await profile(for: userID)
+        return accessToken
+    }
 }
 
 private extension CreateRoomAccessType {
