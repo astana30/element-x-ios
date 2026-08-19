@@ -1185,20 +1185,6 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         pushRegistry = nil
     }
 
-    private final class ApplicationActivitySpy {
-        var isActive: Bool
-        let didBecomeActiveSubject = PassthroughSubject<Void, Never>()
-
-        init(isActive: Bool) {
-            self.isActive = isActive
-        }
-
-        var provider: ApplicationActivityProvider {
-            ApplicationActivityProvider(isActive: { [weak self] in self?.isActive ?? false },
-                                        didBecomeActivePublisher: didBecomeActiveSubject.eraseToAnyPublisher())
-        }
-    }
-
     @Test
     func foregroundVideoAnswerRetainsLegacyRoute() async throws {
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
@@ -2248,7 +2234,23 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(endBridge.calls.count == 1)
         #expect(bootstrapResolver.removedCallIDs == [callID])
     }
+}
 
+private final class ApplicationActivitySpy {
+    var isActive: Bool
+    let didBecomeActiveSubject = PassthroughSubject<Void, Never>()
+
+    init(isActive: Bool) {
+        self.isActive = isActive
+    }
+
+    var provider: ApplicationActivityProvider {
+        ApplicationActivityProvider(isActive: { [weak self] in self?.isActive ?? false },
+                                    didBecomeActivePublisher: didBecomeActiveSubject.eraseToAnyPublisher())
+    }
+}
+
+extension SalemXEmbeddedCallAnswerBridgeServiceTests {
     private func makeAnswerBridgeService(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
                                                                                                             answerTimeout: .seconds(1)),
                                          bootstrapResolver: BootstrapResolverSpy,
