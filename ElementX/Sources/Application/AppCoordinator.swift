@@ -94,7 +94,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         let appVersion = InfoPlistReader.main.bundleShortVersionString
         let appBuild = InfoPlistReader.main.bundleVersion
         MXLog.info("\(appName) \(appVersion) (\(appBuild))")
-        MXLog.info("App Store line build: callkit-end-on-hangup unstick-handset audio-only no-video-button outgoing-hangup-callkit lock-answer-no-wait skip-stale-on-push earpiece-voicechat no-audio-session-loop reassert-voicechat-category matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session callkit-answer-playandrecord wait-callkit-audio virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first")
+        MXLog.info("App Store line build: callkit-end-on-hangup unstick-handset audio-only no-video-button outgoing-hangup-callkit lock-answer-no-wait skip-stale-on-push earpiece-voicechat no-audio-session-loop reassert-voicechat-category matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session callkit-answer-playandrecord wait-callkit-audio wait-unlock-after-audio virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first")
         
         if ProcessInfo.processInfo.environment["RESET_APP_SETTINGS"].map(Bool.init) == true {
             AppSettings.resetAllSettings()

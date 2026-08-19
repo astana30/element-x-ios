@@ -273,7 +273,8 @@ struct TimeProvider {
 }
 
 /// Exposes whether the app is in the foreground. Audio CallKit answers wait for
-/// `didActivate` rather than unlock; this is still used for logging and consume retries.
+/// `didActivate`, then wait to unlock before starting Element Call so WKWebView
+/// can use keychain and media. CallKit stays connected across that wait.
 struct ApplicationActivityProvider {
     var isActive: () -> Bool
     var didBecomeActivePublisher: AnyPublisher<Void, Never>
@@ -1145,6 +1146,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private var pendingLegacyAnswerCallID: CallID?
     private var pendingCallKitAudioStartTimeoutTask: Task<Void, Never>?
     private var shouldSkipCallKitAudioWait = false
+    private var didWaitForUnlockBeforeStart = false
     private let callKitAudioActivationStartTimeout: Duration
     private var keptAliveAudioCallKitID: UUID?
     private let applicationActivityProvider: ApplicationActivityProvider
@@ -2072,7 +2074,14 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         incomingCallID.startMode == .audio && !isCallKitAudioSessionActive && !shouldSkipCallKitAudioWait
     }
 
+    private func shouldWaitForUnlockBeforeStarting(_ incomingCallID: CallID) -> Bool {
+        incomingCallID.startMode == .audio && !applicationActivityProvider.isActive()
+    }
+
     private func legacyAnswerResumeReason() -> String {
+        if didWaitForUnlockBeforeStart {
+            return "unlock"
+        }
         if shouldSkipCallKitAudioWait, !isCallKitAudioSessionActive {
             return "audio_timeout"
         }
@@ -2085,6 +2094,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private func resetCallKitAudioAnswerWaitState() {
         cancelCallKitAudioStartTimeout()
         shouldSkipCallKitAudioWait = false
+        didWaitForUnlockBeforeStart = false
         pendingLegacyAnswerCallID = nil
     }
 
@@ -2134,6 +2144,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 return
             }
 
+            if shouldWaitForUnlockBeforeStarting(incomingCallID) {
+                didWaitForUnlockBeforeStart = true
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-UNLOCK] callkit_id=\(incomingCallID.callKitID) application_active=false callkit_audio_active=\(isCallKitAudioSessionActive)")
+                return
+            }
+
             let isApplicationActive = applicationActivityProvider.isActive()
             let resumeReason = legacyAnswerResumeReason()
             MXLog.info("Resuming answered call because \(resumeReason)")
@@ -2149,6 +2165,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
         cancelCallKitAudioStartTimeout()
         shouldSkipCallKitAudioWait = false
+        didWaitForUnlockBeforeStart = false
         self.pendingLegacyAnswerCallID = nil
         Task { @MainActor in
             guard self.incomingCallID?.callKitID == pendingLegacyAnswerCallID.callKitID else {

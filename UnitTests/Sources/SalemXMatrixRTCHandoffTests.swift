@@ -1361,6 +1361,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason="))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-CONSUME]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-AUDIO]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-UNLOCK]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-AUDIO-TIMEOUT]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-RECEIVED]"))
         #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-WAIT-SESSION]"))
@@ -1372,7 +1373,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
-    func answeredAudioCallStartsWhenCallKitActivatesEvenIfApplicationIsInactive() async throws {
+    func answeredAudioCallWaitsForUnlockAfterCallKitAudioActivation() async throws {
         let activity = ApplicationActivitySpy(isActive: false)
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
@@ -1392,15 +1393,21 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
 
         #expect(action.fulfillCount == 1)
         try? await Task.sleep(for: .milliseconds(80))
-        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 0)
+        #expect(startCallCount(in: observedActions) == 0)
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
 
         service.handleCallProviderAudioSessionActivation()
-        #expect(await waitUntil {
-            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
-        })
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
         #expect(activity.isActive == false)
+
+        unlock(activity)
+        #expect(await waitUntil {
+            startCallCount(in: observedActions) == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == true)
     }
 
     @Test
@@ -1439,12 +1446,16 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         let action = AnswerActionSpy(callUUID: callID)
         service.handleAnswerCallAction(action, provider: callProvider)
         service.handleCallProviderAudioSessionActivation()
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
 
+        unlock(activity)
         #expect(await waitUntil {
-            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+            startCallCount(in: observedActions) == 1
         })
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
-        #expect(activity.isActive == false)
+        #expect(activity.isActive == true)
     }
 
     @Test
@@ -2269,7 +2280,7 @@ private final class ApplicationActivitySpy {
 
 extension SalemXEmbeddedCallAnswerBridgeServiceTests {
     @Test
-    func answeredLockedAudioCallStartsWhenCallKitAudioActivatesWithoutUnlock() async throws {
+    func answeredLockedAudioCallStartsAfterUnlockWhenCallKitAudioIsActive() async throws {
         let activity = ApplicationActivitySpy(isActive: false)
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
@@ -2289,13 +2300,19 @@ extension SalemXEmbeddedCallAnswerBridgeServiceTests {
 
         #expect(action.fulfillCount == 1)
         try? await Task.sleep(for: .milliseconds(80))
-        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 0)
+        #expect(startCallCount(in: observedActions) == 0)
         service.handleCallProviderAudioSessionActivation()
-        #expect(await waitUntil {
-            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
-        })
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
         #expect(activity.isActive == false)
+
+        unlock(activity)
+        #expect(await waitUntil {
+            startCallCount(in: observedActions) == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == true)
     }
 
     @Test
@@ -2325,15 +2342,21 @@ extension SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(audioSession.setCategoryModeOptionsReceivedArguments?.options == [.allowBluetoothHFP])
         #expect(audioSession.setActiveOptionsCallsCount == 0)
         try? await Task.sleep(for: .milliseconds(80))
-        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 0)
+        #expect(startCallCount(in: observedActions) == 0)
 
         service.handleCallProviderAudioSessionActivation()
-        #expect(await waitUntil {
-            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
-        })
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
         #expect(audioSession.setActiveOptionsCallsCount == 0)
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
         #expect(activity.isActive == false)
+
+        unlock(activity)
+        #expect(await waitUntil {
+            startCallCount(in: observedActions) == 1
+        })
+        #expect(audioSession.setActiveOptionsCallsCount == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
     }
 
     @Test
@@ -2357,11 +2380,26 @@ extension SalemXEmbeddedCallAnswerBridgeServiceTests {
         service.handleAnswerCallAction(action, provider: callProvider)
 
         #expect(action.fulfillCount == 1)
-        #expect(await waitUntil {
-            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
-        })
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(startCallCount(in: observedActions) == 0)
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
         #expect(activity.isActive == false)
+
+        unlock(activity)
+        #expect(await waitUntil {
+            startCallCount(in: observedActions) == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == true)
+    }
+
+    private func startCallCount(in actions: [ElementCallServiceAction]) -> Int {
+        actions.filter { if case .startCall = $0 { true } else { false } }.count
+    }
+
+    private func unlock(_ activity: ApplicationActivitySpy) {
+        activity.isActive = true
+        activity.didBecomeActiveSubject.send()
     }
 
     private func makeAnswerBridgeService(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
