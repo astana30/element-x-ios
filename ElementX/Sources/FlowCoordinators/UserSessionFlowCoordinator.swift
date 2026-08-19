@@ -911,8 +911,6 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     
     private func hideCallScreenOverlay() {
         guard activeCallStartMode == .video else {
-            MXLog.info("Minimizing audio call without Picture in Picture.")
-            navigationTabCoordinator.setOverlayPresentationMode(.minimized)
             return
         }
 

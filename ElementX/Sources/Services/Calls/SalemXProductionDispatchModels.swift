@@ -305,3 +305,83 @@ struct SalemXProductionDispatchServerErrorResponse: Codable, Equatable, CustomSt
         "SalemXProductionDispatchServerErrorResponse(errcode: <redacted>, error: <redacted>)"
     }
 }
+
+enum SalemXProductionDispatchOpaqueToken {
+    static let maxCallHandleLength = 128
+    static let maxDisplayLabelLength = 120
+
+    static func callHandle() -> String {
+        "salemx" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    }
+
+    static func isValidCallHandle(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= maxCallHandleLength else {
+            return false
+        }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+        return value.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    static func sanitizedCallHandle(_ value: String) -> String {
+        isValidCallHandle(value) ? value : callHandle()
+    }
+
+    static func sanitizedDisplayLabel(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let limited = String(trimmed.prefix(maxDisplayLabelLength))
+        return limited.isEmpty ? "Audio call" : limited
+    }
+}
+
+enum SalemXProductionDispatchErrorSanitizer {
+    static func loggedErrcode(from data: Data) -> String {
+        sanitizeErrcode(jsonString("errcode", from: data))
+    }
+
+    static func loggedErrorText(from data: Data) -> String {
+        sanitizeErrorText(jsonString("error", from: data))
+    }
+
+    static func sanitizeErrcode(_ value: String?) -> String {
+        guard let value, !value.isEmpty else {
+            return "none"
+        }
+        let allowed = value.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == ".") }
+        let trimmed = String(allowed.prefix(64))
+        return trimmed.isEmpty ? "unrecognized" : trimmed
+    }
+
+    static func sanitizeErrorText(_ value: String?) -> String {
+        guard let value, !value.isEmpty else {
+            return "none"
+        }
+
+        let kept = value.split { character in
+            character.isWhitespace || character == "," || character == ";"
+        }.compactMap { token -> String? in
+            let raw = String(token).trimmingCharacters(in: CharacterSet.punctuationCharacters)
+            guard !raw.isEmpty,
+                  raw.count <= 32,
+                  !raw.contains("@"),
+                  !raw.contains("!"),
+                  !raw.hasPrefix("$") else {
+                return nil
+            }
+            let filtered = raw.filter { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) }
+            return filtered.isEmpty ? nil : filtered
+        }
+
+        let joined = kept.joined(separator: " ")
+        if joined.isEmpty {
+            return "redacted"
+        }
+        return String(joined.prefix(80))
+    }
+
+    private static func jsonString(_ key: String, from data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object[key] as? String
+    }
+}

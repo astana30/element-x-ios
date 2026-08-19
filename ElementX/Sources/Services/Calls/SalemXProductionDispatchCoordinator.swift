@@ -505,10 +505,10 @@ final class SalemXProductionDispatchCoordinator {
 
         let prepareRequest = SalemXProductionDispatchPrepareRequest(recipient: input.admission.recipient,
                                                                     recipientDevice: input.admission.recipientDevice,
-                                                                    callHandle: context.callHandle,
+                                                                    callHandle: SalemXProductionDispatchOpaqueToken.sanitizedCallHandle(context.callHandle),
                                                                     createdAtMS: input.createdAtMS,
                                                                     expiresAtMS: input.expiresAtMS,
-                                                                    displayLabel: input.admission.displayLabel,
+                                                                    displayLabel: SalemXProductionDispatchOpaqueToken.sanitizedDisplayLabel(input.admission.displayLabel),
                                                                     appSessionGeneration: input.appSessionGeneration,
                                                                     pendingMetadata: .init(callID: context.callID,
                                                                                            roomID: context.roomID))

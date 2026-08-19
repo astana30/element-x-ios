@@ -3842,6 +3842,27 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
     }
 
     @Test
+    func staleOngoingCallWithoutRemoteParticipantsDoesNotReportIncomingCallKit() async {
+        let roomSummaries = configureRoomSummaryProvider()
+        service.setClientProxy(clientProxy)
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        roomSummaries.send([
+            makeRoomSummary(id: "redacted-room",
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: [],
+                            lastCallEvent: .init(state: .incoming, intent: .audio))
+        ])
+
+        #expect(await waitForIncomingCallReports(count: 1) == false)
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+    }
+
+    @Test
     func localMatrixRTCPresenceDoesNotReportIncomingCallKit() async {
         let roomSummaries = configureRoomSummaryProvider()
         service.setClientProxy(clientProxy)

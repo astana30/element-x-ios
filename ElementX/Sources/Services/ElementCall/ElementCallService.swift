@@ -1363,7 +1363,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         state.confirmedMembership = identity
         let context = SalemXStockElementCallContext(callID: identity.callScope.callID,
                                                     roomID: state.roomID,
-                                                    callHandle: identity.stateKey)
+                                                    callHandle: SalemXProductionDispatchOpaqueToken.callHandle())
         MXLog.info("Production dispatch confirming local MatrixRTC membership after \(source).")
         finishProductionDispatchConfirmation(state, result: .success(context))
     }
@@ -2637,7 +2637,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 state.observedConfirmedMembershipInTimeline = true
                 let context = SalemXStockElementCallContext(callID: candidate.key.callScope.callID,
                                                             roomID: state.roomID,
-                                                            callHandle: candidate.key.stateKey)
+                                                            callHandle: SalemXProductionDispatchOpaqueToken.callHandle())
                 MXLog.info("Production dispatch observed a fresh local MatrixRTC membership.")
                 finishProductionDispatchConfirmation(state, result: .success(context))
             } else if candidates.count > 1 {
@@ -2680,7 +2680,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             state.observedLocalParticipantAfterConfirmation = true
             let context = SalemXStockElementCallContext(callID: identity.callScope.callID,
                                                         roomID: state.roomID,
-                                                        callHandle: identity.stateKey)
+                                                        callHandle: SalemXProductionDispatchOpaqueToken.callHandle())
             MXLog.info("Production dispatch observed local MatrixRTC participation in room info.")
             finishProductionDispatchConfirmation(state, result: .success(context))
         }
@@ -2875,18 +2875,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             return false
         }
 
-        let hasRemoteParticipant = summary.activeRoomCallParticipants.contains { !participantBelongsToUser($0, userID: ownUserID) }
-        if hasRemoteParticipant {
-            return true
-        }
-
-        guard summary.hasOngoingCall,
-              let lastCallEvent = summary.lastCallEvent,
-              Self.isIncomingFallbackStartEvent(lastCallEvent) else {
-            return false
-        }
-
-        return true
+        return summary.activeRoomCallParticipants.contains { !participantBelongsToUser($0, userID: ownUserID) }
     }
 
     private func handleSessionGlobalSyncNotification(_ notification: NotificationItem,

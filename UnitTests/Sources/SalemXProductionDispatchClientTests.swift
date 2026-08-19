@@ -131,6 +131,18 @@ struct SalemXProductionDispatchClientTests {
     }
 
     @Test
+    func invalidCallHandleBadRequestIsBucketedWithoutIdentifiers() async {
+        let transport = DispatchTransportSpy(response: .success(.init(statusCode: 400,
+                                                                      data: Data(#"{"errcode":"M_UNKNOWN","error":"Invalid foreground call handle."}"#.utf8))))
+        #expect(await makeClient(transport: transport).prepare(prepareRequest()) == .failure(.http(.other, .invalidRequest)))
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedErrcode(from: Data(#"{"errcode":"M_UNKNOWN","error":"Invalid foreground call handle."}"#.utf8)) == "M_UNKNOWN")
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedErrorText(from: Data(#"{"errcode":"M_UNKNOWN","error":"Invalid foreground call handle."}"#.utf8)) == "Invalid foreground call handle")
+        #expect(!SalemXProductionDispatchErrorSanitizer.sanitizeErrorText("User @alice:example.org missing").contains("alice"))
+        #expect(SalemXProductionDispatchOpaqueToken.isValidCallHandle(SalemXProductionDispatchOpaqueToken.callHandle()))
+        #expect(!SalemXProductionDispatchOpaqueToken.isValidCallHandle("_@alice:example.test_DEVICE_m.call"))
+    }
+
+    @Test
     func ambiguousSendRemainsAmbiguousAndIsNotRetried() async {
         let transport = DispatchTransportSpy(response: .failure(.tokenUnavailable))
         let result = await makeClient(transport: transport).sendPrepared(sendRequest())

@@ -30,6 +30,21 @@ struct SalemXProductionDispatchCoordinatorTests {
     }
 
     @Test
+    func prepareReplacesMatrixMembershipStateKeyWithOpaqueCallHandle() async throws {
+        let lifecycle = LifecycleSpy(callHandle: "_@alice:example.test_DEVICE_m.call")
+        let client = DispatchClientSpy()
+        let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
+
+        _ = await coordinator.start(input())
+
+        let handle = try #require(client.prepareRequests.first?.callHandle)
+        #expect(SalemXProductionDispatchOpaqueToken.isValidCallHandle(handle))
+        #expect(!handle.contains("@"))
+        #expect(!handle.contains(":"))
+        #expect(handle != "_@alice:example.test_DEVICE_m.call")
+    }
+
+    @Test
     func duplicateTapsCoalesceIntoOneStockCallAndOneDispatch() async {
         let lifecycle = LifecycleSpy(waitBeforeStart: true)
         let client = DispatchClientSpy()
@@ -587,6 +602,7 @@ private final class LifecycleSpy: SalemXProductionDispatchStockCallLifecycleProt
     private let waitBeforeStart: Bool
     private let waitBeforeMembership: Bool
     private let waitBeforeMembershipRemoval: Bool
+    private let callHandle: String
     private let recorder: Stage5EventRecorder?
     private var startRequested = false
     private var startMayContinue = false
@@ -600,10 +616,12 @@ private final class LifecycleSpy: SalemXProductionDispatchStockCallLifecycleProt
     init(waitBeforeStart: Bool = false,
          waitBeforeMembership: Bool = false,
          waitBeforeMembershipRemoval: Bool = false,
+         callHandle: String = "call-handle",
          recorder: Stage5EventRecorder? = nil) {
         self.waitBeforeStart = waitBeforeStart
         self.waitBeforeMembership = waitBeforeMembership
         self.waitBeforeMembershipRemoval = waitBeforeMembershipRemoval
+        self.callHandle = callHandle
         self.recorder = recorder
     }
 
@@ -620,7 +638,7 @@ private final class LifecycleSpy: SalemXProductionDispatchStockCallLifecycleProt
                 await Task.yield()
             }
         }
-        return .success(.init(roomID: "!room:example.test", callID: "call-id", callHandle: "call-handle"))
+        return .success(.init(roomID: "!room:example.test", callID: "call-id", callHandle: callHandle))
     }
 
     func awaitConfirmedLocalMembership(for context: SalemXProductionDispatchStockCallContext) async

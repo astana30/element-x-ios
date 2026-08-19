@@ -24,6 +24,7 @@ enum SalemXProductionDispatchServerReasonBucket: String {
     case conflict
     case deliveryFailed
     case unavailable
+    case invalidRequest
     case unknown
 }
 
@@ -275,7 +276,9 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
             if Task.isCancelled { return .failure(.cancelled) }
             guard (200..<300).contains(response.statusCode) else {
                 let error = httpError(response)
-                MXLog.error("Production dispatch HTTP failed path=\(path) status=\(response.statusCode) error=\(error)")
+                let errcode = SalemXProductionDispatchErrorSanitizer.loggedErrcode(from: response.data)
+                let errorText = SalemXProductionDispatchErrorSanitizer.loggedErrorText(from: response.data)
+                MXLog.error("Production dispatch HTTP failed path=\(path) status=\(response.statusCode) error=\(error) errcode=\(errcode) error_text=\(errorText)")
                 return .failure(error)
             }
             do {
@@ -317,6 +320,7 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
     private static func reasonBucket(_ errcode: String?) -> SalemXProductionDispatchServerReasonBucket {
         guard let errcode else { return .unknown }
         if errcode == "M_UNRECOGNIZED" { return .disabled }
+        if errcode == "M_UNKNOWN" || errcode == "M_BAD_JSON" || errcode == "M_INVALID_PARAM" { return .invalidRequest }
         if errcode.contains("CAPABILITY") || errcode.contains("BINDING") { return .capability }
         if errcode.contains("EXPIRED") { return .expired }
         if errcode.contains("CONFLICT") || errcode == "M_FORBIDDEN" { return .conflict }
