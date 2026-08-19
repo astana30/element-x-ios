@@ -1197,22 +1197,21 @@ extension CallScreenViewModelTests {
     }
 
     @Test
-    func audioCallKeepsReassertingVoiceChatEarpiece() throws {
+    func audioCallLeavesWebRTCAudioSessionAlone() throws {
         let callScreen = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift")
         let session = try repositorySource(named: "ElementX/Sources/Services/ElementCall/CallVoiceAudioSession.swift")
-        #expect(session.contains("mode: .voiceChat"))
-        #expect(session.contains("overrideOutputAudioPort"))
-        #expect(session.contains(".allowBluetoothHFP"))
-        #expect(session.contains("categoryOptions.contains(.defaultToSpeaker)"))
-        #expect(!session.contains("options: [.defaultToSpeaker]"))
+        #expect(session.contains("leave_webrtc=true"))
+        #expect(!session.contains("overrideOutputAudioPort"))
+        #expect(!session.contains("setCategory"))
         #expect(!session.contains("setActive("))
-        #expect(callScreen.contains("CallVoiceAudioSession.restoreEarpieceIfNeeded()"))
+        #expect(!session.contains(".allowBluetoothHFP"))
+        #expect(!session.contains(".defaultToSpeaker"))
+        #expect(callScreen.contains("CallVoiceAudioSession.logCurrentRoute"))
         #expect(callScreen.contains("CallVoiceAudioSession.applyOutputPort(speakerEnabled:"))
         #expect(!callScreen.contains("CallVoiceAudioSession.configure"))
         #expect(callScreen.contains("guard deviceID == Self.earpieceID else"))
-        #expect(callScreen.contains(".milliseconds(300)"))
-        #expect(callScreen.contains(".seconds(4)"))
-        #expect(!callScreen.contains(".seconds(8)"))
+        #expect(!callScreen.contains(".milliseconds(300)"))
+        #expect(!callScreen.contains(".seconds(4)"))
         #expect(!callScreen.contains("Failed updating call audio route with error"))
     }
 
@@ -1220,7 +1219,7 @@ extension CallScreenViewModelTests {
     func appStoreLinePresentsIncomingCallsFromMatrixRTCPresence() throws {
         let appCoordinator = try repositorySource(named: "ElementX/Sources/Application/AppCoordinator.swift")
         let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
-        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry"))
+        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session"))
         #expect(callService.contains("[MATRIXRTC-PRESENCE-INCOMING]"))
         #expect(callService.contains("source=matrixrtc_presence"))
         #expect(callService.contains("Production dispatch confirming local MatrixRTC membership after \\(source)."))

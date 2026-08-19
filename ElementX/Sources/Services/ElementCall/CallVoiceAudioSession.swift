@@ -14,46 +14,24 @@ enum CallVoiceAudioSession {
         lastLoggedSignature = nil
     }
 
-    /// Restores PlayAndRecord + voiceChat without activating the session.
-    /// CallKit or WebRTC owns `setActive`. WebRTC often reapplies `.defaultToSpeaker`
-    /// after getUserMedia; this clears that option and then overrides the port.
+    /// WKWebView WebRTC owns category, mode, and output port. Mutating the
+    /// shared audio session after getUserMedia mutes the call. CallKit still owns
+    /// session activation for incoming audio; this helper only logs the current route.
     static func prepareEarpieceCategoryIfNeeded() {
-        applyOutputPort(speakerEnabled: false)
+        logCurrentRoute(speakerEnabled: false)
     }
 
     static func applyOutputPort(speakerEnabled: Bool) {
-        let session = AVAudioSession.sharedInstance()
-        let previousOutput = session.currentRoute.outputs.first?.portType
-        if isExternalOutput(previousOutput) {
-            logIfChanged(session: session, speakerEnabled: false, output: previousOutput)
-            return
-        }
-
-        let needsVoiceChatCategory = session.category != .playAndRecord
-            || session.mode != .voiceChat
-            || session.categoryOptions.contains(.defaultToSpeaker)
-        let needsPort = speakerEnabled ? previousOutput != .builtInSpeaker : previousOutput != .builtInReceiver
-
-        if !needsVoiceChatCategory, !needsPort {
-            logIfChanged(session: session, speakerEnabled: speakerEnabled, output: previousOutput)
-            return
-        }
-
-        do {
-            if needsVoiceChatCategory {
-                try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
-            }
-            try session.overrideOutputAudioPort(speakerEnabled ? .speaker : .none)
-        } catch {
-            MXLog.error("Failed updating call audio output port with error: \(error)")
-            return
-        }
-
-        logIfChanged(session: session, speakerEnabled: speakerEnabled, output: session.currentRoute.outputs.first?.portType)
+        logCurrentRoute(speakerEnabled: speakerEnabled)
     }
 
     static func restoreEarpieceIfNeeded() {
-        applyOutputPort(speakerEnabled: false)
+        logCurrentRoute(speakerEnabled: false)
+    }
+
+    static func logCurrentRoute(speakerEnabled: Bool) {
+        let session = AVAudioSession.sharedInstance()
+        logIfChanged(session: session, speakerEnabled: speakerEnabled, output: session.currentRoute.outputs.first?.portType)
     }
 
     private static func logIfChanged(session: AVAudioSession, speakerEnabled: Bool, output: AVAudioSession.Port?) {
@@ -64,15 +42,6 @@ enum CallVoiceAudioSession {
         }
 
         lastLoggedSignature = signature
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-ROUTE] speaker_enabled=\(speakerEnabled) category=\(session.category.rawValue) mode=\(session.mode.rawValue) options=\(session.categoryOptions.rawValue) output=\(outputName)")
-    }
-
-    private static func isExternalOutput(_ port: AVAudioSession.Port?) -> Bool {
-        switch port {
-        case .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .headphones, .headsetMic, .carAudio:
-            return true
-        default:
-            return false
-        }
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-ROUTE] leave_webrtc=true speaker_enabled=\(speakerEnabled) category=\(session.category.rawValue) mode=\(session.mode.rawValue) options=\(session.categoryOptions.rawValue) output=\(outputName)")
     }
 }
