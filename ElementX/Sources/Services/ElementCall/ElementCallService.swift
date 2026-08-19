@@ -1855,14 +1855,16 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 return
             }
 
-            guard applicationActivityProvider.isActive() else {
-                MXLog.info("Delaying answered call presentation until the application becomes active")
-                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-ACTIVE]")
+            let isApplicationActive = applicationActivityProvider.isActive()
+            guard isApplicationActive || isCallKitAudioSessionActive else {
+                MXLog.info("Delaying answered call presentation until CallKit activates audio or the application becomes active")
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-ACTIVE] application_active=false callkit_audio_active=false")
                 return
             }
 
-            MXLog.info("Resuming answered call because the application is active")
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason=application_active")
+            let reason = isCallKitAudioSessionActive ? "callkit_activated" : "application_active"
+            MXLog.info("Resuming answered call because \(reason)")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason=\(reason) application_active=\(isApplicationActive) callkit_audio_active=\(isCallKitAudioSessionActive)")
             resumePendingLegacyAnswerPresentation(provider: provider)
         }
     }

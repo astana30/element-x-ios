@@ -1364,7 +1364,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
-    func answeredAudioCallWaitsForApplicationToBecomeActiveBeforeStarting() async throws {
+    func answeredAudioCallStartsWhenCallKitActivatesEvenIfApplicationIsInactive() async throws {
         let activity = ApplicationActivitySpy(isActive: false)
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
@@ -1388,16 +1388,12 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
 
         service.handleCallProviderAudioSessionActivation()
-        try? await Task.sleep(for: .milliseconds(80))
-        #expect(!observedActions.contains { if case .startCall = $0 { true } else { false } })
-
-        activity.isActive = true
-        activity.didBecomeActiveSubject.send()
 
         #expect(await waitUntil {
             observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
         })
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == false)
     }
 
     @Test

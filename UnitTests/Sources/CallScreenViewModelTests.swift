@@ -1253,6 +1253,8 @@ extension CallScreenViewModelTests {
     func appStoreLinePresentsIncomingCallsFromMatrixRTCPresence() throws {
         let appCoordinator = try repositorySource(named: "ElementX/Sources/Application/AppCoordinator.swift")
         let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+        #expect(appCoordinator.contains("answer-on-callkit-activate"))
+        #expect(!appCoordinator.contains(" answer-on-active "))
         #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session no-native-category virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway"))
         #expect(callService.contains("[MATRIXRTC-PRESENCE-INCOMING]"))
         #expect(callService.contains("source=matrixrtc_presence"))
