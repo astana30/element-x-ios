@@ -1041,6 +1041,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     @MainActor private var productionDispatchCapabilityRetryCount = 0
     @MainActor private var productionDispatchReceiverConsumptions = Set<UUID>()
     @MainActor private var productionDispatchObservations = [UUID: SalemXStockElementCallObservationState]()
+    nonisolated(unsafe) private var productionDispatchObservedRoomIDs = Set<String>()
     
     private weak var clientProxy: ClientProxyProtocol? {
         didSet {
@@ -1230,6 +1231,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                                                            ownDeviceID: ownDeviceID,
                                                            armedAtMilliseconds: UInt64(max(0, timeProvider.now().timeIntervalSince1970 * 1000)))
         productionDispatchObservations[handle.observationID] = state
+        syncProductionDispatchObservedRoomIDs()
 
         let observation = await stateObserver.observeMatrixRTCCallMembershipState { [weak self] itemProxies in
             Task { @MainActor [weak self] in
@@ -2753,6 +2755,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
         finishProductionDispatchConfirmation(state, result: .failure(.cancelled))
         finishProductionDispatchRemoval(state, result: .failure(.cancelled))
+        syncProductionDispatchObservedRoomIDs()
+    }
+
+    @MainActor
+    private func syncProductionDispatchObservedRoomIDs() {
+        productionDispatchObservedRoomIDs = Set(productionDispatchObservations.values.map(\.roomID))
     }
 
     private func observeSessionGlobalIncomingCalls() {
@@ -2848,7 +2856,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
               incomingCallID == nil,
               ongoingCallID == nil,
               activeCallSession?.roomID != summary.id,
-              !productionDispatchObservations.values.contains(where: { $0.roomID == summary.id }),
+              !productionDispatchObservedRoomIDs.contains(summary.id),
               let ownUserID = clientProxy?.userID else {
             return false
         }

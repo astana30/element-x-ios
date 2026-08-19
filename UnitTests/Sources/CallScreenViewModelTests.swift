@@ -1225,6 +1225,7 @@ extension CallScreenViewModelTests {
         #expect(callService.contains("source=matrixrtc_presence"))
         #expect(callService.contains("Production dispatch confirming local MatrixRTC membership after \\(source)."))
         #expect(callService.contains("confirmOutgoingCallMembershipAfterCallScreenPresentation"))
+        #expect(callService.contains("productionDispatchObservedRoomIDs"))
         #expect(callService.contains("Production direct-call capability registration failed: \\(error)"))
         #expect(callService.contains("membershipConfirmationTimeout: Duration = .seconds(5)"))
         #expect(!callService.contains("DirectCallEngine"))
