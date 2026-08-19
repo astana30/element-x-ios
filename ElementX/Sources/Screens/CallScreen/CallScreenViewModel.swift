@@ -606,7 +606,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     """
 
     private var shouldControlAudioRoute: Bool {
-        configuration.startMode == .audio
+        configuration.startMode == .audio && !elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID)
     }
 
     private static func makeDirectRoomCallDetails(roomProxy: JoinedRoomProxyProtocol, startMode: ElementCallStartMode) -> DirectRoomCallDetails? {

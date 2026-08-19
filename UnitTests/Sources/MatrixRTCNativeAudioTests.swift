@@ -107,6 +107,7 @@ final class MatrixRTCNativeAudioTests {
 
         #expect(callScreen.contains("ownsNativeMatrixRTCAudio"))
         #expect(callScreen.contains("isNativeMatrixRTCAudioActive = true"))
+        #expect(callScreen.contains("!elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID)"))
         #expect(!callScreen.contains("DirectCallEngine"))
     }
 
@@ -119,6 +120,7 @@ final class MatrixRTCNativeAudioTests {
 
         let callService = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
         #expect(callService.contains("nativeAudioController.isActive"))
+        #expect(callService.contains("skipped=already_active"))
         #expect(!callService.contains("!= .inactive"))
 
         let generatedMocks = try Self.source(named: "ElementX/Sources/Mocks/Generated/GeneratedMocks.swift")
@@ -137,6 +139,11 @@ final class MatrixRTCNativeAudioTests {
         #expect(handoff.contains("final class MatrixRTCNativeWidgetBridge"))
         #expect(!handoff.contains("?? await"))
         #expect(!handoff.contains("if let widgetBridge, await"))
+        #expect(handoff.contains("isAutomaticConfigurationEnabled = false"))
+        #expect(handoff.contains("isAutomaticDeactivationEnabled = false"))
+        #expect(handoff.contains("skipped=already_active"))
+        #expect(handoff.contains("private func publishMembership(session: SessionContext) async -> Bool"))
+        #expect(!handoff.contains("widgetBridge.sendMembership"))
     }
 
     @Test
@@ -167,6 +174,11 @@ final class MatrixRTCNativeAudioTests {
         #expect(controller.state == .connected)
         #expect(liveKit.connectCount == 1)
         #expect(liveKit.microphoneEnabled == true)
+        #expect(signalingHTTP.requests.contains { $0.method == "PUT" && $0.url.path.contains("org.matrix.msc3401.call.member") })
+
+        await controller.joinIncomingAudio(roomID: "!room:example.com", clientProxy: clientProxy)
+        #expect(liveKit.connectCount == 1)
+        #expect(controller.state == .connected)
 
         controller.leave()
         #expect(controller.state == .inactive)

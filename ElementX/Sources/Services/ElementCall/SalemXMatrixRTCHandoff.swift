@@ -2607,15 +2607,6 @@ final class MatrixRTCNativeWidgetBridge {
         return MatrixRTCOpenIDToken.parse(response)
     }
 
-    func sendMembership(_ membership: MatrixRTCNativeMembership, content: [String: Any]) async -> Bool {
-        let data: [String: Any] = [
-            "type": "org.matrix.msc3401.call.member",
-            "state_key": membership.stateKey,
-            "content": content
-        ]
-        return await send(action: "send_event", data: data) != nil
-    }
-
     func sendEncryptionKey(_ keyBase64: String,
                            index: Int32,
                            membership: MatrixRTCNativeMembership,
@@ -2777,6 +2768,10 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
 
     @MainActor
     private func connectOnMainActor(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool {
+        AudioManager.shared.audioSession.isAutomaticConfigurationEnabled = false
+        AudioManager.shared.audioSession.isAutomaticDeactivationEnabled = false
+        AudioManager.shared.audioSession.isSpeakerOutputPreferred = false
+
         let options = KeyProviderOptions(sharedKey: false, ratchetWindowSize: 10, keyRingSize: 256)
         let keyProvider = BaseKeyProvider(options: options)
         keyProvider.setKey(key: localKeyBase64, participantId: localIdentity, index: 0)
@@ -2874,11 +2869,15 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     }
 
     func joinIncomingAudio(roomID: String, clientProxy: ClientProxyProtocol) async {
-        if activeRoomID == roomID, state != .inactive {
+        if activeRoomID == roomID, isActive {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join skipped=already_active")
             return
         }
 
-        leave()
+        if isActive {
+            leave()
+        }
+
         joinGeneration += 1
         let generation = joinGeneration
         activeRoomID = roomID
@@ -2954,13 +2953,23 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
             return
         }
 
-        let membershipPublished = await publishMembership(session: session, widgetBridge: widgetStarted ? widgetBridge : nil)
+        let membershipPublished = await publishMembership(session: session)
         guard membershipPublished else {
             widgetBridge.stop()
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=membership")
             failIfCurrent(generation: generation)
             return
         }
+        guard isCurrent(generation) else {
+            widgetBridge.stop()
+            return
+        }
+
+        self.widgetBridge = widgetBridge
+        membership = session.membership
+        accessToken = session.accessToken
+        homeserverURL = session.homeserverURL
+        self.roomID = roomID
 
         let localKey = Self.randomKeyBase64()
         widgetBridge.listenForEncryptionKeys { [weak self] key in
@@ -2978,9 +2987,9 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
             if connected {
                 await liveKitClient.disconnect()
             }
-            widgetBridge.stop()
             if isCurrent(generation) {
-                failIfCurrent(generation: generation)
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=livekit")
+                leave()
             }
             return
         }
@@ -2994,11 +3003,10 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
                                                      peerDeviceID: "*")
         }
 
-        self.widgetBridge = widgetBridge
-        membership = session.membership
-        accessToken = session.accessToken
-        homeserverURL = session.homeserverURL
-        self.roomID = roomID
+        guard isCurrent(generation) else {
+            return
+        }
+
         state = .connected
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=true")
     }
@@ -3082,15 +3090,8 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         return .init(jwt: jwt)
     }
 
-    private func publishMembership(session: SessionContext, widgetBridge: MatrixRTCNativeWidgetBridge?) async -> Bool {
+    private func publishMembership(session: SessionContext) async -> Bool {
         let content = session.membership.stateContent()
-        if let widgetBridge {
-            let sent = await widgetBridge.sendMembership(session.membership, content: content)
-            if sent {
-                return true
-            }
-        }
-
         return await signalingClient.putMembership(homeserverURL: session.homeserverURL,
                                                    roomID: session.roomProxy.id,
                                                    accessToken: session.accessToken,

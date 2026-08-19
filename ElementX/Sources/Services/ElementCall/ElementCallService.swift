@@ -2115,6 +2115,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             return
         }
 
+        if nativeAudioController.activeRoomID == incomingCallID.roomID, nativeAudioController.isActive {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=start skipped=already_active")
+            return
+        }
+
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=start")
         Task { @MainActor [weak self] in
             await self?.nativeAudioController.joinIncomingAudio(roomID: incomingCallID.roomID, clientProxy: clientProxy)
