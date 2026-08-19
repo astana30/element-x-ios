@@ -130,6 +130,8 @@ final class MatrixRTCNativeAudioTests {
         #expect(pbxproj.contains("MatrixRTCNativeAudioTests.swift in Sources"))
         #expect(!pbxproj.contains("MatrixRTCNativeAudioController.swift in Sources"))
         #expect(handoff.contains("final class MatrixRTCNativeAudioController"))
+        #expect(!handoff.contains("@MainActor\nfinal class MatrixRTCNativeAudioController"))
+        #expect(!handoff.contains("@MainActor\nfinal class MatrixRTCNativeLiveKitClient"))
         #expect(handoff.contains("final class MatrixRTCNativeLiveKitClient"))
         #expect(handoff.contains("struct MatrixRTCNativeSignalingClient"))
         #expect(handoff.contains("final class MatrixRTCNativeWidgetBridge"))
