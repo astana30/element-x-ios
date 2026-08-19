@@ -19,5 +19,7 @@ extension ElementCallServiceMock {
         
         underlyingActions = PassthroughSubject().eraseToAnyPublisher()
         underlyingOngoingCallRoomIDPublisher = .init(.init(configuration.ongoingCallRoomID))
+        ownsNativeMatrixRTCAudioRoomIDReturnValue = false
+        nativeMatrixRTCAudioStateRoomIDReturnValue = .inactive
     }
 }

@@ -303,7 +303,7 @@ struct SalemXProductionDispatchCoordinatorTests {
         let recorder = Stage5EventRecorder()
         let lifecycleProvider = StockLifecycleProviderSpy(recorder: recorder)
         let client = DispatchClientSpy(recorder: recorder)
-        let elementCallService = ElementCallServiceMock()
+        let elementCallService = ElementCallServiceMock(.init())
         let session = SalemXProductionDispatchSession(dispatchClient: client,
                                                       appSessionGeneration: "session-generation",
                                                       elementCallService: elementCallService,
@@ -325,7 +325,7 @@ struct SalemXProductionDispatchCoordinatorTests {
         let client = DispatchClientSpy(dispatchIDs: [UUID(), UUID()])
         let session = SalemXProductionDispatchSession(dispatchClient: client,
                                                       appSessionGeneration: "session-generation",
-                                                      elementCallService: ElementCallServiceMock(),
+                                                      elementCallService: ElementCallServiceMock(.init()),
                                                       lifecycleProvider: lifecycleProvider)
 
         #expect(await session.startEligibleAudio(input: input(), roomID: "room") { .init { true } }.isSent)
@@ -343,7 +343,7 @@ struct SalemXProductionDispatchCoordinatorTests {
         let client = DispatchClientSpy(dispatchIDs: [UUID(), UUID()])
         let session = SalemXProductionDispatchSession(dispatchClient: client,
                                                       appSessionGeneration: "session-generation",
-                                                      elementCallService: ElementCallServiceMock(),
+                                                      elementCallService: ElementCallServiceMock(.init()),
                                                       lifecycleProvider: lifecycleProvider)
 
         let first = Task {

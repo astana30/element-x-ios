@@ -6705,6 +6705,146 @@ class ElementCallServiceMock: ElementCallServiceProtocol, @unchecked Sendable {
         }
         setAudioEnabledRoomIDClosure?(enabled, roomID)
     }
+    //MARK: - ownsNativeMatrixRTCAudio
+
+    var ownsNativeMatrixRTCAudioRoomIDUnderlyingCallsCount = 0
+    var ownsNativeMatrixRTCAudioRoomIDCallsCount: Int {
+        get {
+            if Thread.isMainThread {
+                return ownsNativeMatrixRTCAudioRoomIDUnderlyingCallsCount
+            } else {
+                var returnValue: Int? = nil
+                DispatchQueue.main.sync {
+                    returnValue = ownsNativeMatrixRTCAudioRoomIDUnderlyingCallsCount
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                ownsNativeMatrixRTCAudioRoomIDUnderlyingCallsCount = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    ownsNativeMatrixRTCAudioRoomIDUnderlyingCallsCount = newValue
+                }
+            }
+        }
+    }
+    var ownsNativeMatrixRTCAudioRoomIDCalled: Bool {
+        return ownsNativeMatrixRTCAudioRoomIDCallsCount > 0
+    }
+    var ownsNativeMatrixRTCAudioRoomIDReceivedRoomID: String?
+    var ownsNativeMatrixRTCAudioRoomIDReceivedInvocations: [String] = []
+
+    var ownsNativeMatrixRTCAudioRoomIDUnderlyingReturnValue: Bool! = false
+    var ownsNativeMatrixRTCAudioRoomIDReturnValue: Bool! {
+        get {
+            if Thread.isMainThread {
+                return ownsNativeMatrixRTCAudioRoomIDUnderlyingReturnValue
+            } else {
+                var returnValue: Bool? = nil
+                DispatchQueue.main.sync {
+                    returnValue = ownsNativeMatrixRTCAudioRoomIDUnderlyingReturnValue
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                ownsNativeMatrixRTCAudioRoomIDUnderlyingReturnValue = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    ownsNativeMatrixRTCAudioRoomIDUnderlyingReturnValue = newValue
+                }
+            }
+        }
+    }
+    var ownsNativeMatrixRTCAudioRoomIDClosure: ((String) -> Bool)?
+
+    func ownsNativeMatrixRTCAudio(roomID: String) -> Bool {
+        ownsNativeMatrixRTCAudioRoomIDCallsCount += 1
+        ownsNativeMatrixRTCAudioRoomIDReceivedRoomID = roomID
+        DispatchQueue.main.async {
+            self.ownsNativeMatrixRTCAudioRoomIDReceivedInvocations.append(roomID)
+        }
+        if let ownsNativeMatrixRTCAudioRoomIDClosure = ownsNativeMatrixRTCAudioRoomIDClosure {
+            return ownsNativeMatrixRTCAudioRoomIDClosure(roomID)
+        } else {
+            return ownsNativeMatrixRTCAudioRoomIDReturnValue
+        }
+    }
+    //MARK: - nativeMatrixRTCAudioState
+
+    var nativeMatrixRTCAudioStateRoomIDUnderlyingCallsCount = 0
+    var nativeMatrixRTCAudioStateRoomIDCallsCount: Int {
+        get {
+            if Thread.isMainThread {
+                return nativeMatrixRTCAudioStateRoomIDUnderlyingCallsCount
+            } else {
+                var returnValue: Int? = nil
+                DispatchQueue.main.sync {
+                    returnValue = nativeMatrixRTCAudioStateRoomIDUnderlyingCallsCount
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                nativeMatrixRTCAudioStateRoomIDUnderlyingCallsCount = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    nativeMatrixRTCAudioStateRoomIDUnderlyingCallsCount = newValue
+                }
+            }
+        }
+    }
+    var nativeMatrixRTCAudioStateRoomIDCalled: Bool {
+        return nativeMatrixRTCAudioStateRoomIDCallsCount > 0
+    }
+    var nativeMatrixRTCAudioStateRoomIDReceivedRoomID: String?
+    var nativeMatrixRTCAudioStateRoomIDReceivedInvocations: [String] = []
+
+    var nativeMatrixRTCAudioStateRoomIDUnderlyingReturnValue: MatrixRTCNativeAudioState! = .inactive
+    var nativeMatrixRTCAudioStateRoomIDReturnValue: MatrixRTCNativeAudioState! {
+        get {
+            if Thread.isMainThread {
+                return nativeMatrixRTCAudioStateRoomIDUnderlyingReturnValue
+            } else {
+                var returnValue: MatrixRTCNativeAudioState? = nil
+                DispatchQueue.main.sync {
+                    returnValue = nativeMatrixRTCAudioStateRoomIDUnderlyingReturnValue
+                }
+
+                return returnValue!
+            }
+        }
+        set {
+            if Thread.isMainThread {
+                nativeMatrixRTCAudioStateRoomIDUnderlyingReturnValue = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    nativeMatrixRTCAudioStateRoomIDUnderlyingReturnValue = newValue
+                }
+            }
+        }
+    }
+    var nativeMatrixRTCAudioStateRoomIDClosure: ((String) -> MatrixRTCNativeAudioState)?
+
+    func nativeMatrixRTCAudioState(roomID: String) -> MatrixRTCNativeAudioState {
+        nativeMatrixRTCAudioStateRoomIDCallsCount += 1
+        nativeMatrixRTCAudioStateRoomIDReceivedRoomID = roomID
+        DispatchQueue.main.async {
+            self.nativeMatrixRTCAudioStateRoomIDReceivedInvocations.append(roomID)
+        }
+        if let nativeMatrixRTCAudioStateRoomIDClosure = nativeMatrixRTCAudioStateRoomIDClosure {
+            return nativeMatrixRTCAudioStateRoomIDClosure(roomID)
+        } else {
+            return nativeMatrixRTCAudioStateRoomIDReturnValue
+        }
+    }
 }
 class ElementCallWidgetDriverMock: ElementCallWidgetDriverProtocol, @unchecked Sendable {
     var widgetID: String {

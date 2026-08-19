@@ -110,6 +110,21 @@ final class MatrixRTCNativeAudioTests {
     }
 
     @Test
+    func nativeAudioSourcesAreInTheSalemXXcodeTarget() throws {
+        let pbxproj = try Self.source(named: "SalemX.xcodeproj/project.pbxproj")
+        for filename in [
+            "MatrixRTCNativeAudioController.swift",
+            "MatrixRTCNativeAudioJoining.swift",
+            "MatrixRTCNativeLiveKitClient.swift",
+            "MatrixRTCNativeSignalingClient.swift",
+            "MatrixRTCNativeWidgetBridge.swift",
+            "MatrixRTCNativeAudioTests.swift"
+        ] {
+            #expect(pbxproj.contains("\(filename) in Sources"))
+        }
+    }
+
+    @Test
     func controllerJoinsThroughInjectedLiveKitAndLeavesMembership() async throws {
         let signalingHTTP = MatrixRTCHTTPClientSpy()
         signalingHTTP.responses = [

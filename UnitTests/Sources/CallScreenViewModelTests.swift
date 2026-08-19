@@ -1265,10 +1265,11 @@ extension CallScreenViewModelTests {
         #expect(appCoordinator.contains("wait-callkit-audio"))
         #expect(appCoordinator.contains("wait-unlock-after-audio"))
         #expect(appCoordinator.contains("callkit-native-audio"))
+        #expect(appCoordinator.contains("native-audio-pbx"))
         #expect(!appCoordinator.contains("no-native-category"))
         #expect(!appCoordinator.contains(" answer-on-active "))
         #expect(!appCoordinator.contains("answer-on-callkit-activate"))
-        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session callkit-answer-playandrecord wait-callkit-audio wait-unlock-after-audio callkit-native-audio virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first"))
+        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session callkit-answer-playandrecord wait-callkit-audio wait-unlock-after-audio callkit-native-audio native-audio-pbx virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first"))
         #expect(callService.contains("[MATRIXRTC-PRESENCE-INCOMING]"))
         #expect(callService.contains("source=matrixrtc_presence"))
         #expect(callService.contains("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] origin=push"))
@@ -1375,7 +1376,7 @@ extension CallScreenViewModelTests {
     }
 
     private func makeAudioRoomCallViewModel(configureWidgetDriver: (ElementCallWidgetDriverMock) -> Void = { _ in }) throws -> CallScreenHarness {
-        let elementCallService = ElementCallServiceMock()
+        let elementCallService = ElementCallServiceMock(.init())
         let elementCallServiceActions = PassthroughSubject<ElementCallServiceAction, Never>()
         elementCallService.underlyingActions = elementCallServiceActions.eraseToAnyPublisher()
         elementCallService.underlyingOngoingCallRoomIDPublisher = CurrentValueSubject<String?, Never>(nil).asCurrentValuePublisher()

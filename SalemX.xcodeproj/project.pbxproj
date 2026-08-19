@@ -452,6 +452,12 @@
 		4BAEC5F7F9A73201B740F551 /* NotificationItemProxyMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 550EFBA3104021AEB08B327D /* NotificationItemProxyMock.swift */; };
 		4BB844AF070A195D36116161 /* ElementCallWidgetDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88E289DCC44B86427557B33 /* ElementCallWidgetDriver.swift */; };
 		4BB9A0CE070A195D36116162 /* CallVoiceAudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C3E91A04B2D4E6F80A1C5D9 /* CallVoiceAudioSession.swift */; };
+		4BB9A0CE070A195D36116163 /* MatrixRTCNativeAudioController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DA /* MatrixRTCNativeAudioController.swift */; };
+		4BB9A0CE070A195D36116164 /* MatrixRTCNativeAudioJoining.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DB /* MatrixRTCNativeAudioJoining.swift */; };
+		4BB9A0CE070A195D36116165 /* MatrixRTCNativeLiveKitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DC /* MatrixRTCNativeLiveKitClient.swift */; };
+		4BB9A0CE070A195D36116166 /* MatrixRTCNativeSignalingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DD /* MatrixRTCNativeSignalingClient.swift */; };
+		4BB9A0CE070A195D36116167 /* MatrixRTCNativeWidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DE /* MatrixRTCNativeWidgetBridge.swift */; };
+		4BB9A0CE070A195D36116168 /* MatrixRTCNativeAudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DF /* MatrixRTCNativeAudioTests.swift */; };
 		4BD650160406F8B65AA55F92 /* NotificationSettingsProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5640E019B82BA0030C503AA /* NotificationSettingsProxy.swift */; };
 		4BDAFADA7A952533D590C458 /* SeparatorMediaEventsTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 272E82C08AE94F62FEAB2E7A /* SeparatorMediaEventsTimelineView.swift */; };
 		4C15854B8AA02205B0F54473 /* MatrixUserShareLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A14EBE49212F658D4C96320 /* MatrixUserShareLink.swift */; };
@@ -2743,6 +2749,12 @@
 		C969B5E5388708336BB28BD4 /* compound-ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "compound-ios"; path = "compound-ios"; sourceTree = SOURCE_ROOT; };
 		C96D53B756BB780F85A41F75 /* CXProviderProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CXProviderProtocol.swift; sourceTree = "<group>"; };
 		7C3E91A04B2D4E6F80A1C5D9 /* CallVoiceAudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallVoiceAudioSession.swift; sourceTree = "<group>"; };
+		7C4E91A04B2D4E6F80A1C5DA /* MatrixRTCNativeAudioController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeAudioController.swift; sourceTree = "<group>"; };
+		7C4E91A04B2D4E6F80A1C5DB /* MatrixRTCNativeAudioJoining.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeAudioJoining.swift; sourceTree = "<group>"; };
+		7C4E91A04B2D4E6F80A1C5DC /* MatrixRTCNativeLiveKitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeLiveKitClient.swift; sourceTree = "<group>"; };
+		7C4E91A04B2D4E6F80A1C5DD /* MatrixRTCNativeSignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeSignalingClient.swift; sourceTree = "<group>"; };
+		7C4E91A04B2D4E6F80A1C5DE /* MatrixRTCNativeWidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeWidgetBridge.swift; sourceTree = "<group>"; };
+		7C4E91A04B2D4E6F80A1C5DF /* MatrixRTCNativeAudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeAudioTests.swift; sourceTree = "<group>"; };
 		C9781EF3944A35E4F0F5075A /* BadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeView.swift; sourceTree = "<group>"; };
 		C98126A51A5E8EC1AC9AC909 /* AttributedStringBuilderProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttributedStringBuilderProtocol.swift; sourceTree = "<group>"; };
 		C995236CA4A97B9E3F7241D7 /* CallScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallScreen.swift; sourceTree = "<group>"; };
@@ -3325,6 +3337,11 @@
 				E88E289DCC44B86427557B33 /* ElementCallWidgetDriver.swift */,
 				F6B23D410CA42762229CFBEE /* ElementCallWidgetDriverProtocol.swift */,
 				EABADC0AB3C5C00DF4171F21 /* GenericCallLinkWidgetDriver.swift */,
+				7C4E91A04B2D4E6F80A1C5DA /* MatrixRTCNativeAudioController.swift */,
+				7C4E91A04B2D4E6F80A1C5DB /* MatrixRTCNativeAudioJoining.swift */,
+				7C4E91A04B2D4E6F80A1C5DC /* MatrixRTCNativeLiveKitClient.swift */,
+				7C4E91A04B2D4E6F80A1C5DD /* MatrixRTCNativeSignalingClient.swift */,
+				7C4E91A04B2D4E6F80A1C5DE /* MatrixRTCNativeWidgetBridge.swift */,
 				64231023224AA5D7B55A96F4 /* SalemXMatrixRTCHandoff.swift */,
 			);
 			path = ElementCall;
@@ -6523,6 +6540,7 @@
 				D5A1BC32328A4C0F8B1BD1BB /* DirectCallProductionKeyWrappingTests.swift */,
 				4C32CAF0343C7330058CF646 /* EditRoomAddressScreenViewModelTests.swift */,
 				5120B4BA5662E97750E2C6B4 /* ElementCallServiceTests.swift */,
+				7C4E91A04B2D4E6F80A1C5DF /* MatrixRTCNativeAudioTests.swift */,
 				AC688FC7F7B01C139C0B2037 /* EmojiPickerScreenViewModelTests.swift */,
 				8F8ACD08621799AC3FDE5C66 /* EmojiProviderTests.swift */,
 				2A3014F13577265BD88A5FA7 /* ExpiringTaskRunnerTests.swift */,
@@ -8371,6 +8389,11 @@
 				6B78C7796FDFAF1CE08218E1 /* MapTilerURLBuilderProtocol.swift in Sources */,
 				7DCD683857258787B94FC6D4 /* MapURLs.swift in Sources */,
 				882A1F6899F8D119A5FB3861 /* MatrixEntityRegex.swift in Sources */,
+				4BB9A0CE070A195D36116163 /* MatrixRTCNativeAudioController.swift in Sources */,
+				4BB9A0CE070A195D36116164 /* MatrixRTCNativeAudioJoining.swift in Sources */,
+				4BB9A0CE070A195D36116165 /* MatrixRTCNativeLiveKitClient.swift in Sources */,
+				4BB9A0CE070A195D36116166 /* MatrixRTCNativeSignalingClient.swift in Sources */,
+				4BB9A0CE070A195D36116167 /* MatrixRTCNativeWidgetBridge.swift in Sources */,
 				B8666042EE08F5D6FFFC4D68 /* MatrixSDKDirectCallMediaKeyWrapper.swift in Sources */,
 				4C15854B8AA02205B0F54473 /* MatrixUserShareLink.swift in Sources */,
 				65A082A45BF6423258C74D0C /* MediaEventsTimelineFlowCoordinator.swift in Sources */,
@@ -9044,6 +9067,7 @@
 				5CCC2C468CC9C24B191B1ECC /* LoginScreenViewModelTests.swift in Sources */,
 				4CDDF9241C42D23C1CD075BB /* ManageRoomMemberSheetViewModelTests.swift in Sources */,
 				557E98DC1B379CBFC1256B94 /* MapTilerURLBuilderTests.swift in Sources */,
+				4BB9A0CE070A195D36116168 /* MatrixRTCNativeAudioTests.swift in Sources */,
 				D8423A707A702D85352F0B2F /* MatrixEntityRegexTests.swift in Sources */,
 				9C267FE6226FEB83FE19E38E /* MediaLoaderTests.swift in Sources */,
 				10199976F08FBEDC4BCA003A /* MediaPlayerProviderTests.swift in Sources */,
@@ -9465,7 +9489,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 27;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
@@ -9989,7 +10013,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 27;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
@@ -10067,7 +10091,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 27;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
