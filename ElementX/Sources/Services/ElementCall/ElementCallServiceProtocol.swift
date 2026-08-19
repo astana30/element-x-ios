@@ -196,9 +196,14 @@ protocol SalemXStockElementCallLifecycleProviding {
         -> Result<SalemXStockElementCallObservationHandle, SalemXStockElementCallLifecycleError>
     @MainActor func awaitMembershipConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>
+    @MainActor func confirmOutgoingCallMembershipAfterCallScreenPresentation(_ handle: SalemXStockElementCallObservationHandle)
     @MainActor func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<Void, SalemXStockElementCallLifecycleError>
     @MainActor func cancelObservation(_ handle: SalemXStockElementCallObservationHandle)
+}
+
+extension SalemXStockElementCallLifecycleProviding {
+    @MainActor func confirmOutgoingCallMembershipAfterCallScreenPresentation(_ handle: SalemXStockElementCallObservationHandle) { }
 }
 
 struct SalemXProductionDispatchCapabilityConfiguration: CustomStringConvertible {

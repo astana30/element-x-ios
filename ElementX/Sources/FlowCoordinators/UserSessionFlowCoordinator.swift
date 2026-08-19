@@ -899,8 +899,14 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
             return .init { await coordinator.requestProductionDispatchTermination() }
         }
 
-        guard case .failed = outcome else { return }
-        flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
+        switch outcome {
+        case .sent:
+            break
+        case .failed(.lifecycle), .failed(.staleGeneration):
+            flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
+        case .failed(let error):
+            MXLog.error("Production dispatch did not notify the callee: \(error)")
+        }
     }
     
     private func hideCallScreenOverlay() {

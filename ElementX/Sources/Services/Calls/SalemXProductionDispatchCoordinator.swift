@@ -220,6 +220,7 @@ private final class SalemXProductionDispatchElementCallLifecycle: SalemXProducti
             return .failure(.unavailable)
         }
         self.stockCallPresentation = stockCallPresentation
+        lifecycleProvider.confirmOutgoingCallMembershipAfterCallScreenPresentation(handle)
 
         switch await lifecycleProvider.awaitMembershipConfirmation(handle) {
         case .success(let context):
@@ -517,6 +518,7 @@ final class SalemXProductionDispatchCoordinator {
         case .success(let response):
             preparedRecord = response
         case .failure(let error):
+            MXLog.error("Production dispatch prepare failed: \(error)")
             return .failed(coordinatorError(for: error))
         }
 
@@ -532,6 +534,7 @@ final class SalemXProductionDispatchCoordinator {
         case .success:
             break
         case .failure(let error):
+            MXLog.error("Production dispatch claim failed: \(error)")
             return .failed(coordinatorError(for: error))
         }
 
@@ -552,8 +555,10 @@ final class SalemXProductionDispatchCoordinator {
             state = .sent
             return .sent(preparedRecord.dispatchID)
         case .failure(.ambiguousSend):
+            MXLog.error("Production dispatch send failed: \(SalemXProductionDispatchClientError.ambiguousSend)")
             return .failed(Task.isCancelled ? .cancelled : .deliveryUnknown)
         case .failure(let error):
+            MXLog.error("Production dispatch send failed: \(error)")
             return .failed(coordinatorError(for: error))
         }
     }
@@ -563,6 +568,7 @@ final class SalemXProductionDispatchCoordinator {
         guard let attempt = activeAttempt, attempt.generation == generation else { return }
 
         if case .failed(let error) = outcome {
+            MXLog.error("Production dispatch attempt failed: \(error)")
             let cleanupTask = Task { [weak self] in
                 guard let self else { return }
                 if let preparedRecord = attempt.preparedRecord {
@@ -571,9 +577,7 @@ final class SalemXProductionDispatchCoordinator {
                                                                            appSessionGeneration: attempt.appSessionGeneration)
                     _ = await dispatchClient.cancelPrepared(request)
                 }
-                if error != .cancelled, let context = attempt.context {
-                    await endAndAwaitMembershipRemoval(context)
-                }
+                // Keep the presented Element Call. A VoIP notify failure must not hang up MatrixRTC.
             }
             await cleanupTask.value
         }
@@ -583,11 +587,6 @@ final class SalemXProductionDispatchCoordinator {
         if case .failed = outcome {
             state = .idle
         }
-    }
-
-    private func endAndAwaitMembershipRemoval(_ context: SalemXProductionDispatchStockCallContext) async {
-        await stockCallLifecycle.endAudioCall(context)
-        await stockCallLifecycle.awaitMembershipRemoval(for: context)
     }
 
     private func isCurrent(_ generation: Int) -> Bool {

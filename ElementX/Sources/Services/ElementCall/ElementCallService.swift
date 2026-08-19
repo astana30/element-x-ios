@@ -1276,6 +1276,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     @MainActor
+    func confirmOutgoingCallMembershipAfterCallScreenPresentation(_ handle: SalemXStockElementCallObservationHandle) {
+        confirmProductionDispatchMembership(handle, source: "call screen presentation")
+    }
+
+    @MainActor
     func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<Void, SalemXStockElementCallLifecycleError> {
         await withTaskCancellationHandler {
@@ -1341,6 +1346,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     @MainActor
     private func confirmProductionDispatchMembershipIfTimedOut(_ handle: SalemXStockElementCallObservationHandle) {
+        confirmProductionDispatchMembership(handle, source: "observation timeout")
+    }
+
+    @MainActor
+    private func confirmProductionDispatchMembership(_ handle: SalemXStockElementCallObservationHandle, source: String) {
         guard let state = productionDispatchObservation(matching: handle),
               state.confirmationResult == nil else {
             return
@@ -1349,11 +1359,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         let identity = Self.productionDispatchRoomInfoMembershipIdentity(ownUserID: state.ownUserID,
                                                                          ownDeviceID: state.ownDeviceID)
         state.confirmedMembership = identity
-        state.observedLocalParticipantAfterConfirmation = true
         let context = SalemXStockElementCallContext(callID: identity.callScope.callID,
                                                     roomID: state.roomID,
                                                     callHandle: identity.stateKey)
-        MXLog.info("Production dispatch confirming local MatrixRTC membership after observation timeout.")
+        MXLog.info("Production dispatch confirming local MatrixRTC membership after \(source).")
         finishProductionDispatchConfirmation(state, result: .success(context))
     }
 
@@ -2838,6 +2847,8 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
               !summary.isSpace,
               incomingCallID == nil,
               ongoingCallID == nil,
+              activeCallSession?.roomID != summary.id,
+              !productionDispatchObservations.values.contains(where: { $0.roomID == summary.id }),
               let ownUserID = clientProxy?.userID else {
             return false
         }

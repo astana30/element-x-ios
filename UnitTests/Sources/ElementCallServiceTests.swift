@@ -3405,6 +3405,89 @@ final class ElementCallServiceTests {
         service.cancelObservation(handle)
     }
 
+    @Test
+    func productionDispatchTimeoutConfirmationDoesNotTreatEmptyRoomInfoAsHangup() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!outgoing-timeout-empty-room-info:test"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true))
+        let infoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
+                                                                                         isDirect: true,
+                                                                                         hasRoomCall: false,
+                                                                                         participants: []))
+        room.infoPublisher = infoSubject.asCurrentValuePublisher()
+        room.emitsInitialRawMembershipState = false
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 14).get()
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        await Task.yield()
+        await testClock.advance(by: .seconds(5))
+        _ = try await confirmationTask.value.get()
+
+        let removalTask = Task { @MainActor in
+            await self.service.awaitMembershipRemoval(handle)
+        }
+        infoSubject.send(makeRoomInfo(id: roomID,
+                                      isDirect: true,
+                                      hasRoomCall: false,
+                                      participants: []))
+        await Task.yield()
+        service.cancelObservation(handle)
+        #expect(await removalTask.value == .failure(.cancelled))
+    }
+
+    @Test
+    func productionDispatchObservationConfirmsMembershipAfterCallScreenPresentation() async throws {
+        await service.declineIncomingCall()
+        let roomID = "!outgoing-present:test"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true))
+        let infoSubject = CurrentValueSubject<RoomInfoProxyProtocol, Never>(makeRoomInfo(id: roomID,
+                                                                                         isDirect: true,
+                                                                                         hasRoomCall: false,
+                                                                                         participants: []))
+        room.infoPublisher = infoSubject.asCurrentValuePublisher()
+        room.emitsInitialRawMembershipState = false
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 15).get()
+        let confirmationTask = Task { @MainActor in
+            await self.service.awaitMembershipConfirmation(handle)
+        }
+        await Task.yield()
+        service.confirmOutgoingCallMembershipAfterCallScreenPresentation(handle)
+
+        let context = try await confirmationTask.value.get()
+        #expect(context.roomID == roomID)
+        #expect(context.callHandle == "_@test:user.net_LOCAL_DEVICE_m.call")
+
+        let removalTask = Task { @MainActor in
+            await self.service.awaitMembershipRemoval(handle)
+        }
+        infoSubject.send(makeRoomInfo(id: roomID,
+                                      isDirect: true,
+                                      hasRoomCall: false,
+                                      participants: []))
+        await Task.yield()
+        service.cancelObservation(handle)
+        #expect(await removalTask.value == .failure(.cancelled))
+    }
+
     private func makeRoomInfo(id: String,
                               isDirect: Bool,
                               hasRoomCall: Bool,
@@ -3776,6 +3859,39 @@ final class ElementCallServiceRepeatIncomingFastPathTests {
 
         #expect(await waitForIncomingCallReports(count: 1) == false)
         #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+    }
+
+    @Test
+    func outgoingObservationSuppressesMatrixRTCPresenceIncomingCallKit() async throws {
+        let roomID = "redacted-room"
+        let roomSummaries = configureRoomSummaryProvider()
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: roomID,
+                                                              name: "Room",
+                                                              isDirect: true))
+        room.emitsInitialRawMembershipState = false
+        clientProxy.deviceID = "LOCAL_DEVICE"
+        clientProxy.roomForIdentifierClosure = { identifier in
+            identifier == roomID ? .joined(room) : nil
+        }
+        service.setClientProxy(clientProxy)
+        let handle = try await service.beginOutgoingObservation(roomID: roomID,
+                                                                appSessionGeneration: "opaque-generation",
+                                                                attemptGeneration: 16).get()
+
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            completion(nil)
+        }
+
+        roomSummaries.send([
+            makeRoomSummary(id: roomID,
+                            isDirect: true,
+                            hasOngoingCall: true,
+                            participants: ["redacted-remote"])
+        ])
+
+        #expect(await waitForIncomingCallReports(count: 1) == false)
+        #expect(!callProvider.reportNewIncomingCallWithUpdateCompletionCalled)
+        service.cancelObservation(handle)
     }
 
     @Test

@@ -168,7 +168,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 switch action {
                 case .callEnded(reason: let reason):
                     let sendHangupMessage = reason == .hangup
-                    requestLocalCallTermination(sendHangupMessage: sendHangupMessage)
+                    requestLocalCallTermination(sendHangupMessage: sendHangupMessage, terminationReason: "widget_driver_call_ended")
                 case .mediaStateChanged(let audioEnabled, _):
                     state.isMicrophoneEnabled = audioEnabled
                     state.isVideoEnabled = false
@@ -202,7 +202,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .pictureInPictureWillStop:
             actionsSubject.send(.pictureInPictureStopped)
         case .endCall:
-            requestLocalCallTermination()
+            requestLocalCallTermination(terminationReason: "user_end_call")
         case .toggleMicrophone:
             Task { await toggleMicrophone() }
         case .toggleVideo:
@@ -247,7 +247,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
         if shouldSendHangupOnStop {
             Task {
-                _ = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
+                _ = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask, terminationReason: "view_model_stop")
             }
         }
         
@@ -257,7 +257,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
 
     func requestProductionDispatchTermination() async -> Bool {
-        await sendCallTerminationSignal(waitingFor: setupCallTask)
+        await sendCallTerminationSignal(waitingFor: setupCallTask, terminationReason: "production_dispatch_termination")
     }
     
     // MARK: - Private
@@ -285,11 +285,11 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 completeCallScreenDismissalIfNeeded()
                 return
             }
-            requestLocalCallTermination(sendHangupMessage: false)
+            requestLocalCallTermination(sendHangupMessage: false, terminationReason: "service_end_call")
         case let .requestCallTermination(roomID):
             guard roomID == configuration.callRoomID else { return }
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-VM-REQUEST-RECEIVED]")
-            requestLocalCallTermination()
+            requestLocalCallTermination(terminationReason: "service_request_call_termination")
         default:
             break
         }
@@ -410,7 +410,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         MXLog.info("Element Call media diagnostics: \(payload)")
     }
 
-    private func requestLocalCallTermination(sendHangupMessage: Bool = true) {
+    private func requestLocalCallTermination(sendHangupMessage: Bool = true, terminationReason: String = "local_termination") {
         guard !isDismissingAfterLocalHangup else {
             return
         }
@@ -439,7 +439,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         Task {
-            let callTerminationCompleted = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
+            let callTerminationCompleted = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask,
+                                                                           terminationReason: terminationReason)
             guard callTerminationCompleted || serviceEndedDuringLocalTermination else {
                 isDismissingAfterLocalHangup = false
                 hasRequestedLocalTermination = false
@@ -711,7 +712,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         if case .roomCall(let roomProxy, _, _, _, _, _, _) = configuration.kind,
            !hasJoinedWidgetCall,
            elementCallService.isPreAnswerOutgoingCall(roomID: roomProxy.id) {
-            requestLocalCallTermination(sendHangupMessage: true)
+            requestLocalCallTermination(sendHangupMessage: true, terminationReason: "backwards_navigation")
             return
         }
 
@@ -832,7 +833,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         pendingMatrixRTCMembershipLeaveResponse.continuation.resume(returning: outcome)
     }
     
-    private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil) async -> Bool {
+    private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil,
+                                           terminationReason: String) async -> Bool {
+        MXLog.info("Sending Element Call hangup (\(terminationReason)).")
         switch configuration.kind {
         case .genericCallLink:
             let outcome = await hangup(waitingFor: setupTask)
@@ -846,7 +849,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 return false
             }
         case .roomCall(let roomProxy, _, _, _, _, _, _):
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=start")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=start reason=\(terminationReason)")
             switch await hangup(waitingFor: setupTask) {
             case .failed:
                 if serviceEndedDuringLocalTermination {
@@ -944,12 +947,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .close:
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-LOCAL-CLOSE] " +
                 "has_joined_widget_call=\(hasJoinedWidgetCall) send_hangup_message=false source=upstream_widget")
-            requestLocalCallTermination(sendHangupMessage: false)
+            requestLocalCallTermination(sendHangupMessage: false, terminationReason: "widget_close")
             Task { [weak self] in
                 await self?.acknowledgeWidgetRequest(requestPayload)
             }
         case .hangup:
-            requestLocalCallTermination(sendHangupMessage: false)
+            requestLocalCallTermination(sendHangupMessage: false, terminationReason: "widget_hangup")
             Task { [weak self] in
                 await self?.acknowledgeWidgetRequest(requestPayload)
             }

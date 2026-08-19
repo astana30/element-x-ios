@@ -86,18 +86,22 @@ struct SalemXProductionDispatchCoordinatorTests {
     }
 
     @Test
-    func prepareFailureEndsStockCallAndAwaitsMembershipRemoval() async {
+    func prepareFailureKeepsThePresentedStockCall() async {
         let lifecycle = LifecycleSpy()
         let client = DispatchClientSpy(prepareResult: .failure(.transportUnavailable))
         let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
 
         #expect(await coordinator.start(input()) == .failed(.dispatch(.transportUnavailable)))
-        #expect(lifecycle.events == [.start, .membershipConfirmed, .end, .membershipRemoved])
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
         #expect(client.cancelCount == 0)
+        client.prepareResult = nil
+        #expect(await coordinator.start(input()) == .sent(client.dispatchID))
+        #expect(lifecycle.startCount == 2)
     }
 
     @Test
-    func disabledServerAfterMatrixRTCStartTearsDownExactlyOnce() async {
+    func disabledServerAfterMatrixRTCStartDoesNotHangUpStockCall() async {
         let lifecycle = LifecycleSpy()
         let disabled = SalemXProductionDispatchClientError.http(.notFound, .disabled)
         let client = DispatchClientSpy(prepareResult: .failure(disabled))
@@ -108,14 +112,13 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(client.claimCount == 0)
         #expect(client.sendCount == 0)
         #expect(client.cancelCount == 0)
-        #expect(lifecycle.events == [.start, .membershipConfirmed, .end, .membershipRemoved])
-        #expect(lifecycle.events.filter { $0 == .end }.count == 1)
-        #expect(lifecycle.events.filter { $0 == .membershipRemoved }.count == 1)
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
         #expect(coordinator.state == .idle)
     }
 
     @Test
-    func claimFailureCancelsExactPreparedRecordAndEndsMembership() async {
+    func claimFailureCancelsExactPreparedRecordAndKeepsStockCall() async {
         let lifecycle = LifecycleSpy()
         let client = DispatchClientSpy(claimResult: .failure(.http(.forbidden, .capability)))
         let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
@@ -131,7 +134,8 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(cancelRequest.dispatchID == client.referenceRequest.dispatchID)
         #expect(cancelRequest.senderReference == client.referenceRequest.senderReference)
         #expect(cancelRequest.appSessionGeneration == client.referenceRequest.appSessionGeneration)
-        #expect(lifecycle.events.suffix(2) == [.end, .membershipRemoved])
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
     }
 
     @Test
@@ -143,11 +147,12 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(await coordinator.start(input()) == .failed(.deliveryUnknown))
         #expect(client.sendCount == 1)
         #expect(client.cancelCount == 1)
-        #expect(lifecycle.events.suffix(2) == [.end, .membershipRemoved])
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
     }
 
     @Test
-    func cancellationIsIdempotentAndAwaitsMembershipRemoval() async {
+    func cancellationIsIdempotentAndDoesNotHangUpStockCall() async {
         let lifecycle = LifecycleSpy(waitBeforeMembership: true)
         let client = DispatchClientSpy()
         let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
@@ -159,7 +164,8 @@ struct SalemXProductionDispatchCoordinatorTests {
         lifecycle.continueMembership()
 
         #expect(await task.value == .failed(.cancelled))
-        #expect(lifecycle.events == [.start, .end, .membershipRemoved])
+        #expect(!lifecycle.events.contains(.end))
+        #expect(!lifecycle.events.contains(.membershipRemoved))
         #expect(client.events.isEmpty)
     }
 
@@ -176,7 +182,8 @@ struct SalemXProductionDispatchCoordinatorTests {
 
         #expect(await task.value == .failed(.cancelled))
         #expect(client.events.isEmpty)
-        #expect(lifecycle.events.suffix(2) == [.end, .membershipRemoved])
+        #expect(!lifecycle.events.contains(.end))
+        #expect(!lifecycle.events.contains(.membershipRemoved))
         #expect(await coordinator.start(input()) == .failed(.staleGeneration))
         #expect(lifecycle.startCount == 1)
     }
@@ -196,9 +203,9 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(await task.value == .failed(.cancelled))
         #expect(client.sendCount <= 1)
         #expect(client.cancelCount == (operation == .prepare ? 0 : 1))
-        #expect(lifecycle.events.suffix(2) == [.end, .membershipRemoved])
-        #expect(lifecycle.events.filter { $0 == .end }.count == 1)
-        #expect(lifecycle.events.filter { $0 == .membershipRemoved }.count == 1)
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
+        #expect(lifecycle.events.filter { $0 == .membershipRemoved }.isEmpty)
     }
 
     @Test
@@ -215,22 +222,14 @@ struct SalemXProductionDispatchCoordinatorTests {
     }
 
     @Test
-    func failureCleanupRetainsTheActiveSlotUntilItCompletes() async {
-        let lifecycle = LifecycleSpy(waitBeforeMembershipRemoval: true)
+    func failureCleanupAllowsARetryAfterPrepareFailure() async {
+        let lifecycle = LifecycleSpy()
         let client = DispatchClientSpy(prepareResult: .failure(.transportUnavailable))
         let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
 
-        let first = Task { await coordinator.start(input()) }
-        await lifecycle.waitUntilMembershipRemovalIsRequested()
-        let duplicateDuringCleanup = Task { await coordinator.start(input()) }
-        for _ in 0..<8 {
-            await Task.yield()
-        }
-        #expect(lifecycle.startCount == 1)
-        lifecycle.continueMembershipRemoval()
-
-        #expect(await first.value == .failed(.dispatch(.transportUnavailable)))
-        #expect(await duplicateDuringCleanup.value == .failed(.dispatch(.transportUnavailable)))
+        #expect(await coordinator.start(input()) == .failed(.dispatch(.transportUnavailable)))
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
         client.prepareResult = nil
         #expect(await coordinator.start(input()) == .sent(client.dispatchID))
         #expect(lifecycle.startCount == 2)
@@ -301,7 +300,7 @@ struct SalemXProductionDispatchCoordinatorTests {
         }
 
         #expect(outcome == .sent(client.dispatchID))
-        #expect(recorder.events == ["arm", "stock", "membership", "prepare", "claim", "send"])
+        #expect(recorder.events == ["arm", "stock", "confirm", "membership", "prepare", "claim", "send"])
         #expect(lifecycleProvider.armCount == 1)
     }
 
@@ -516,6 +515,10 @@ private final class StockLifecycleProviderSpy: SalemXStockElementCallLifecyclePr
         armCount += 1
         recorder.events.append("arm")
         return .success(handle)
+    }
+
+    func confirmOutgoingCallMembershipAfterCallScreenPresentation(_ handle: SalemXStockElementCallObservationHandle) {
+        recorder.events.append("confirm")
     }
 
     func awaitMembershipConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
