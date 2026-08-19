@@ -121,6 +121,9 @@ final class MatrixRTCNativeAudioTests {
         let callService = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
         #expect(callService.contains("nativeAudioController.isActive"))
         #expect(callService.contains("skipped=already_active"))
+        #expect(callService.contains("shouldKeepAnsweredCallKitForNativeAudio"))
+        #expect(callService.contains("nativeAudioJoinCallKitID = incomingCallID.callKitID"))
+        #expect(callService.contains("[APP-INCOMING-SKIP-END]"))
         #expect(!callService.contains("!= .inactive"))
 
         let generatedMocks = try Self.source(named: "ElementX/Sources/Mocks/Generated/GeneratedMocks.swift")

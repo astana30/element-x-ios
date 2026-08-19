@@ -1151,6 +1151,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private var didWaitForUnlockBeforeStart = false
     private let callKitAudioActivationStartTimeout: Duration
     private var keptAliveAudioCallKitID: UUID?
+    private var nativeAudioJoinCallKitID: UUID?
     private let applicationActivityProvider: ApplicationActivityProvider
     private var applicationBecameActiveCancellable: AnyCancellable?
     private var ongoingCallID: CallID? {
@@ -1620,7 +1621,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SERVICE-ENDCALL] room_id=\(roomID)")
         suppressIncomingFallback(for: roomID)
         applySessionEvent(type: .hangup, roomID: roomID)
-        nativeAudioController.leave()
+        stopNativeMatrixRTCAudio()
         actionsSubject.send(.endCall(roomID: roomID))
     }
 
@@ -2116,14 +2117,54 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         if nativeAudioController.activeRoomID == incomingCallID.roomID, nativeAudioController.isActive {
+            nativeAudioJoinCallKitID = incomingCallID.callKitID
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=start skipped=already_active")
             return
         }
 
+        nativeAudioJoinCallKitID = incomingCallID.callKitID
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=start")
         Task { @MainActor [weak self] in
             await self?.nativeAudioController.joinIncomingAudio(roomID: incomingCallID.roomID, clientProxy: clientProxy)
+            guard let self else {
+                return
+            }
+
+            let joined = self.nativeAudioController.activeRoomID == incomingCallID.roomID && self.nativeAudioController.isActive
+            guard !joined else {
+                return
+            }
+
+            if self.nativeAudioJoinCallKitID == incomingCallID.callKitID {
+                self.nativeAudioJoinCallKitID = nil
+            }
+
+            guard self.incomingCallID?.callKitID == incomingCallID.callKitID else {
+                return
+            }
+
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join ok=false reason=callkit_end")
+            self.reportEndedCall(incomingCallID: incomingCallID,
+                                 reason: .failed,
+                                 deduplicationID: "native-join-failed:\(incomingCallID.callKitID.uuidString)")
         }
+    }
+
+    private func stopNativeMatrixRTCAudio() {
+        nativeAudioJoinCallKitID = nil
+        nativeAudioController.leave()
+    }
+
+    private func shouldKeepAnsweredCallKitForNativeAudio(_ incomingCallID: CallID) -> Bool {
+        guard incomingCallID.startMode == .audio else {
+            return false
+        }
+
+        if nativeAudioJoinCallKitID == incomingCallID.callKitID {
+            return true
+        }
+
+        return nativeAudioController.activeRoomID == incomingCallID.roomID && nativeAudioController.isActive
     }
 
     private func shouldWaitForCallKitAudioBeforeStarting(_ incomingCallID: CallID) -> Bool {
@@ -2790,7 +2831,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 suppressIncomingFallback(for: roomID)
                 actionsSubject.send(.requestCallTermination(roomID: roomID))
             }
-            nativeAudioController.leave()
+            stopNativeMatrixRTCAudio()
             resetCallKitAudioAnswerWaitState()
             if let incomingCallID, incomingCallID.callKitID == knownCallID.callKitID {
                 markConsumedDirectCallIdentity(incomingCallID)
@@ -2862,7 +2903,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         ongoingCallID = nil
         ongoingCallTimelineCancellable = nil
         resetCallKitAudioAnswerWaitState()
-        nativeAudioController.leave()
+        stopNativeMatrixRTCAudio()
 
         if let callKitUUIDToEnd {
             reportCallKitEndedIfNeeded(uuid: callKitUUIDToEnd, reason: callKitEndReason)
@@ -4238,6 +4279,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                     guard let terminationEvent = self.latestIncomingCallTerminationEvent(in: itemProxies, roomID: incomingCallID.roomID) else { return }
                     guard terminationEvent.eventID != tracker.eventID else { return }
 
+                    if self.shouldKeepAnsweredCallKitForNativeAudio(incomingCallID),
+                       self.nativeAudioController.state != .connected {
+                        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-INCOMING-SKIP-END] reason=native_audio_connecting source=timeline")
+                        return
+                    }
+
                     tracker.eventID = terminationEvent.eventID
                     IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-RECIPIENT-TERMINAL] room_id=\(incomingCallID.roomID) " +
                         "event_id=\(terminationEvent.eventID) reason=\(terminationEvent.reason)")
@@ -4353,6 +4400,12 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                     return
                 }
 
+                if self.shouldKeepAnsweredCallKitForNativeAudio(incomingCallID),
+                   self.nativeAudioController.state != .connected {
+                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-INCOMING-SKIP-END] reason=native_audio_connecting source=room_info")
+                    return
+                }
+
                 self.reportEndedCall(incomingCallID: incomingCallID,
                                      reason: .remoteEnded,
                                      deduplicationID: self.roomInfoDeduplicationID(prefix: "incoming-info",
@@ -4412,9 +4465,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             return true
         }
 
-        if incomingCallID.startMode == .audio,
-           nativeAudioController.activeRoomID == incomingCallID.roomID,
-           nativeAudioController.isActive {
+        if shouldKeepAnsweredCallKitForNativeAudio(incomingCallID) {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] reason=native_audio")
             return true
         }
@@ -4430,6 +4481,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
 
         for attempt in 0..<6 {
+            if shouldKeepAnsweredCallKitForNativeAudio(incomingCallID) {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] reason=native_audio")
+                return true
+            }
+
             let participants = Set(roomProxy.infoPublisher.value.activeRoomCallParticipants)
             let hasForeignParticipant = participants.contains { !participantBelongsToUser($0, userID: roomProxy.ownUserID) }
             if hasForeignParticipant {
@@ -4760,6 +4816,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private func reportEndedCall(incomingCallID: CallID, reason: CXCallEndedReason, deduplicationID: String? = nil) {
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-RECIPIENT-CLEAR] room_id=\(incomingCallID.roomID) " +
             "callkit_id=\(incomingCallID.callKitID) reason=\(reason) deduplication_id=\(deduplicationID ?? "nil")")
+        if nativeAudioJoinCallKitID == incomingCallID.callKitID
+            || nativeAudioController.activeRoomID == incomingCallID.roomID {
+            stopNativeMatrixRTCAudio()
+        }
         suppressIncomingFallback(for: incomingCallID.roomID)
         markConsumedDirectCallIdentity(incomingCallID)
         applySessionEvent(type: sessionEventType(for: reason),
