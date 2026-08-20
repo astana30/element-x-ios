@@ -3310,12 +3310,7 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         let widgetBridge = widgetBridgeFactory(session.widgetDriver)
         widgetBridge.listenForEncryptionKeys { [weak self] key in
             Task { @MainActor in
-                guard let self else { return }
-                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key identity=\(key.identity) index=\(key.index)")
-                if let deviceID = MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: key.identity) {
-                    self.lastRemoteDeviceID = deviceID
-                }
-                self.liveKitClient.setRemoteParticipantKey(key.keyBase64, identity: key.identity, index: key.index)
+                self?.applyIncomingRemoteKey(key)
             }
         }
 
@@ -3344,6 +3339,12 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     }
 
     func resendLocalEncryptionKey() async {
+        // Unlock can hit this while join is still connecting and the key has not been minted yet.
+        // Scheduling retries then races the join path and sends the same key twice after success.
+        guard lastLocalKey != nil, state == .connected else {
+            return
+        }
+
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key_resend")
         if await sendStoredLocalEncryptionKey() {
             return
@@ -3372,6 +3373,43 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         }
     }
 
+    private func storeLocalEncryptionKey(_ localKey: String, session: SessionContext, widgetStarted: Bool) {
+        guard widgetStarted, let peerUserID = Self.peerUserID(in: session.roomProxy, ownUserID: session.userID) else {
+            return
+        }
+
+        lastLocalKey = localKey
+        lastPeerUserID = peerUserID
+        lastPeerDeviceID = MatrixRTCNativeEncryptionPeer.peerDeviceID(from: [lastRemoteDeviceID].compactMap { $0 })
+    }
+
+    /// Starts the Olm key send without waiting for LiveKit. The remote side can install our key while
+    /// we are still connecting, so the first encrypted frames decrypt as soon as they arrive.
+    private func beginSendingLocalEncryptionKey(generation: UInt64) {
+        Task { @MainActor [weak self] in
+            guard let self, isCurrent(generation) else {
+                return
+            }
+
+            if await sendStoredLocalEncryptionKey() {
+                return
+            }
+
+            scheduleLocalEncryptionKeyRetries(generation: generation)
+        }
+    }
+
+    private func applyIncomingRemoteKey(_ key: MatrixRTCWidgetEncryptionKey) {
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key identity=\(key.identity) index=\(key.index)")
+        if let deviceID = MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: key.identity) {
+            lastRemoteDeviceID = deviceID
+            if lastPeerDeviceID == nil || lastPeerDeviceID == "*" {
+                lastPeerDeviceID = deviceID
+            }
+        }
+        liveKitClient.setRemoteParticipantKey(key.keyBase64, identity: key.identity, index: key.index)
+    }
+
     private func sendStoredLocalEncryptionKey() async -> Bool {
         guard let widgetBridge,
               let localKey = lastLocalKey,
@@ -3388,6 +3426,10 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
                                                         peerUserID: peerUserID,
                                                         peerDeviceID: peerDeviceID)
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key ok=\(sent) peerDeviceID=\(peerDeviceID)")
+        if sent {
+            localKeyRetryTask?.cancel()
+            localKeyRetryTask = nil
+        }
         return sent
     }
 
@@ -3452,11 +3494,7 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
             widgetBridge.listenForEncryptionKeys { [weak self] key in
                 Task { @MainActor in
                     guard let self, self.joinGeneration == generation else { return }
-                    IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key identity=\(key.identity) index=\(key.index)")
-                    if let deviceID = MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: key.identity) {
-                        self.lastRemoteDeviceID = deviceID
-                    }
-                    self.liveKitClient.setRemoteParticipantKey(key.keyBase64, identity: key.identity, index: key.index)
+                    self.applyIncomingRemoteKey(key)
                 }
             }
             self.widgetBridge = widgetBridge
@@ -3498,6 +3536,9 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         self.roomID = roomID
 
         let localKey = Self.randomKeyBase64()
+        storeLocalEncryptionKey(localKey, session: session, widgetStarted: widgetStarted)
+        beginSendingLocalEncryptionKey(generation: generation)
+
         let connected = await liveKitClient.connect(serverURL: credentials.jwt.serverURL,
                                                     token: credentials.jwt.token,
                                                     localIdentity: session.membership.liveKitIdentity,
@@ -3511,16 +3552,6 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
                 leave()
             }
             return
-        }
-
-        if widgetStarted, let peerUserID = Self.peerUserID(in: session.roomProxy, ownUserID: session.userID) {
-            lastLocalKey = localKey
-            lastPeerUserID = peerUserID
-            lastPeerDeviceID = MatrixRTCNativeEncryptionPeer.peerDeviceID(from: [lastRemoteDeviceID].compactMap { $0 })
-            let sentLocalKey = await sendStoredLocalEncryptionKey()
-            if !sentLocalKey {
-                scheduleLocalEncryptionKeyRetries(generation: generation)
-            }
         }
 
         guard isCurrent(generation) else {
