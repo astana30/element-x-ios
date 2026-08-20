@@ -159,7 +159,10 @@ protocol ClientProxyProtocol: AnyObject {
     func hasDevicesToVerifyAgainst() async -> Result<Bool, ClientProxyError>
     
     func startSync()
-
+    
+    /// Keeps Matrix to-device sending alive while answering a call from CallKit with the app locked.
+    func enableOutgoingToDeviceForCall() async
+    
     func stopSync()
     
     func stopSync(completion: (() -> Void)?) // Hopefully this will become async once we get SE-0371.
@@ -267,4 +270,10 @@ protocol ClientProxyProtocol: AnyObject {
     
     func setTimelineMediaVisibility(_ value: TimelineMediaVisibility) async -> Result<Void, ClientProxyError>
     func setHideInviteAvatars(_ value: Bool) async -> Result<Void, ClientProxyError>
+}
+
+extension ClientProxyProtocol {
+    func enableOutgoingToDeviceForCall() async {
+        startSync()
+    }
 }

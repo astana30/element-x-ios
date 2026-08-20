@@ -2734,6 +2734,7 @@ final class MatrixRTCNativeWidgetBridge {
         cancellables.removeAll()
         hasStartedDriver = false
         hasNegotiatedCapabilities = false
+        (widgetDriver as? ElementCallWidgetDriver)?.stop()
     }
 
     private func negotiateCapabilities(delayForDriverStart: Bool) async {
@@ -2804,10 +2805,9 @@ final class MatrixRTCNativeWidgetBridge {
                     return
                 }
 
-                Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(300))
-                    self?.finish(requestID: requestID, response: [:])
-                }
+                // native-audio-bg-key-send: wait for the widget/HTTP ack. A 300ms empty
+                // fallback used to count as success and cancelled the retry ladder
+                // before Olm sendToDevice actually left the device.
             }
             Task { [weak self] in
                 try? await Task.sleep(for: timeout)
@@ -2872,16 +2872,20 @@ final class MatrixRTCNativeWidgetBridge {
     private func handleToWidgetRequest(_ object: [String: Any]) {
         let action = object["action"] as? String
         if action == "capabilities" {
-            replyToWidget(object, response: ["capabilities": Self.encryptionKeyCapabilities])
-            markCapabilitiesAnswered(true)
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_caps answered=true")
+            Task { [weak self] in
+                await self?.replyToWidget(object, response: ["capabilities": Self.encryptionKeyCapabilities])
+                self?.markCapabilitiesAnswered(true)
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_caps answered=true")
+            }
             return
         }
 
-        replyToWidget(object, response: [:])
+        Task { [weak self] in
+            await self?.replyToWidget(object, response: [:])
+        }
     }
 
-    private func replyToWidget(_ object: [String: Any], response: [String: Any]) {
+    private func replyToWidget(_ object: [String: Any], response: [String: Any]) async {
         var reply = object
         reply["response"] = response
         guard let jsonData = try? JSONSerialization.data(withJSONObject: reply),
@@ -2889,9 +2893,7 @@ final class MatrixRTCNativeWidgetBridge {
             return
         }
 
-        Task {
-            _ = await widgetDriver.handleMessage(json)
-        }
+        _ = await widgetDriver.handleMessage(json)
     }
 
     private func markCapabilitiesAnswered(_ answered: Bool) {
@@ -3250,6 +3252,7 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     private var localKeyRetryTask: Task<Void, Never>?
     private var prepareIncomingKeyListenerTask: Task<Void, Never>?
     private var preparedCredentials: MediaCredentials?
+    private weak var toDeviceClientProxy: ClientProxyProtocol?
         
         init(signalingClient: MatrixRTCNativeSignalingClient = MatrixRTCNativeSignalingClient(),
          liveKitClient: MatrixRTCNativeLiveKitConnecting = MatrixRTCNativeLiveKitClient(),
@@ -3320,7 +3323,7 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
 
         async let widgetStarted = widgetBridge.start(baseURL: elementCallBaseURL,
                                                      clientID: clientID,
-                                                     shouldNegotiateCapabilities: false)
+                                                     shouldNegotiateCapabilities: true)
         let credentials = await mediaCredentials(session: session)
         guard await widgetStarted else {
             widgetBridge.stop()
@@ -3335,6 +3338,8 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         self.widgetBridge = widgetBridge
         preparedSession = session
         preparedCredentials = credentials
+        toDeviceClientProxy = clientProxy
+        await clientProxy.enableOutgoingToDeviceForCall()
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=early_listen ok=true jwt=\(credentials != nil)")
     }
 
@@ -3425,6 +3430,8 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
               let peerDeviceID = lastPeerDeviceID else {
             return false
         }
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=bg_key_send")
+        await toDeviceClientProxy?.enableOutgoingToDeviceForCall()
         let sent = await widgetBridge.sendEncryptionKey(localKey,
                                                         index: 0,
                                                         membership: membership,
@@ -3465,6 +3472,7 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
 
         widgetBridge?.stop()
         widgetBridge = nil
+        toDeviceClientProxy = nil
 
         Task { [liveKitClient, signalingClient] in
             await liveKitClient.disconnect()
@@ -3531,6 +3539,8 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         accessToken = session.accessToken
         homeserverURL = session.homeserverURL
         self.roomID = roomID
+        toDeviceClientProxy = clientProxy
+        await clientProxy.enableOutgoingToDeviceForCall()
 
         let localKey = Self.randomKeyBase64()
         async let membershipPublished = publishMembership(session: session)

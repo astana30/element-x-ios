@@ -1580,7 +1580,9 @@ extension CallScreenViewModelTests {
         "native-audio-cancel-key-retry",
         "native-audio-prefetch-jwt",
         "native-audio-overlap-membership",
-        "native-audio-direct-openid"
+        "native-audio-direct-openid",
+        "native-audio-widget-stop",
+        "native-audio-bg-key-send"
     ]
     
     private static func expectAppStoreLineAppCoordinatorFingerprints(_ source: String) {
@@ -1592,7 +1594,7 @@ extension CallScreenViewModelTests {
         #expect(!source.contains(" answer-on-active "))
         #expect(!source.contains("answer-on-callkit-activate"))
         #expect(source.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session callkit-answer-playandrecord wait-callkit-audio wait-unlock-after-audio callkit-native-audio native-audio-pbx native-audio-types native-audio-active native-audio-handoff native-audio-nonisolated native-audio-await native-audio-membership-http native-audio-skip-rejoin native-audio-callkit-session native-audio-widget-caps native-audio-keep-answered native-audio-skip-stale-while-join "))
-        #expect(source.contains("native-audio-early-keys native-audio-peer-device-key native-audio-buffer-keys native-audio-local-key-wait native-audio-skip-chrome native-audio-key-error-log native-audio-hkdf-raw-keys native-audio-frame-crypto-log native-audio-unnamed-participant-key native-audio-key-retry-ladder native-audio-key-before-livekit native-audio-cancel-key-retry native-audio-prefetch-jwt native-audio-overlap-membership native-audio-direct-openid virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first"))
+        #expect(source.contains("native-audio-early-keys native-audio-peer-device-key native-audio-buffer-keys native-audio-local-key-wait native-audio-skip-chrome native-audio-key-error-log native-audio-hkdf-raw-keys native-audio-frame-crypto-log native-audio-unnamed-participant-key native-audio-key-retry-ladder native-audio-key-before-livekit native-audio-cancel-key-retry native-audio-prefetch-jwt native-audio-overlap-membership native-audio-direct-openid native-audio-widget-stop native-audio-bg-key-send virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first"))
     }
     
     private func repositorySource(named path: String) throws -> String {
