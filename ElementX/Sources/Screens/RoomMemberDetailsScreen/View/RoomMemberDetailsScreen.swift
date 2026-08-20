@@ -105,7 +105,7 @@ struct RoomMemberDetailsScreen: View {
                 Button {
                     context.send(viewAction: .startCall(roomID: roomID))
                 } label: {
-                    CompoundIcon(\.videoCall)
+                    CompoundIcon(\.voiceCall)
                 }
                 .buttonStyle(FormActionButtonStyle(title: L10n.actionCall))
             }

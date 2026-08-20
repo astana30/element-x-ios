@@ -454,7 +454,13 @@ class ClientProxy: ClientProxyProtocol {
             await cacheAccountURL()
         }
     }
-
+    
+    func enableOutgoingToDeviceForCall() async {
+        MXLog.info("Enabling send queues for a native call to-device send")
+        startSync()
+        await client.enableAllSendQueues(enable: true)
+    }
+    
     private static func registerSyncNotificationListener(on client: ClientProtocol,
                                                          actionsSubject: PassthroughSubject<ClientProxyAction, Never>) async -> ClientSyncNotificationListener {
         let listener = ClientSyncNotificationListener(actionsSubject: actionsSubject)
@@ -1460,6 +1466,11 @@ extension ClientProxy: DirectCallMediaKeyEnvelopeWrappingProviding {
 extension ClientProxy: DirectCallMatrixAccessTokenProviding {
     func matrixAccessToken() async -> String? {
         accessToken
+    }
+
+    func refreshedMatrixAccessToken() async -> String? {
+        _ = await profile(for: userID)
+        return accessToken
     }
 }
 

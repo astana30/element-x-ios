@@ -7,6 +7,16 @@
 
 import Foundation
 
+enum SalemXPushKitTokenEncoding {
+    static func apnsDeviceTokenHex(from token: Data) -> String {
+        token.map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func isAPNsHexToken(_ token: String) -> Bool {
+        !token.isEmpty && token.count.isMultiple(of: 2) && token.allSatisfy(\.isHexDigit)
+    }
+}
+
 enum SalemXProductionDispatchProtocolVersion: Int, Codable {
     case v1 = 1
 }
@@ -18,6 +28,16 @@ enum SalemXProductionDispatchIntent: String, Codable {
 enum SalemXProductionDispatchEnvironment: String, Codable {
     case development
     case production
+}
+
+enum SalemXProductionDispatchAPNsEnvironment {
+    static var capabilityRegistrationEnvironment: SalemXProductionDispatchEnvironment {
+        #if DEBUG || SALEMX_PRODUCTION_DISPATCH_ACTIVATION
+        .development
+        #else
+        .production
+        #endif
+    }
 }
 
 enum SalemXProductionDispatchReceiverHandoff: String, Codable {
@@ -303,5 +323,112 @@ struct SalemXProductionDispatchServerErrorResponse: Codable, Equatable, CustomSt
 
     var description: String {
         "SalemXProductionDispatchServerErrorResponse(errcode: <redacted>, error: <redacted>)"
+    }
+}
+
+enum SalemXProductionDispatchOpaqueToken {
+    static let maxCallHandleLength = 128
+    static let maxDisplayLabelLength = 120
+
+    static func callHandle() -> String {
+        "salemx" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    }
+
+    static func isValidCallHandle(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= maxCallHandleLength else {
+            return false
+        }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+        return value.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    static func sanitizedCallHandle(_ value: String) -> String {
+        isValidCallHandle(value) ? value : callHandle()
+    }
+
+    static func sanitizedDisplayLabel(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let limited = String(trimmed.prefix(maxDisplayLabelLength))
+        return limited.isEmpty ? "Audio call" : limited
+    }
+}
+
+enum SalemXProductionDispatchErrorSanitizer {
+    static func loggedErrcode(from data: Data) -> String {
+        sanitizeErrcode(jsonString("errcode", from: data))
+    }
+
+    static func loggedErrorText(from data: Data) -> String {
+        sanitizeErrorText(jsonString("error", from: data))
+    }
+
+    static func loggedDeliveryDiagnostics(from data: Data) -> String {
+        let object = jsonObject(from: data)
+        let nested = object?["diagnostics"] as? [String: Any]
+        func stringValue(_ key: String) -> String? {
+            (object?[key] as? String) ?? (nested?[key] as? String)
+        }
+        func boolValue(_ key: String) -> Bool? {
+            (object?[key] as? Bool) ?? (nested?[key] as? Bool)
+        }
+
+        let tokenHex: String
+        if let value = boolValue("pushkit_upload_token_is_hex") ?? boolValue("real_invite_lookup_token_is_hex") {
+            tokenHex = value ? "true" : "false"
+        } else {
+            tokenHex = "unknown"
+        }
+
+        return [
+            "blocked=\(sanitizeErrcode(stringValue("blocked_reason")))",
+            "apns_env=\(sanitizeErrcode(stringValue("apns_environment")))",
+            "failure=\(sanitizeErrcode(stringValue("background_apns_failure_reason") ?? stringValue("apns_failure_reason")))",
+            "token_hex=\(tokenHex)",
+            "upload_env=\(sanitizeErrcode(stringValue("pushkit_upload_environment") ?? stringValue("real_invite_lookup_environment")))"
+        ].joined(separator: " ")
+    }
+
+    static func sanitizeErrcode(_ value: String?) -> String {
+        guard let value, !value.isEmpty else {
+            return "none"
+        }
+        let allowed = value.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == ".") }
+        let trimmed = String(allowed.prefix(64))
+        return trimmed.isEmpty ? "unrecognized" : trimmed
+    }
+
+    static func sanitizeErrorText(_ value: String?) -> String {
+        guard let value, !value.isEmpty else {
+            return "none"
+        }
+
+        let kept = value.split { character in
+            character.isWhitespace || character == "," || character == ";"
+        }.compactMap { token -> String? in
+            let raw = String(token).trimmingCharacters(in: CharacterSet.punctuationCharacters)
+            guard !raw.isEmpty,
+                  raw.count <= 32,
+                  !raw.contains("@"),
+                  !raw.contains("!"),
+                  !raw.hasPrefix("$") else {
+                return nil
+            }
+            let filtered = raw.filter { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) }
+            return filtered.isEmpty ? nil : filtered
+        }
+
+        let joined = kept.joined(separator: " ")
+        if joined.isEmpty {
+            return "redacted"
+        }
+        return String(joined.prefix(80))
+    }
+
+    private static func jsonString(_ key: String, from data: Data) -> String? {
+        jsonObject(from: data)?[key] as? String
+    }
+
+    private static func jsonObject(from data: Data) -> [String: Any]? {
+        try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 }

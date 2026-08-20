@@ -5,7 +5,9 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import AVFoundation
 import CallKit
+import Clocks
 import Combine
 @testable import ElementX
 import Foundation
@@ -1218,7 +1220,7 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
     }
 
     @Test
-    func lockedAudioAnswerWaitsForAudioActivationAndKeepsCallKitActive() async throws {
+    func lockedAudioAnswerStartsCallWhenApplicationIsActiveAndKeepsCallKitActive() async throws {
         let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
         let bootstrapResolver = BootstrapResolverSpy()
         service = makeAnswerBridgeService(configuration: .init(),
@@ -1236,14 +1238,15 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
 
         #expect(action.fulfillCount == 1)
         #expect(action.failCount == 0)
-        #expect(!observedActions.contains { if case .startCall = $0 { true } else { false } })
-
         service.handleCallProviderAudioSessionActivation()
-        service.handleCallProviderAudioSessionActivation()
-
         #expect(await waitUntil {
             observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
         })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.handleCallProviderAudioSessionActivation()
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1)
         #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
 
         await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
@@ -1258,6 +1261,283 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(duplicateEndAction.fulfillCount == 1)
         #expect(observedActions.filter { if case .requestCallTermination = $0 { true } else { false } }.count == 1)
         #expect(service.ongoingCallRoomIDPublisher.value == nil)
+    }
+
+    @Test
+    func publicTearDownEndsKeptAliveAudioCallKitSession() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+        service.handleCallProviderAudioSessionActivation()
+
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.tearDownCallSession()
+
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.uuid == callID)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+        #expect(service.ongoingCallRoomIDPublisher.value == nil)
+    }
+
+    @Test
+    func publicTearDownEndsOutgoingAudioCallKitSession() async {
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: BootstrapResolverSpy(),
+                                          answerBridge: AnswerBridgeSpy(result: .alreadyPresented))
+
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.tearDownCallSession()
+
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
+        #expect(service.ongoingCallRoomIDPublisher.value == nil)
+
+        service.tearDownCallSession()
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 1)
+    }
+
+    @Test
+    func answeredAudioCallWaitsForCallKitAudioBeforeStarting() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.handleCallProviderAudioSessionActivation()
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+    }
+
+    @Test
+    func audioAnswerKeepsCallKitAliveWithoutNativeCategoryChanges() throws {
+        let source = try SalemXEmbeddedCallAnswerBridgeTests.source(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+        let session = try SalemXEmbeddedCallAnswerBridgeTests.source(named: "ElementX/Sources/Services/ElementCall/CallVoiceAudioSession.swift")
+        #expect(source.contains("CallVoiceAudioSession.configurePlayAndRecordVoiceChatForCallKitAnswer(session: audioSession)"))
+        #expect(session.contains("[CALL-INCOMING-TRACE][APP-AUDIO-ANSWER-CATEGORY]"))
+        #expect(!source.contains("CallVoiceAudioSession.applyOutputPort(speakerEnabled: false)"))
+        #expect(!source.contains("audioSession.setActive"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=answer"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-AUDIO-EARPIECE] reason=callkit_activated"))
+        #expect(source.contains("keptAliveAudioCallKitID = incomingCallID.callKitID"))
+        #expect(source.contains("Incoming answer guard skipped for PushKit wake"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] origin=push"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] reason=native_audio"))
+        #expect(source.contains("shouldKeepAnsweredCallKitForNativeAudio"))
+        #expect(source.contains("nativeAudioJoinCallKitID = incomingCallID.callKitID"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-RESUME] reason="))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-CONSUME]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-AUDIO]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-UNLOCK]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO]"))
+        #expect(source.contains("startNativeMatrixRTCAudioIfNeeded"))
+        #expect(source.contains("startNativeIncomingKeyListenerIfNeeded"))
+        #expect(source.contains("early_listen_request"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-AUDIO-TIMEOUT]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-RECEIVED]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-WAKE]"))
+        #expect(source.contains("Sleeping/killed wake: report CallKit on this callback stack before returning."))
+        #expect(!source.contains("await self.reportProductionDispatchCallKitThenConsume"))
+        #expect(source.contains("startNativeIncomingKeyListenerIfNeeded(bound)"))
+        #expect(source.contains("startNativeIncomingKeyListenerIfNeeded(incomingCallID)"))
+        #expect(source.contains("early_listen_skip reason=wait_consume"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-WAIT-SESSION]"))
+        #expect(source.contains("[CALL-INCOMING-TRACE][APP-PUSH-DROP] reason=invalid_envelope"))
+        #expect(!source.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-ACTIVE]"))
+        #expect(source.contains("incomingCallID.origin != .push"))
+        #expect(source.contains("origin: .push"))
+        #expect(source.contains("private static func matrixEventID(from value: String?)"))
+    }
+
+    @Test
+    func answeredAudioCallWaitsForUnlockAfterCallKitAudioActivation() async throws {
+        let activity = ApplicationActivitySpy(isActive: false)
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          applicationActivityProvider: activity.provider)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        service.handleCallProviderAudioSessionActivation()
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == false)
+
+        unlock(activity)
+        #expect(await waitUntil {
+            startCallCount(in: observedActions) == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == true)
+    }
+
+    @Test
+    func answeredPushKitAudioCallStartsWithoutRemoteMembership() async throws {
+        let activity = ApplicationActivitySpy(isActive: false)
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          applicationActivityProvider: activity.provider)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: Self.roomID,
+                                                              name: "Room",
+                                                              isDirect: true,
+                                                              hasOngoingCall: false,
+                                                              ownUserID: localUserID))
+        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
+            .failure(.missingTransactionID)
+        }
+        let emptyInfo = makeRoomInfo(participants: [])
+        (emptyInfo as? RoomInfoProxyMock)?.hasRoomCall = false
+        let roomInfoSubscription = EmbeddedRoomInfoSubscriptionHarness(initialValue: emptyInfo)
+        roomInfoSubscription.install(on: room)
+
+        let clientProxy = ClientProxyMock(.init(userID: localUserID, deviceID: "LOCAL_DEVICE"))
+        clientProxy.roomForIdentifierClosure = { _ in .joined(room) }
+        service.setClientProxy(clientProxy)
+
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+        service.handleCallProviderAudioSessionActivation()
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        unlock(activity)
+        #expect(await waitUntil {
+            startCallCount(in: observedActions) == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == true)
+    }
+
+    @Test
+    func answeredAudioCallReportsCallKitEndedOnRemoteHangupAfterMissingAudioActivation() async throws {
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          callKitAudioActivationStartTimeout: .milliseconds(50))
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        #expect(await waitUntil {
+            observedActions.filter { if case .startCall = $0 { true } else { false } }.count == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+
+        await service.setupCallSession(roomID: Self.roomID, roomDisplayName: "welcome", startMode: .audio)
+        #expect(service.ongoingCallRoomIDPublisher.value == Self.roomID)
+
+        let remoteUserID = "@alice:example.com"
+        let room = MatrixRTCCallMembershipRoomProxyMock(.init(id: Self.roomID,
+                                                              name: "Room",
+                                                              isDirect: true,
+                                                              hasOngoingCall: true,
+                                                              ownUserID: localUserID))
+        room.subscribeToCallDeclineEventsRtcNotificationEventIDListenerClosure = { _, _ in
+            .failure(.missingTransactionID)
+        }
+        let roomInfoSubscription = EmbeddedRoomInfoSubscriptionHarness(initialValue: makeRoomInfo(participants: [localUserID, remoteUserID]))
+        let localMembership = makeMatrixRTCMembershipTimelineItem(eventID: "$local-membership",
+                                                                  roomID: Self.roomID,
+                                                                  userID: localUserID,
+                                                                  deviceID: "LOCAL_DEVICE",
+                                                                  membershipID: "LOCAL_PARTY",
+                                                                  isActive: true)
+        roomInfoSubscription.install(on: room, initialTimelineItems: [
+            localMembership,
+            makeMatrixRTCMembershipTimelineItem(eventID: "$remote-membership",
+                                                roomID: Self.roomID,
+                                                userID: remoteUserID,
+                                                deviceID: "REMOTE_DEVICE",
+                                                membershipID: "REMOTE_PARTY",
+                                                isActive: true)
+        ])
+
+        let clientProxy = ClientProxyMock(.init(userID: localUserID, deviceID: "LOCAL_DEVICE"))
+        clientProxy.roomForIdentifierClosure = { _ in .joined(room) }
+        service.setClientProxy(clientProxy)
+        #expect(await waitUntil { room.subscribeToRoomInfoUpdatesCallsCount == 1 })
+        #expect(await roomInfoSubscription.waitForTimelineSubscription())
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID, remoteUserID])))
+        #expect(roomInfoSubscription.receiveSDKUpdate(makeRoomInfo(participants: [localUserID])))
+        #expect(await waitUntil {
+            self.callProvider.reportCallWithEndedAtReasonCallsCount == 1 &&
+                observedActions.contains { if case .endCall = $0 { true } else { false } } &&
+                self.service.ongoingCallRoomIDPublisher.value == nil
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.uuid == callID)
+        #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .remoteEnded)
     }
 
     @Test
@@ -1995,19 +2275,166 @@ final class SalemXEmbeddedCallAnswerBridgeServiceTests {
         #expect(endBridge.calls.count == 1)
         #expect(bootstrapResolver.removedCallIDs == [callID])
     }
+}
+
+private final class ApplicationActivitySpy {
+    var isActive: Bool
+    let didBecomeActiveSubject = PassthroughSubject<Void, Never>()
+
+    init(isActive: Bool) {
+        self.isActive = isActive
+    }
+
+    var provider: ApplicationActivityProvider {
+        ApplicationActivityProvider(isActive: { [weak self] in self?.isActive ?? false },
+                                    didBecomeActivePublisher: didBecomeActiveSubject.eraseToAnyPublisher())
+    }
+}
+
+extension SalemXEmbeddedCallAnswerBridgeServiceTests {
+    @Test
+    func answeredLockedAudioCallStartsAfterUnlockWhenCallKitAudioIsActive() async throws {
+        let activity = ApplicationActivitySpy(isActive: false)
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          applicationActivityProvider: activity.provider)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
+        service.handleCallProviderAudioSessionActivation()
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == false)
+
+        unlock(activity)
+        #expect(await waitUntil {
+            startCallCount(in: observedActions) == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == true)
+    }
+
+    @Test
+    func answeredAudioCallConfiguresPlayAndRecordVoiceChatBeforeFulfillWithoutActivating() async throws {
+        let audioSession = AudioSessionMock()
+        let activity = ApplicationActivitySpy(isActive: false)
+        service = ElementCallService(appSettings: appSettings,
+                                     callProvider: callProvider,
+                                     timeProvider: TimeProvider(clock: ContinuousClock()) { self.currentDate },
+                                     applicationActivityProvider: activity.provider,
+                                     salemXAnswerBridgeConfiguration: .init(embeddedMatrixRTCAnswerBridgeEnabled: false),
+                                     audioSession: audioSession)
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        #expect(audioSession.setCategoryModeOptionsCallsCount == 1)
+        #expect(audioSession.setCategoryModeOptionsReceivedArguments?.category == .playAndRecord)
+        #expect(audioSession.setCategoryModeOptionsReceivedArguments?.mode == .voiceChat)
+        #expect(audioSession.setCategoryModeOptionsReceivedArguments?.options == [.allowBluetoothHFP])
+        #expect(audioSession.setActiveOptionsCallsCount == 0)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
+
+        service.handleCallProviderAudioSessionActivation()
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(startCallCount(in: observedActions) == 0)
+        #expect(audioSession.setActiveOptionsCallsCount == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == false)
+
+        unlock(activity)
+        #expect(await waitUntil {
+            startCallCount(in: observedActions) == 1
+        })
+        #expect(audioSession.setActiveOptionsCallsCount == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+    }
+
+    @Test
+    func answeredAudioCallStartsAfterAudioTimeoutWhenCallKitDoesNotActivate() async throws {
+        let activity = ApplicationActivitySpy(isActive: false)
+        let answerBridge = AnswerBridgeSpy(result: .alreadyPresented)
+        let bootstrapResolver = BootstrapResolverSpy()
+        service = makeAnswerBridgeService(configuration: .init(),
+                                          bootstrapResolver: bootstrapResolver,
+                                          answerBridge: answerBridge,
+                                          applicationActivityProvider: activity.provider,
+                                          callKitAudioActivationStartTimeout: .milliseconds(50))
+
+        var observedActions = [ElementCallServiceAction]()
+        service.actions
+            .sink { observedActions.append($0) }
+            .store(in: &cancellables)
+
+        let callID = try await reportIncomingCall(startMode: .audio)
+        let action = AnswerActionSpy(callUUID: callID)
+        service.handleAnswerCallAction(action, provider: callProvider)
+
+        #expect(action.fulfillCount == 1)
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(startCallCount(in: observedActions) == 0)
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == false)
+
+        unlock(activity)
+        #expect(await waitUntil {
+            startCallCount(in: observedActions) == 1
+        })
+        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 0)
+        #expect(activity.isActive == true)
+    }
+
+    private func startCallCount(in actions: [ElementCallServiceAction]) -> Int {
+        actions.filter { if case .startCall = $0 { true } else { false } }.count
+    }
+
+    private func unlock(_ activity: ApplicationActivitySpy) {
+        activity.isActive = true
+        activity.didBecomeActiveSubject.send()
+    }
 
     private func makeAnswerBridgeService(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,
                                                                                                             answerTimeout: .seconds(1)),
                                          bootstrapResolver: BootstrapResolverSpy,
                                          answerBridge: AnswerBridgeSpy,
-                                         endBridge: EndBridgeSpy? = nil) -> ElementCallService {
+                                         endBridge: EndBridgeSpy? = nil,
+                                         timeProvider: TimeProvider? = nil,
+                                         applicationActivityProvider: ApplicationActivityProvider? = nil,
+                                         audioSession: AudioSessionProtocol = AudioSessionMock(),
+                                         callKitAudioActivationStartTimeout: Duration = .milliseconds(1500)) -> ElementCallService {
         ElementCallService(appSettings: appSettings,
                            callProvider: callProvider,
-                           timeProvider: TimeProvider(clock: ContinuousClock()) { self.currentDate },
+                           timeProvider: timeProvider ?? TimeProvider(clock: ContinuousClock()) { self.currentDate },
+                           applicationActivityProvider: applicationActivityProvider ?? ApplicationActivityProvider(isActive: { true },
+                                                                                                                   didBecomeActivePublisher: Empty().eraseToAnyPublisher()),
                            salemXAnswerBridgeConfiguration: configuration,
                            salemXIncomingCallBootstrapResolver: bootstrapResolver,
                            salemXAnswerBridge: answerBridge,
-                           salemXEndBridge: endBridge)
+                           salemXEndBridge: endBridge,
+                           audioSession: audioSession,
+                           callKitAudioActivationStartTimeout: callKitAudioActivationStartTimeout)
     }
 
     private func prepareOngoingEmbeddedCall(configuration: SalemXEmbeddedCallAnswerBridgeConfiguration = .init(embeddedMatrixRTCAnswerBridgeEnabled: true,

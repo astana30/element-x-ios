@@ -189,35 +189,25 @@ struct RoomScreen: View {
     @ViewBuilder
     private var callButton: some View {
         if timelineContext.viewState.isDirectOneToOneRoom {
-            HStack(spacing: 16) {
-                Button {
-                    context.send(viewAction: .displayCall(startMode: .audio))
-                } label: {
-                    Image(systemName: "phone.fill")
-                }
-                .accessibilityLabel(L10n.a11yStartVoiceCall)
-                .accessibilityIdentifier(A11yIdentifiers.roomScreen.voiceCall)
-                
-                Button {
-                    context.send(viewAction: .displayCall(startMode: .video))
-                } label: {
-                    CompoundIcon(\.videoCallSolid)
-                }
-                .accessibilityLabel(L10n.a11yStartCall)
-                .accessibilityIdentifier(A11yIdentifiers.roomScreen.videoCall)
+            Button {
+                context.send(viewAction: .displayCall(startMode: .audio))
+            } label: {
+                Image(systemName: "phone.fill")
             }
+            .accessibilityLabel(L10n.a11yStartVoiceCall)
+            .accessibilityIdentifier(A11yIdentifiers.roomScreen.voiceCall)
         } else if context.viewState.hasOngoingCall {
             JoinCallButton {
-                context.send(viewAction: .displayCall(startMode: .video))
+                context.send(viewAction: .displayCall(startMode: .audio))
             }
             .accessibilityIdentifier(A11yIdentifiers.roomScreen.joinCall)
         } else {
             Button {
-                context.send(viewAction: .displayCall(startMode: .video))
+                context.send(viewAction: .displayCall(startMode: .audio))
             } label: {
-                CompoundIcon(\.videoCallSolid)
+                CompoundIcon(\.voiceCallSolid)
             }
-            .accessibilityLabel(L10n.a11yStartCall)
+            .accessibilityLabel(L10n.a11yStartVoiceCall)
             .accessibilityIdentifier(A11yIdentifiers.roomScreen.joinCall)
         }
     }

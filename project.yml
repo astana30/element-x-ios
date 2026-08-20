@@ -57,7 +57,7 @@ settings:
   APP_NAME: SalemX
   KEYCHAIN_ACCESS_GROUP_IDENTIFIER: "$(DEVELOPMENT_TEAM).$(BASE_BUNDLE_IDENTIFIER)"
   MARKETING_VERSION: 26.03.4
-  CURRENT_PROJECT_VERSION: 1
+    CURRENT_PROJECT_VERSION: 47
   SUPPORTS_MACCATALYST: false
 
 include:
@@ -137,7 +137,7 @@ packages:
     minorVersion: 1.2.0
   LiveKit:
     url: https://github.com/livekit/client-sdk-swift.git
-    exactVersion: 2.13.0
+    exactVersion: 2.16.0
   LoremSwiftum:
     url: https://github.com/lukaskubanek/LoremSwiftum
     minorVersion: 2.2.3

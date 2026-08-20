@@ -27,7 +27,7 @@ struct InfoPlistReader {
     }
     
     private enum Values {
-        static let defaultPushGatewayBaseURL = "https://matrix.org"
+        static let defaultPushGatewayBaseURL = "https://matrix.mertis.kz"
         static let mentionPills = "Mention Pills"
     }
 

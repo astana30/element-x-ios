@@ -196,9 +196,14 @@ protocol SalemXStockElementCallLifecycleProviding {
         -> Result<SalemXStockElementCallObservationHandle, SalemXStockElementCallLifecycleError>
     @MainActor func awaitMembershipConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>
+    @MainActor func confirmOutgoingCallMembershipAfterCallScreenPresentation(_ handle: SalemXStockElementCallObservationHandle)
     @MainActor func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<Void, SalemXStockElementCallLifecycleError>
     @MainActor func cancelObservation(_ handle: SalemXStockElementCallObservationHandle)
+}
+
+extension SalemXStockElementCallLifecycleProviding {
+    @MainActor func confirmOutgoingCallMembershipAfterCallScreenPresentation(_ handle: SalemXStockElementCallObservationHandle) { }
 }
 
 struct SalemXProductionDispatchCapabilityConfiguration: CustomStringConvertible {
@@ -217,6 +222,23 @@ struct SalemXProductionDispatchCapabilityConfiguration: CustomStringConvertible 
     var description: String {
         "SalemXProductionDispatchCapabilityConfiguration(<redacted>)"
     }
+}
+
+enum MatrixRTCNativeAudioState: Equatable {
+    case inactive
+    case connecting
+    case connected
+}
+
+protocol MatrixRTCNativeAudioJoining: AnyObject {
+    var activeRoomID: String? { get }
+    var state: MatrixRTCNativeAudioState { get }
+
+    func joinIncomingAudio(roomID: String, clientProxy: ClientProxyProtocol) async
+    func prepareIncomingKeyListener(roomID: String, clientProxy: ClientProxyProtocol)
+    func setMicrophoneEnabled(_ enabled: Bool)
+    func resendLocalEncryptionKey() async
+    func leave()
 }
 
 // sourcery: AutoMockable
@@ -244,6 +266,8 @@ protocol ElementCallServiceProtocol {
     func tearDownCallSession()
     
     func setAudioEnabled(_ enabled: Bool, roomID: String)
+
+    func ownsNativeMatrixRTCAudio(roomID: String) -> Bool
 }
 
 extension ElementCallServiceProtocol {
@@ -260,4 +284,23 @@ extension ElementCallServiceProtocol {
     func isPreAnswerOutgoingCall(roomID: String) -> Bool {
         false
     }
+
+    func ownsNativeMatrixRTCAudio(roomID: String) -> Bool {
+        false
+    }
+}
+
+extension MatrixRTCNativeAudioJoining {
+    var isActive: Bool {
+        switch state {
+        case MatrixRTCNativeAudioState.connecting, MatrixRTCNativeAudioState.connected:
+            true
+        case MatrixRTCNativeAudioState.inactive:
+            false
+        }
+    }
+
+    func prepareIncomingKeyListener(roomID _: String, clientProxy _: ClientProxyProtocol) { }
+
+    func resendLocalEncryptionKey() async { }
 }

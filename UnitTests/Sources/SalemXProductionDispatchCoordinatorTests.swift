@@ -30,6 +30,21 @@ struct SalemXProductionDispatchCoordinatorTests {
     }
 
     @Test
+    func prepareReplacesMatrixMembershipStateKeyWithOpaqueCallHandle() async throws {
+        let lifecycle = LifecycleSpy(callHandle: "_@alice:example.test_DEVICE_m.call")
+        let client = DispatchClientSpy()
+        let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
+
+        _ = await coordinator.start(input())
+
+        let handle = try #require(client.prepareRequests.first?.callHandle)
+        #expect(SalemXProductionDispatchOpaqueToken.isValidCallHandle(handle))
+        #expect(!handle.contains("@"))
+        #expect(!handle.contains(":"))
+        #expect(handle != "_@alice:example.test_DEVICE_m.call")
+    }
+
+    @Test
     func duplicateTapsCoalesceIntoOneStockCallAndOneDispatch() async {
         let lifecycle = LifecycleSpy(waitBeforeStart: true)
         let client = DispatchClientSpy()
@@ -86,18 +101,22 @@ struct SalemXProductionDispatchCoordinatorTests {
     }
 
     @Test
-    func prepareFailureEndsStockCallAndAwaitsMembershipRemoval() async {
+    func prepareFailureKeepsThePresentedStockCall() async {
         let lifecycle = LifecycleSpy()
         let client = DispatchClientSpy(prepareResult: .failure(.transportUnavailable))
         let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
 
         #expect(await coordinator.start(input()) == .failed(.dispatch(.transportUnavailable)))
-        #expect(lifecycle.events == [.start, .membershipConfirmed, .end, .membershipRemoved])
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
         #expect(client.cancelCount == 0)
+        client.prepareResult = nil
+        #expect(await coordinator.start(input()) == .sent(client.dispatchID))
+        #expect(lifecycle.startCount == 2)
     }
 
     @Test
-    func disabledServerAfterMatrixRTCStartTearsDownExactlyOnce() async {
+    func disabledServerAfterMatrixRTCStartDoesNotHangUpStockCall() async {
         let lifecycle = LifecycleSpy()
         let disabled = SalemXProductionDispatchClientError.http(.notFound, .disabled)
         let client = DispatchClientSpy(prepareResult: .failure(disabled))
@@ -108,14 +127,13 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(client.claimCount == 0)
         #expect(client.sendCount == 0)
         #expect(client.cancelCount == 0)
-        #expect(lifecycle.events == [.start, .membershipConfirmed, .end, .membershipRemoved])
-        #expect(lifecycle.events.filter { $0 == .end }.count == 1)
-        #expect(lifecycle.events.filter { $0 == .membershipRemoved }.count == 1)
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
         #expect(coordinator.state == .idle)
     }
 
     @Test
-    func claimFailureCancelsExactPreparedRecordAndEndsMembership() async {
+    func claimFailureCancelsExactPreparedRecordAndKeepsStockCall() async {
         let lifecycle = LifecycleSpy()
         let client = DispatchClientSpy(claimResult: .failure(.http(.forbidden, .capability)))
         let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
@@ -131,7 +149,8 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(cancelRequest.dispatchID == client.referenceRequest.dispatchID)
         #expect(cancelRequest.senderReference == client.referenceRequest.senderReference)
         #expect(cancelRequest.appSessionGeneration == client.referenceRequest.appSessionGeneration)
-        #expect(lifecycle.events.suffix(2) == [.end, .membershipRemoved])
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
     }
 
     @Test
@@ -143,11 +162,12 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(await coordinator.start(input()) == .failed(.deliveryUnknown))
         #expect(client.sendCount == 1)
         #expect(client.cancelCount == 1)
-        #expect(lifecycle.events.suffix(2) == [.end, .membershipRemoved])
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
     }
 
     @Test
-    func cancellationIsIdempotentAndAwaitsMembershipRemoval() async {
+    func cancellationIsIdempotentAndDoesNotHangUpStockCall() async {
         let lifecycle = LifecycleSpy(waitBeforeMembership: true)
         let client = DispatchClientSpy()
         let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
@@ -159,7 +179,8 @@ struct SalemXProductionDispatchCoordinatorTests {
         lifecycle.continueMembership()
 
         #expect(await task.value == .failed(.cancelled))
-        #expect(lifecycle.events == [.start, .end, .membershipRemoved])
+        #expect(!lifecycle.events.contains(.end))
+        #expect(!lifecycle.events.contains(.membershipRemoved))
         #expect(client.events.isEmpty)
     }
 
@@ -176,7 +197,8 @@ struct SalemXProductionDispatchCoordinatorTests {
 
         #expect(await task.value == .failed(.cancelled))
         #expect(client.events.isEmpty)
-        #expect(lifecycle.events.suffix(2) == [.end, .membershipRemoved])
+        #expect(!lifecycle.events.contains(.end))
+        #expect(!lifecycle.events.contains(.membershipRemoved))
         #expect(await coordinator.start(input()) == .failed(.staleGeneration))
         #expect(lifecycle.startCount == 1)
     }
@@ -196,9 +218,9 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(await task.value == .failed(.cancelled))
         #expect(client.sendCount <= 1)
         #expect(client.cancelCount == (operation == .prepare ? 0 : 1))
-        #expect(lifecycle.events.suffix(2) == [.end, .membershipRemoved])
-        #expect(lifecycle.events.filter { $0 == .end }.count == 1)
-        #expect(lifecycle.events.filter { $0 == .membershipRemoved }.count == 1)
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
+        #expect(lifecycle.events.filter { $0 == .membershipRemoved }.isEmpty)
     }
 
     @Test
@@ -215,22 +237,14 @@ struct SalemXProductionDispatchCoordinatorTests {
     }
 
     @Test
-    func failureCleanupRetainsTheActiveSlotUntilItCompletes() async {
-        let lifecycle = LifecycleSpy(waitBeforeMembershipRemoval: true)
+    func failureCleanupAllowsARetryAfterPrepareFailure() async {
+        let lifecycle = LifecycleSpy()
         let client = DispatchClientSpy(prepareResult: .failure(.transportUnavailable))
         let coordinator = SalemXProductionDispatchCoordinator(dispatchClient: client, stockCallLifecycle: lifecycle)
 
-        let first = Task { await coordinator.start(input()) }
-        await lifecycle.waitUntilMembershipRemovalIsRequested()
-        let duplicateDuringCleanup = Task { await coordinator.start(input()) }
-        for _ in 0..<8 {
-            await Task.yield()
-        }
-        #expect(lifecycle.startCount == 1)
-        lifecycle.continueMembershipRemoval()
-
-        #expect(await first.value == .failed(.dispatch(.transportUnavailable)))
-        #expect(await duplicateDuringCleanup.value == .failed(.dispatch(.transportUnavailable)))
+        #expect(await coordinator.start(input()) == .failed(.dispatch(.transportUnavailable)))
+        #expect(lifecycle.events == [.start, .membershipConfirmed])
+        #expect(!lifecycle.events.contains(.end))
         client.prepareResult = nil
         #expect(await coordinator.start(input()) == .sent(client.dispatchID))
         #expect(lifecycle.startCount == 2)
@@ -289,7 +303,7 @@ struct SalemXProductionDispatchCoordinatorTests {
         let recorder = Stage5EventRecorder()
         let lifecycleProvider = StockLifecycleProviderSpy(recorder: recorder)
         let client = DispatchClientSpy(recorder: recorder)
-        let elementCallService = ElementCallServiceMock()
+        let elementCallService = ElementCallServiceMock(.init())
         let session = SalemXProductionDispatchSession(dispatchClient: client,
                                                       appSessionGeneration: "session-generation",
                                                       elementCallService: elementCallService,
@@ -311,7 +325,7 @@ struct SalemXProductionDispatchCoordinatorTests {
         let client = DispatchClientSpy(dispatchIDs: [UUID(), UUID()])
         let session = SalemXProductionDispatchSession(dispatchClient: client,
                                                       appSessionGeneration: "session-generation",
-                                                      elementCallService: ElementCallServiceMock(),
+                                                      elementCallService: ElementCallServiceMock(.init()),
                                                       lifecycleProvider: lifecycleProvider)
 
         #expect(await session.startEligibleAudio(input: input(), roomID: "room") { .init { true } }.isSent)
@@ -319,6 +333,27 @@ struct SalemXProductionDispatchCoordinatorTests {
         while lifecycleProvider.removalCount == 0 {
             await Task.yield()
         }
+        #expect(await session.startEligibleAudio(input: input(), roomID: "room") { .init { true } }.isSent)
+        #expect(lifecycleProvider.armCount == 2)
+    }
+
+    @Test
+    func hangupDuringMembershipWaitAllowsASecondOutgoingAttempt() async {
+        let lifecycleProvider = StockLifecycleProviderSpy(recorder: .init(), waitBeforeMembership: true)
+        let client = DispatchClientSpy(dispatchIDs: [UUID(), UUID()])
+        let session = SalemXProductionDispatchSession(dispatchClient: client,
+                                                      appSessionGeneration: "session-generation",
+                                                      elementCallService: ElementCallServiceMock(.init()),
+                                                      lifecycleProvider: lifecycleProvider)
+
+        let first = Task {
+            await session.startEligibleAudio(input: input(), roomID: "room") { .init { true } }
+        }
+        await lifecycleProvider.waitUntilConfirmationIsWaiting()
+        session.stockCallDidEnd()
+        #expect(await first.value == .failed(.cancelled))
+
+        lifecycleProvider.prepareForNextAttempt()
         #expect(await session.startEligibleAudio(input: input(), roomID: "room") { .init { true } }.isSent)
         #expect(lifecycleProvider.armCount == 2)
     }
@@ -362,6 +397,38 @@ struct SalemXProductionDispatchCoordinatorTests {
     }
 
     @Test
+    func incomingOrRestorePresentationDoesNotPrepareOutgoingDispatch() {
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: false,
+                                                                           featureEnabled: true,
+                                                                           startMode: .audio,
+                                                                           hasSession: true) == false)
+    }
+
+    @Test
+    func userInitiatedAudioWithSessionPreparesOutgoingDispatch() {
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: true,
+                                                                           featureEnabled: true,
+                                                                           startMode: .audio,
+                                                                           hasSession: true))
+    }
+
+    @Test
+    func disabledFeatureOrMissingSessionStaysOnStockCallScreen() {
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: true,
+                                                                           featureEnabled: false,
+                                                                           startMode: .audio,
+                                                                           hasSession: true) == false)
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: true,
+                                                                           featureEnabled: true,
+                                                                           startMode: .audio,
+                                                                           hasSession: false) == false)
+        #expect(SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: true,
+                                                                           featureEnabled: true,
+                                                                           startMode: .video,
+                                                                           hasSession: true) == false)
+    }
+
+    @Test
     func memberResolutionReturnsJoinedUserIDs() async {
         let room = JoinedRoomProxyMock(.init(members: [.mockMe, .mockAlice, .mockInvitedAlice]))
 
@@ -390,6 +457,41 @@ struct SalemXProductionDispatchCoordinatorTests {
         #expect(room.updateMembersCallsCount == 1)
     }
 
+    @Test
+    func memberResolutionUsesDirectRoomHeroWhenMemberListIsIncomplete() async {
+        let room = JoinedRoomProxyMock(.init(isDirect: true,
+                                             members: [.mockMe],
+                                             heroes: [.mockAlice]))
+        (room.infoPublisher.value as? RoomInfoProxyMock)?.joinedMembersCount = 2
+
+        let result = await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: room,
+                                                                                ownUserID: RoomMemberProxyMock.mockMe.userID,
+                                                                                timeout: .milliseconds(20))
+
+        #expect(result == .resolved([RoomMemberProxyMock.mockMe.userID, RoomMemberProxyMock.mockAlice.userID]))
+        #expect(room.updateMembersCallsCount == 0)
+    }
+
+    @Test
+    func memberResolutionWaitsForASecondJoinedMemberInsteadOfFailingOpen() async {
+        let room = JoinedRoomProxyMock(.init(isDirect: true, members: [.mockMe]))
+        (room.infoPublisher.value as? RoomInfoProxyMock)?.joinedMembersCount = 2
+        var refreshCount = 0
+        room.updateMembersClosure = {
+            refreshCount += 1
+            if refreshCount >= 2 {
+                room.membersPublisher = CurrentValuePublisher<[RoomMemberProxyProtocol], Never>([RoomMemberProxyMock.mockMe, RoomMemberProxyMock.mockAlice])
+            }
+        }
+
+        let result = await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: room,
+                                                                                ownUserID: RoomMemberProxyMock.mockMe.userID,
+                                                                                timeout: .seconds(1))
+
+        #expect(result == .resolved([RoomMemberProxyMock.mockMe.userID, RoomMemberProxyMock.mockAlice.userID]))
+        #expect(refreshCount >= 2)
+    }
+
     private func input() -> SalemXProductionDispatchAttemptInput {
         .init(appSessionGeneration: "session-generation",
               admission: .init(recipient: "@receiver:example.test",
@@ -408,12 +510,17 @@ private final class StockLifecycleProviderSpy: SalemXStockElementCallLifecyclePr
     private let recorder: Stage5EventRecorder
     private(set) var armCount = 0
     private(set) var removalCount = 0
+    var waitBeforeMembership: Bool
+    private var cancelled = false
+    private var confirmationWaiting = false
+    private var confirmationContinuations = [CheckedContinuation<Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError>, Never>]()
     private let handle = SalemXStockElementCallObservationHandle(observationID: UUID(),
                                                                  appSessionGeneration: "session-generation",
                                                                  attemptGeneration: 1)
 
-    init(recorder: Stage5EventRecorder) {
+    init(recorder: Stage5EventRecorder, waitBeforeMembership: Bool = false) {
         self.recorder = recorder
+        self.waitBeforeMembership = waitBeforeMembership
     }
 
     func beginOutgoingObservation(roomID: String,
@@ -425,8 +532,22 @@ private final class StockLifecycleProviderSpy: SalemXStockElementCallLifecyclePr
         return .success(handle)
     }
 
+    func confirmOutgoingCallMembershipAfterCallScreenPresentation(_ handle: SalemXStockElementCallObservationHandle) {
+        recorder.events.append("confirm")
+    }
+
     func awaitMembershipConfirmation(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<SalemXStockElementCallContext, SalemXStockElementCallLifecycleError> {
+        if waitBeforeMembership {
+            return await withCheckedContinuation { continuation in
+                if cancelled {
+                    continuation.resume(returning: .failure(.cancelled))
+                    return
+                }
+                confirmationWaiting = true
+                confirmationContinuations.append(continuation)
+            }
+        }
         recorder.events.append("membership")
         return .success(.init(callID: "call", roomID: "room", callHandle: "handle"))
     }
@@ -434,10 +555,32 @@ private final class StockLifecycleProviderSpy: SalemXStockElementCallLifecyclePr
     func awaitMembershipRemoval(_ handle: SalemXStockElementCallObservationHandle) async
         -> Result<Void, SalemXStockElementCallLifecycleError> {
         removalCount += 1
+        if cancelled {
+            return .failure(.cancelled)
+        }
         return .success(())
     }
 
-    func cancelObservation(_ handle: SalemXStockElementCallObservationHandle) { }
+    func cancelObservation(_ handle: SalemXStockElementCallObservationHandle) {
+        cancelled = true
+        confirmationWaiting = false
+        let continuations = confirmationContinuations
+        confirmationContinuations.removeAll()
+        continuations.forEach { $0.resume(returning: .failure(.cancelled)) }
+    }
+
+    func waitUntilConfirmationIsWaiting() async {
+        while !confirmationWaiting, !cancelled {
+            await Task.yield()
+        }
+    }
+
+    func prepareForNextAttempt() {
+        cancelled = false
+        waitBeforeMembership = false
+        confirmationWaiting = false
+        confirmationContinuations.removeAll()
+    }
 }
 
 private extension SalemXProductionDispatchCoordinatorOutcome {
@@ -459,6 +602,7 @@ private final class LifecycleSpy: SalemXProductionDispatchStockCallLifecycleProt
     private let waitBeforeStart: Bool
     private let waitBeforeMembership: Bool
     private let waitBeforeMembershipRemoval: Bool
+    private let callHandle: String
     private let recorder: Stage5EventRecorder?
     private var startRequested = false
     private var startMayContinue = false
@@ -472,10 +616,12 @@ private final class LifecycleSpy: SalemXProductionDispatchStockCallLifecycleProt
     init(waitBeforeStart: Bool = false,
          waitBeforeMembership: Bool = false,
          waitBeforeMembershipRemoval: Bool = false,
+         callHandle: String = "call-handle",
          recorder: Stage5EventRecorder? = nil) {
         self.waitBeforeStart = waitBeforeStart
         self.waitBeforeMembership = waitBeforeMembership
         self.waitBeforeMembershipRemoval = waitBeforeMembershipRemoval
+        self.callHandle = callHandle
         self.recorder = recorder
     }
 
@@ -492,7 +638,7 @@ private final class LifecycleSpy: SalemXProductionDispatchStockCallLifecycleProt
                 await Task.yield()
             }
         }
-        return .success(.init(roomID: "!room:example.test", callID: "call-id", callHandle: "call-handle"))
+        return .success(.init(roomID: "!room:example.test", callID: "call-id", callHandle: callHandle))
     }
 
     func awaitConfirmedLocalMembership(for context: SalemXProductionDispatchStockCallContext) async

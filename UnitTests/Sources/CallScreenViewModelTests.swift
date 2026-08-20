@@ -1183,6 +1183,193 @@ extension CallScreenViewModelTests {
         harness.viewModel.stop()
     }
 
+    @Test
+    func audioRoomCallStartsOnEarpiece() throws {
+        let harness = try makeAudioRoomCallViewModel()
+        #expect(harness.viewModel.context.viewState.isSpeakerphoneEnabled == false)
+    }
+
+    @Test
+    func audioCallGivesNativeControlOfAudioDevices() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallWidgetDriver.swift")
+        #expect(source.contains("startMode == .audio ? \"true\" : \"false\""))
+        #expect(!source.contains("controlledAudioDevices, value: \"false\""))
+    }
+
+    @Test
+    func audioCallLeavesWebRTCAudioSessionUntouched() throws {
+        let callScreen = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift")
+        let session = try repositorySource(named: "ElementX/Sources/Services/ElementCall/CallVoiceAudioSession.swift")
+        let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+        #expect(session.contains("native_category=false"))
+        #expect(session.contains("try session.overrideOutputAudioPort(speakerEnabled ? .speaker : .none)"))
+        #expect(session.contains("static func lockAfterCapture()"))
+        #expect(session.contains("try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])"))
+        #expect(session.contains("[CALL-INCOMING-TRACE][APP-AUDIO-ANSWER-CATEGORY]"))
+        #expect(!session.contains("setActive("))
+        #expect(!session.contains("options: [.defaultToSpeaker"))
+        #expect(!session.contains("options: [.allowBluetoothHFP, .defaultToSpeaker]"))
+        #expect(callScreen.contains("CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()"))
+        #expect(callScreen.contains("CallVoiceAudioSession.lockAfterCapture()"))
+        #expect(callScreen.contains("CallVoiceAudioSession.applyOutputPort(speakerEnabled:"))
+        #expect(callScreen.contains("applyPreferredAudioRouteIfNeeded(force: true, userInitiated: true)"))
+        #expect(callScreen.contains("guard userInitiated else"))
+        #expect(!callScreen.contains("CallVoiceAudioSession.configure"))
+        #expect(!callScreen.contains("guard deviceID == Self.earpieceID else"))
+        #expect(!callScreen.contains(".milliseconds(300)"))
+        #expect(!callScreen.contains(".seconds(4)"))
+        #expect(!callScreen.contains("Failed updating call audio route with error"))
+        #expect(!callService.contains("CallVoiceAudioSession.applyOutputPort(speakerEnabled: false)"))
+        #expect(callService.contains("CallVoiceAudioSession.configurePlayAndRecordVoiceChatForCallKitAnswer(session: audioSession)"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-AUDIO]"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-UNLOCK]"))
+        #expect(callService.contains("native-audio-cancel-unanswered"))
+        #expect(!callService.contains("audioSession.setActive"))
+        let prepareIndex = try #require(callScreen.range(of: "CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()")?.lowerBound)
+        let setupCallIndex = try #require(callScreen.range(of: "setupCall()")?.lowerBound)
+        #expect(prepareIndex < setupCallIndex)
+        let permissionIndex = try #require(callScreen.range(of: "case .mediaCapturePermissionGranted:")?.lowerBound)
+        let lockIndex = try #require(callScreen.range(of: "CallVoiceAudioSession.lockAfterCapture()")?.lowerBound)
+        #expect(permissionIndex < lockIndex)
+    }
+
+    @Test
+    func audioCallDefaultsToElementCallVirtualEarpiece() throws {
+        let callScreen = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift")
+        let models = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/CallScreenModels.swift")
+        let view = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/View/CallScreen.swift")
+        #expect(callScreen.contains("publishControlledAudioDevicesIfNeeded()"))
+        #expect(callScreen.contains("setAvailableAudioDevices"))
+        #expect(callScreen.contains("setAudioDevice"))
+        #expect(callScreen.contains("\"forEarpiece\": true"))
+        #expect(callScreen.contains("\"isSpeaker\": true"))
+        #expect(callScreen.contains("private static let earpieceID = \"earpiece-id\""))
+        #expect(callScreen.contains("private static let speakerDeviceID = \"Speaker\""))
+        #expect(callScreen.contains("preferredAudioRoute == .speaker ? Self.speakerDeviceID : Self.earpieceID"))
+        #expect(callScreen.contains("case .audioPlaybackStarted:"))
+        #expect(!callScreen.contains("{id: 'dummy'"))
+        #expect(!callScreen.contains("updateOutputsListOnWeb()"))
+        #expect(models.contains("case onAudioPlaybackStarted"))
+        #expect(models.contains("case onAudioDeviceSelect"))
+        #expect(view.contains("case .onAudioPlaybackStarted:"))
+        #expect(view.contains("case .onOutputDeviceSelect, .onAudioDeviceSelect:"))
+    }
+
+    @Test
+    func appStoreLinePresentsIncomingCallsFromMatrixRTCPresence() throws {
+        let appCoordinator = try repositorySource(named: "ElementX/Sources/Application/AppCoordinator.swift")
+        let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+        Self.expectAppStoreLineAppCoordinatorFingerprints(appCoordinator)
+        #expect(callService.contains("[MATRIXRTC-PRESENCE-INCOMING]"))
+        #expect(callService.contains("source=matrixrtc_presence"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] origin=push"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] reason=native_audio"))
+        #expect(callService.contains("shouldKeepAnsweredCallKitForNativeAudio"))
+        #expect(callService.contains("nativeAudioJoinCallKitID = incomingCallID.callKitID"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-INCOMING-SKIP-END] reason=native_audio_connecting"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-PUSH-RECEIVED]"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-PUSH-WAKE]"))
+        #expect(callService.contains("Sleeping/killed wake: report CallKit on this callback stack before returning."))
+        #expect(!callService.contains("await self.reportProductionDispatchCallKitThenConsume"))
+        #expect(callService.contains("startNativeIncomingKeyListenerIfNeeded(bound)"))
+        #expect(callService.contains("startNativeIncomingKeyListenerIfNeeded(incomingCallID)"))
+        #expect(callService.contains("early_listen_skip reason=wait_consume"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-PUSH-WAIT-SESSION]"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-CONSUME]"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-UNLOCK]"))
+        #expect(callService.contains("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO]"))
+        #expect(callService.contains("startNativeMatrixRTCAudioIfNeeded"))
+        #expect(callService.contains("skipped=already_active"))
+        #expect(callService.contains("Production dispatch confirming local MatrixRTC membership after \\(source)."))
+        #expect(callService.contains("productionDispatchObservedRoomIDs"))
+        #expect(callService.contains("Production direct-call capability registration failed: \\(error)"))
+        #expect(callService.contains("SalemXPushKitTokenEncoding.apnsDeviceTokenHex(from: voIPPushToken)"))
+        #expect(callService.contains("SalemXProductionDispatchAPNsEnvironment.capabilityRegistrationEnvironment"))
+        #expect(callService.contains("Set VoIP pusher succeeded app_id=\\(appSettings.voIPPusherAppID)"))
+        #expect(!callService.contains("token: voIPPushToken.base64EncodedString()"))
+        #expect(callService.contains("membershipConfirmationTimeout: Duration = .seconds(5)"))
+        #expect(callService.contains("SalemXProductionDispatchOpaqueToken.callHandle()"))
+        #expect(!callService.contains("callHandle: identity.stateKey"))
+        #expect(!callService.contains("callHandle: candidate.key.stateKey"))
+        #expect(!callService.contains("DirectCallEngine"))
+        let callScreen = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/CallScreenViewModel.swift")
+        #expect(callScreen.contains("ownsNativeMatrixRTCAudio"))
+        #expect(callScreen.contains("isNativeMatrixRTCAudioActive = true"))
+        #expect(callScreen.contains("!elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID)"))
+        #expect(callScreen.contains("GenericCallLinkWidgetDriver(url: URL(string: \"about:blank\")!)"))
+        #expect(!callScreen.contains("DirectCallEngine"))
+        let callScreenView = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/View/CallScreen.swift")
+        #expect(callScreenView.contains("isNativeMatrixRTCAudioActive"))
+        let coordinator = try repositorySource(named: "ElementX/Sources/Services/Calls/SalemXProductionDispatchCoordinator.swift")
+        #expect(!coordinator.contains("confirmOutgoingCallMembershipAfterCallScreenPresentation"))
+        #expect(coordinator.contains("Keep the presented Element Call"))
+        #expect(coordinator.contains("Production dispatch prepare failed: \\(error)"))
+        #expect(coordinator.contains("Production dispatch prepare succeeded."))
+        #expect(coordinator.contains("Production dispatch claim succeeded."))
+        #expect(coordinator.contains("Production dispatch send succeeded."))
+        #expect(coordinator.contains("sanitizedCallHandle"))
+        #expect(!coordinator.contains("endAndAwaitMembershipRemoval"))
+        let dispatchClient = try repositorySource(named: "ElementX/Sources/Services/Calls/SalemXProductionDispatchClient.swift")
+        #expect(dispatchClient.contains("Production dispatch HTTP failed path=\\(path) status=\\(response.statusCode) error=\\(error) errcode=\\(errcode) error_text=\\(errorText) delivery=\\(delivery)"))
+        #expect(dispatchClient.contains("loggedDeliveryDiagnostics(from: response.data)"))
+        #expect(dispatchClient.contains("Production dispatch retrying once after authentication failure path=\\(path)"))
+        #expect(dispatchClient.contains("authenticationRetryAllowed"))
+        let appSettings = try repositorySource(named: "ElementX/Sources/Application/Settings/AppSettings.swift")
+        #expect(appSettings.contains("usesSandboxPusherAppIDs"))
+        #expect(appSettings.contains("#if DEBUG || SALEMX_PRODUCTION_DISPATCH_ACTIVATION"))
+        let appYML = try repositorySource(named: "app.yml")
+        #expect(appYML.contains("PUSH_GATEWAY_BASE_URL: https://matrix.mertis.kz"))
+        #expect(!appYML.contains("PUSH_GATEWAY_BASE_URL: https://matrix.org"))
+        let notificationManager = try repositorySource(named: "ElementX/Sources/Services/Notification/Manager/NotificationManager.swift")
+        #expect(notificationManager.contains("Set pusher succeeded app_id=\\(appSettings.pusherAppID) gateway_host=\\(appSettings.pushGatewayBaseURL.host ?? \"none\")"))
+        let clientProxy = try repositorySource(named: "ElementX/Sources/Services/Client/ClientProxy.swift")
+        #expect(clientProxy.contains("func refreshedMatrixAccessToken()"))
+        #expect(clientProxy.contains("_ = await profile(for: userID)"))
+        let sessionFlow = try repositorySource(named: "ElementX/Sources/FlowCoordinators/UserSessionFlowCoordinator.swift")
+        #expect(sessionFlow.contains("Production dispatch did not notify the callee: \\(error)"))
+        #expect(!sessionFlow.contains("Minimizing audio call without Picture in Picture."))
+    }
+
+    @Test
+    func roomScreenDoesNotExposeAVideoCallButton() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Screens/RoomScreen/View/RoomScreen.swift")
+        #expect(!source.contains("videoCallSolid"))
+        #expect(!source.contains("startMode: .video"))
+        #expect(!source.contains("A11yIdentifiers.roomScreen.videoCall"))
+    }
+
+    @Test
+    func homeScreenDoesNotExposeAVideoCallButton() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Screens/HomeScreen/View/HomeScreenRoomCell.swift")
+        #expect(!source.contains("videoCallSolid"))
+    }
+
+    @Test
+    func callsTabDoesNotExposeAVideoCallButton() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Screens/CallsScreen/View/CallsScreenRow.swift")
+        #expect(!source.contains("videoCallSolid"))
+        #expect(!source.contains("startMode: .video"))
+    }
+
+    @Test
+    func callHistoryDoesNotExposeAVideoCallIcon() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Services/Calls/RoomCallEvent.swift")
+        #expect(!source.contains("videoCallSolid"))
+        #expect(!source.contains("videoCallOutgoingSolid"))
+        #expect(!source.contains("videoCallMissedSolid"))
+        #expect(!source.contains("videoCallDeclinedSolid"))
+        #expect(!source.contains("L10n.commonVideo"))
+    }
+
+    @Test
+    func callScreenDoesNotExposeAVideoCallButton() throws {
+        let source = try repositorySource(named: "ElementX/Sources/Screens/CallScreen/View/CallScreen.swift")
+        #expect(!source.contains("video.fill"))
+        #expect(!source.contains("video.slash.fill"))
+        #expect(!source.contains("DirectRoomVideoCallChrome"))
+        #expect(!source.contains("startMode: .video"))
+    }
+
     private struct CallScreenHarness {
         let viewModel: CallScreenViewModel
         let elementCallService: ElementCallServiceMock
@@ -1192,7 +1379,7 @@ extension CallScreenViewModelTests {
     }
 
     private func makeAudioRoomCallViewModel(configureWidgetDriver: (ElementCallWidgetDriverMock) -> Void = { _ in }) throws -> CallScreenHarness {
-        let elementCallService = ElementCallServiceMock()
+        let elementCallService = ElementCallServiceMock(.init())
         let elementCallServiceActions = PassthroughSubject<ElementCallServiceAction, Never>()
         elementCallService.underlyingActions = elementCallServiceActions.eraseToAnyPublisher()
         elementCallService.underlyingOngoingCallRoomIDPublisher = CurrentValueSubject<String?, Never>(nil).asCurrentValuePublisher()
@@ -1364,6 +1551,68 @@ extension CallScreenViewModelTests {
         """
         {"api":"fromWidget","action":"send_event","widgetId":"call-widget","requestId":"\(requestID)","response":{}}
         """
+    }
+
+    private static let appStoreLineAppCoordinatorFingerprints = [
+        "lock-answer-no-wait",
+        "pushkit-callkit-first",
+        "skip-stale-on-push",
+        "callkit-answer-playandrecord",
+        "wait-callkit-audio",
+        "wait-unlock-after-audio",
+        "callkit-native-audio",
+        "native-audio-pbx",
+        "native-audio-types",
+        "native-audio-active",
+        "native-audio-handoff",
+        "native-audio-nonisolated",
+        "native-audio-await",
+        "native-audio-membership-http",
+        "native-audio-skip-rejoin",
+        "native-audio-callkit-session",
+        "native-audio-widget-caps",
+        "native-audio-keep-answered",
+        "native-audio-skip-stale-while-join",
+        "native-audio-early-keys",
+        "native-audio-peer-device-key",
+        "native-audio-buffer-keys",
+        "native-audio-local-key-wait",
+        "native-audio-skip-chrome",
+        "native-audio-key-error-log",
+        "native-audio-hkdf-raw-keys",
+        "native-audio-frame-crypto-log",
+        "native-audio-unnamed-participant-key",
+        "native-audio-key-retry-ladder",
+        "native-audio-key-before-livekit",
+        "native-audio-cancel-key-retry",
+        "native-audio-prefetch-jwt",
+        "native-audio-overlap-membership",
+        "native-audio-direct-openid",
+        "native-audio-widget-stop",
+        "native-audio-bg-key-send",
+        "native-audio-no-star-send",
+        "native-audio-cancel-unanswered",
+        "pushkit-sleep-wake"
+    ]
+    
+    private static func expectAppStoreLineAppCoordinatorFingerprints(_ source: String) {
+        for fingerprint in appStoreLineAppCoordinatorFingerprints {
+            #expect(source.contains(fingerprint))
+        }
+        
+        #expect(!source.contains("no-native-category"))
+        #expect(!source.contains(" answer-on-active "))
+        #expect(!source.contains("answer-on-callkit-activate"))
+        #expect(source.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session callkit-answer-playandrecord wait-callkit-audio wait-unlock-after-audio callkit-native-audio native-audio-pbx native-audio-types native-audio-active native-audio-handoff native-audio-nonisolated native-audio-await native-audio-membership-http native-audio-skip-rejoin native-audio-callkit-session native-audio-widget-caps native-audio-keep-answered native-audio-skip-stale-while-join "))
+        #expect(source.contains("native-audio-early-keys native-audio-peer-device-key native-audio-buffer-keys native-audio-local-key-wait native-audio-skip-chrome native-audio-key-error-log native-audio-hkdf-raw-keys native-audio-frame-crypto-log native-audio-unnamed-participant-key native-audio-key-retry-ladder native-audio-key-before-livekit native-audio-cancel-key-retry native-audio-prefetch-jwt native-audio-overlap-membership native-audio-direct-openid native-audio-widget-stop native-audio-bg-key-send native-audio-no-star-send native-audio-cancel-unanswered virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first pushkit-sleep-wake"))
+    }
+    
+    private func repositorySource(named path: String) throws -> String {
+        let repositoryRootURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return try String(contentsOf: repositoryRootURL.appendingPathComponent(path), encoding: .utf8)
     }
 
     private func stage2FSimulatorProofText() throws -> String {

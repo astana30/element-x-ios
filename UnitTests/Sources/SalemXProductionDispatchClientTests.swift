@@ -118,16 +118,93 @@ struct SalemXProductionDispatchClientTests {
     }
 
     @Test
-    func transportAndHTTPFailuresAreRedactedAndNeverRetried() async {
+    func transportFailuresAreNotRetried() async {
         let transport = DispatchTransportSpy(response: .failure(.tokenUnavailable))
         let client = makeClient(transport: transport)
         #expect(await client.prepare(prepareRequest()) == .failure(.transportUnavailable))
         #expect(transport.requests.count == 1)
+    }
 
-        transport.response = .success(.init(statusCode: 401, data: Data(#"{"errcode":"M_UNKNOWN_TOKEN","error":"private"}"#.utf8)))
-        #expect(await client.claim(referenceRequest()) == .failure(.http(.authentication, .unknown)))
+    @Test
+    func authenticationFailureRetriesOnceWithARefreshedAccessToken() async throws {
+        let prepared = #"{"dispatch_protocol_version":1,"dispatch_id":"11111111-1111-4111-8111-111111111111","sender_reference":"sender-ref","receiver_reference":"receiver-ref","state":"prepared"}"#
+        let transport = DispatchTransportSpy(responses: [
+            .success(.init(statusCode: 401, data: Data(#"{"errcode":"M_UNKNOWN_TOKEN","error":"private"}"#.utf8))),
+            .success(.init(statusCode: 200, data: Data(prepared.utf8)))
+        ])
+        let provider = RotatingDispatchAccessTokenProvider(tokens: ["stale-token", "fresh-token"])
+        let result = await makeClient(transport: transport, accessTokenProvider: provider).prepare(prepareRequest())
+
+        #expect(try result.get().state == .prepared)
         #expect(transport.requests.count == 2)
+        #expect(transport.requests[0].headers["Authorization"] == "Bearer stale-token")
+        #expect(transport.requests[1].headers["Authorization"] == "Bearer fresh-token")
+        #expect(provider.refreshCalls == 1)
+        #expect(String(describing: result).contains("private") == false)
         #expect(String(describing: SalemXProductionDispatchClientError.http(.authentication, .unknown)).contains("private") == false)
+    }
+
+    @Test
+    func authenticationFailureIsRetriedOnlyOnce() async {
+        let transport = DispatchTransportSpy(response: .success(.init(statusCode: 401,
+                                                                      data: Data(#"{"errcode":"M_UNKNOWN_TOKEN","error":"private"}"#.utf8))))
+        #expect(await makeClient(transport: transport).prepare(prepareRequest()) == .failure(.http(.authentication, .unknown)))
+        #expect(transport.requests.count == 2)
+    }
+
+    @Test
+    func sendPreparedServerDeliveryFailureIsNotRetried() async {
+        let transport = DispatchTransportSpy(response: .success(.init(statusCode: 502,
+                                                                      data: Data(#"{"errcode":"M_DIRECT_CALL_APNS_DELIVERY_FAILED","error":"APNs delivery failed"}"#.utf8))))
+        #expect(await makeClient(transport: transport).sendPrepared(sendRequest()) == .failure(.http(.server, .deliveryFailed)))
+        #expect(transport.requests.count == 1)
+    }
+
+    @Test
+    func invalidCallHandleBadRequestIsBucketedWithoutIdentifiers() async {
+        let transport = DispatchTransportSpy(response: .success(.init(statusCode: 400,
+                                                                      data: Data(#"{"errcode":"M_UNKNOWN","error":"Invalid foreground call handle."}"#.utf8))))
+        #expect(await makeClient(transport: transport).prepare(prepareRequest()) == .failure(.http(.other, .invalidRequest)))
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedErrcode(from: Data(#"{"errcode":"M_UNKNOWN","error":"Invalid foreground call handle."}"#.utf8)) == "M_UNKNOWN")
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedErrorText(from: Data(#"{"errcode":"M_UNKNOWN","error":"Invalid foreground call handle."}"#.utf8)) == "Invalid foreground call handle")
+        #expect(!SalemXProductionDispatchErrorSanitizer.sanitizeErrorText("User @alice:example.org missing").contains("alice"))
+        #expect(SalemXProductionDispatchOpaqueToken.isValidCallHandle(SalemXProductionDispatchOpaqueToken.callHandle()))
+        #expect(!SalemXProductionDispatchOpaqueToken.isValidCallHandle("_@alice:example.test_DEVICE_m.call"))
+    }
+
+    @Test
+    func pushKitCapabilityTokenUsesAPNsHexNotMatrixBase64() {
+        let token = Data([0x01, 0x23, 0xab, 0xcd])
+        let hex = SalemXPushKitTokenEncoding.apnsDeviceTokenHex(from: token)
+
+        #expect(hex == "0123abcd")
+        #expect(hex != token.base64EncodedString())
+        #expect(SalemXPushKitTokenEncoding.isAPNsHexToken(hex))
+        #expect(!SalemXPushKitTokenEncoding.isAPNsHexToken(token.base64EncodedString()))
+        #expect(!SalemXPushKitTokenEncoding.isAPNsHexToken(""))
+        #expect(SalemXProductionDispatchAPNsEnvironment.capabilityRegistrationEnvironment == .development)
+    }
+
+    @Test
+    func deliveryDiagnosticsAreRedactedAndDoNotRetryHints() {
+        let payload = Data(#"""
+        {"errcode":"M_DIRECT_CALL_APNS_DELIVERY_FAILED","error":"APNs delivery failed.",
+         "blocked_reason":"apns_sandbox_send_http_failure_redacted","apns_environment":"sandbox",
+         "background_apns_failure_reason":"BadDeviceToken","pushkit_upload_token_is_hex":false,
+         "pushkit_upload_environment":"production","token":"should-not-appear"}
+        """#.utf8)
+        let nested = Data(#"""
+        {"errcode":"M_DIRECT_CALL_APNS_DELIVERY_FAILED","error":"APNs delivery failed.",
+         "diagnostics":{"blocked_reason":"none","apns_environment":"sandbox",
+         "apns_failure_reason":"none","pushkit_upload_token_is_hex":true,
+         "pushkit_upload_environment":"development"}}
+        """#.utf8)
+        let missing = Data(#"{"errcode":"M_DIRECT_CALL_APNS_DELIVERY_FAILED","error":"APNs delivery failed."}"#.utf8)
+
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: payload) == "blocked=apns_sandbox_send_http_failure_redacted apns_env=sandbox failure=BadDeviceToken token_hex=false upload_env=production")
+        #expect(!SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: payload).contains("should-not-appear"))
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: nested) == "blocked=none apns_env=sandbox failure=none token_hex=true upload_env=development")
+        #expect(SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: missing) == "blocked=none apns_env=none failure=none token_hex=unknown upload_env=none")
     }
 
     @Test
@@ -190,13 +267,14 @@ struct SalemXProductionDispatchClientTests {
         #expect(String(describing: decoded).contains("room") == false)
     }
 
-    private func makeClient(transport: DispatchTransportSpy) -> SalemXProductionDispatchClient {
+    private func makeClient(transport: DispatchTransportSpy,
+                            accessTokenProvider: DirectCallMatrixAccessTokenProviding? = nil) -> SalemXProductionDispatchClient {
         guard let homeserverOrigin = URL(string: "https://matrix.example.test") else {
             fatalError("Invalid static test URL")
         }
         return SalemXProductionDispatchClient(homeserverOrigin: homeserverOrigin,
                                               httpTransport: transport,
-                                              accessTokenProvider: DispatchAccessTokenProvider(accessToken: accessToken))
+                                              accessTokenProvider: accessTokenProvider ?? DispatchAccessTokenProvider(accessToken: accessToken))
     }
 
     private func prepareRequest() -> SalemXProductionDispatchPrepareRequest {
@@ -233,13 +311,22 @@ struct SalemXProductionDispatchClientTests {
 
 @MainActor
 private final class DispatchTransportSpy: DirectCallHTTPTransportProtocol {
-    var response: Result<DirectCallHTTPTransportResponse, DirectCallMediaError>
+    private var queuedResponses: [Result<DirectCallHTTPTransportResponse, DirectCallMediaError>]
+    var response: Result<DirectCallHTTPTransportResponse, DirectCallMediaError> {
+        get { queuedResponses.last ?? .failure(.tokenUnavailable) }
+        set { queuedResponses = [newValue] }
+    }
     private(set) var requests = [DirectCallHTTPTransportRequest]()
     private(set) var cancellationObserved = false
     private let waitsForCancellation: Bool
 
     init(response: Result<DirectCallHTTPTransportResponse, DirectCallMediaError>, waitsForCancellation: Bool = false) {
-        self.response = response
+        queuedResponses = [response]
+        self.waitsForCancellation = waitsForCancellation
+    }
+
+    init(responses: [Result<DirectCallHTTPTransportResponse, DirectCallMediaError>], waitsForCancellation: Bool = false) {
+        queuedResponses = responses
         self.waitsForCancellation = waitsForCancellation
     }
 
@@ -251,7 +338,13 @@ private final class DispatchTransportSpy: DirectCallHTTPTransportProtocol {
             }
             cancellationObserved = true
         }
-        return response
+        guard !queuedResponses.isEmpty else {
+            return .failure(.tokenUnavailable)
+        }
+        if queuedResponses.count == 1 {
+            return queuedResponses[0]
+        }
+        return queuedResponses.removeFirst()
     }
 }
 
@@ -261,6 +354,28 @@ private struct DispatchAccessTokenProvider: DirectCallMatrixAccessTokenProviding
 
     func matrixAccessToken() async -> String? {
         accessToken
+    }
+}
+
+@MainActor
+private final class RotatingDispatchAccessTokenProvider: DirectCallMatrixAccessTokenProviding {
+    private var tokens: [String]
+    private(set) var refreshCalls = 0
+
+    init(tokens: [String]) {
+        self.tokens = tokens
+    }
+
+    func matrixAccessToken() async -> String? {
+        tokens.first
+    }
+
+    func refreshedMatrixAccessToken() async -> String? {
+        refreshCalls += 1
+        if tokens.count > 1 {
+            tokens.removeFirst()
+        }
+        return tokens.first
     }
 }
 

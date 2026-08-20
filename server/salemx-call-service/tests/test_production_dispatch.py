@@ -217,6 +217,36 @@ class ProductionDispatchRouteTests(unittest.IsolatedAsyncioTestCase):
         self._register("@sender:example.org", "SENDER", "gen-sender")
         self._register("@receiver:example.org", "RECEIVER", "gen-receiver")
 
+    def test_preferred_receiver_uses_newer_development_over_stale_production(self) -> None:
+        stale = PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "b" * 64,
+            "environment": "production",
+            "protocol_version": 1,
+            "intents": ["audio"],
+            "receiver_handoff": "matrixrtc_element_call",
+            "app_session_generation": "gen-receiver",
+        })
+        self.tokens.store("@receiver:example.org", "RECEIVER", stale)
+        fresh = PushKitTokenRegistrationRequest.from_mapping({
+            "version": 1,
+            "token": "a" * 64,
+            "environment": "development",
+            "protocol_version": 1,
+            "intents": ["audio"],
+            "receiver_handoff": "matrixrtc_element_call",
+            "app_session_generation": "gen-receiver",
+        })
+        self.tokens.store("@receiver:example.org", "RECEIVER", fresh)
+
+        record = app_module._preferred_receiver_token_record("@receiver:example.org", self.tokens)
+
+        self.assertIsNotNone(record)
+        assert record is not None
+        self.assertEqual(record.environment_class, "development")
+        self.assertEqual(record.token, "a" * 64)
+        self.assertTrue(record.supports_direct_audio_v1())
+
     def _register(self, user_id: str, device_id: str, generation: str) -> None:
         request = PushKitTokenRegistrationRequest.from_mapping({
             "version": 1,
@@ -526,6 +556,14 @@ class ProductionDispatchRouteTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(response.status_code, 502)
                 self.assertEqual(self.store.state, expected_state)
+                if outcome == "rejected":
+                    body = response.json()
+                    self.assertEqual(body["errcode"], "M_DIRECT_CALL_APNS_DELIVERY_FAILED")
+                    diagnostics = body["diagnostics"]
+                    self.assertEqual(diagnostics["APNs_sent"], False)
+                    self.assertEqual(diagnostics["apns_environment"], "production")
+                    self.assertEqual(diagnostics["background_apns_failure_reason"], "rejected_redacted")
+                    self.assertNotIn("token", diagnostics)
 
     async def test_cancel_and_receiver_consume_are_exact_and_non_replayable(self) -> None:
         app = self._app()

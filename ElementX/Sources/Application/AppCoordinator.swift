@@ -94,6 +94,8 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         let appVersion = InfoPlistReader.main.bundleShortVersionString
         let appBuild = InfoPlistReader.main.bundleVersion
         MXLog.info("\(appName) \(appVersion) (\(appBuild))")
+        MXLog.info("App Store line build: callkit-end-on-hangup unstick-handset audio-only no-video-button outgoing-hangup-callkit lock-answer-no-wait skip-stale-on-push earpiece-voicechat no-audio-session-loop reassert-voicechat-category matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session callkit-answer-playandrecord wait-callkit-audio wait-unlock-after-audio callkit-native-audio native-audio-pbx native-audio-types native-audio-active native-audio-handoff native-audio-nonisolated native-audio-await native-audio-membership-http native-audio-skip-rejoin native-audio-callkit-session native-audio-widget-caps native-audio-keep-answered native-audio-skip-stale-while-join " +
+            "native-audio-early-keys native-audio-peer-device-key native-audio-buffer-keys native-audio-local-key-wait native-audio-skip-chrome native-audio-key-error-log native-audio-hkdf-raw-keys native-audio-frame-crypto-log native-audio-unnamed-participant-key native-audio-key-retry-ladder native-audio-key-before-livekit native-audio-cancel-key-retry native-audio-prefetch-jwt native-audio-overlap-membership native-audio-direct-openid native-audio-widget-stop native-audio-bg-key-send native-audio-no-star-send native-audio-cancel-unanswered virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first pushkit-sleep-wake")
         
         if ProcessInfo.processInfo.environment["RESET_APP_SETTINGS"].map(Bool.init) == true {
             AppSettings.resetAllSettings()
@@ -748,9 +750,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             directCallEngineSignalBridge = nil
         }
 
-        let productionDispatchSession = SalemXProductionDispatchSession.makeIfEnabled(appSettings: appSettings,
-                                                                                      userSession: userSession,
-                                                                                      elementCallService: elementCallService)
+        let productionDispatchSession = makeProductionDispatchSession(userSession: userSession)
 
         var flowParameters = CommonFlowParameters(userSession: userSession,
                                                   bugReportService: bugReportService,
@@ -1318,6 +1318,15 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
 }
 
 extension AppCoordinator {
+    private func makeProductionDispatchSession(userSession: UserSessionProtocol) -> SalemXProductionDispatchSession? {
+        AppSettings.applyProductionDispatchActivationOverride(to: appSettings)
+        let session = SalemXProductionDispatchSession.makeIfEnabled(appSettings: appSettings,
+                                                                    userSession: userSession,
+                                                                    elementCallService: elementCallService)
+        MXLog.info("Production dispatch session \(session == nil ? "unavailable" : "ready") activation_build=\(AppSettings.salemxProductionDispatchV1ActivationBuild) feature=\(appSettings.salemxProductionDispatchV1Enabled)")
+        return session
+    }
+
     private func makeUserSessionFlowCoordinator(isNewLogin: Bool,
                                                 flowParameters: CommonFlowParameters) -> UserSessionFlowCoordinator {
         #if DEBUG

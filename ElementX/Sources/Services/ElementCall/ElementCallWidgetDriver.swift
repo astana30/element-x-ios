@@ -66,6 +66,7 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
     private let deviceID: String
     
     private var widgetDriver: WidgetDriverAndHandle?
+    private var driverTasks = [Task<Void, Never>]()
     var startMode: ElementCallStartMode = .audio
     
     let widgetID = UUID().uuidString
@@ -142,16 +143,17 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
             return .failure(.failedBuildingWidgetDriver)
         }
         
+        stop()
         self.widgetDriver = widgetDriver
         
-        Task.detached { [weak self, widgetDriver, messagePublisher] in
+        let recvTask = Task.detached { [weak self, widgetDriver, messagePublisher] in
             MXLog.debug("Started message receiving loop")
             
             defer {
                 MXLog.debug("Stopped message receiving loop")
             }
             
-            while true {
+            while !Task.isCancelled {
                 guard let receivedMessage = await widgetDriver.handle.recv() else {
                     return
                 }
@@ -163,7 +165,7 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
             }
         }
         
-        Task.detached { [widgetDriver] in
+        let runTask = Task.detached { [widgetDriver] in
             MXLog.debug("Started widget driver")
             
             defer {
@@ -173,7 +175,17 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
             await widgetDriver.driver.run(room: room, capabilitiesProvider: self)
         }
         
+        driverTasks = [recvTask, runTask]
+        
         return .success(url)
+    }
+    
+    /// native-audio-widget-stop: drop the Rust widget driver so the next incoming call
+    /// does not inherit a stale send_to_device session from the previous call.
+    func stop() {
+        driverTasks.forEach { $0.cancel() }
+        driverTasks.removeAll()
+        widgetDriver = nil
     }
     
     @discardableResult
@@ -218,7 +230,10 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
     }
     
     private func updateCallURLParameters(_ queryItems: inout [URLQueryItem], isDirectRoomCall: Bool) {
-        setQueryItem(&queryItems, name: CallURLParameter.controlledAudioDevices, value: "false")
+        // Audio 1:1 calls tell Element Call to accept a native-published speaker
+        // device with forEarpiece, so it can default to virtual earpiece instead
+        // of full-volume speaker. Video calls keep Element Call's own routing.
+        setQueryItem(&queryItems, name: CallURLParameter.controlledAudioDevices, value: startMode == .audio ? "true" : "false")
         
         guard isDirectRoomCall else {
             return

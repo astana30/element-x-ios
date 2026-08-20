@@ -6,10 +6,29 @@
 //
 
 import Testing
+@testable import ElementX
 
 struct ProductionDispatchActivationBuildTests {
     @Test
     func productionDispatchDefaultMatchesTheBoundedBuildConfiguration() {
         #expect(AppSettings.salemxProductionDispatchV1DefaultEnabled == AppSettings.salemxProductionDispatchV1ActivationBuild)
+    }
+
+    @Test
+    func activationOverrideForcesTheFeatureFlagOnlyOnActivationBuilds() {
+        let appSettings = AppSettings()
+        let previousValue = appSettings.salemxProductionDispatchV1Enabled
+        defer { appSettings.salemxProductionDispatchV1Enabled = previousValue }
+
+        appSettings.salemxProductionDispatchV1Enabled = false
+        AppSettings.applyProductionDispatchActivationOverride(to: appSettings)
+        #expect(appSettings.salemxProductionDispatchV1Enabled == AppSettings.salemxProductionDispatchV1ActivationBuild)
+    }
+
+    @Test
+    func sandboxPusherAppIDsMatchDevelopmentSigning() {
+        #expect(AppSettings().pusherAppID.hasSuffix(".ios.dev"))
+        #expect(AppSettings().voIPPusherAppID.hasSuffix(".ios.voip.dev"))
+        #expect(!AppSettings().pusherAppID.hasSuffix(".ios.prod"))
     }
 }

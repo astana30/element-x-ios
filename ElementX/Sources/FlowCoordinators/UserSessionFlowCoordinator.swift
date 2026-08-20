@@ -25,11 +25,25 @@ enum SalemXProductionDispatchMemberResolution: Equatable {
 }
 
 enum SalemXProductionDispatchMemberResolver {
+    private static let memberRefreshInterval: Duration = .milliseconds(100)
+
     static func joinedUserIDs(roomProxy: JoinedRoomProxyProtocol,
+                              ownUserID: String? = nil,
                               timeout: Duration) async -> SalemXProductionDispatchMemberResolution {
+        if let ownUserID, let heroUserIDs = heroJoinedUserIDs(roomProxy: roomProxy, ownUserID: ownUserID) {
+            return .resolved(heroUserIDs)
+        }
+
         let runner = ExpiringTaskRunner<[String]?> {
-            guard let members = await roomProxy.members() else { return nil }
-            return members.filter { $0.membership == .join }.map(\.userID)
+            while !Task.isCancelled {
+                guard let members = await roomProxy.members() else { return nil }
+                let joinedUserIDs = members.filter { $0.membership == .join }.map(\.userID)
+                if joinedUserIDs.count >= 2 {
+                    return joinedUserIDs
+                }
+                try await Task.sleep(for: Self.memberRefreshInterval)
+            }
+            return nil
         }
 
         do {
@@ -40,6 +54,19 @@ enum SalemXProductionDispatchMemberResolver {
         } catch {
             return .unavailable
         }
+    }
+
+    private static func heroJoinedUserIDs(roomProxy: JoinedRoomProxyProtocol, ownUserID: String) -> [String]? {
+        let roomInfo = roomProxy.infoPublisher.value
+        guard roomInfo.isDirect, roomInfo.joinedMembersCount == 2 else {
+            return nil
+        }
+
+        let peerUserIDs = roomInfo.heroes.map(\.userId).filter { !$0.isEmpty && $0 != ownUserID }
+        guard peerUserIDs.count == 1 else {
+            return nil
+        }
+        return [ownUserID, peerUserIDs[0]]
     }
 }
 
@@ -231,8 +258,8 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     }
 
     func startCall(roomID: String, startMode: ElementCallStartMode) {
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-START-CALL] room_id=\(roomID) start_mode=\(startMode)")
-        Task { await presentCallScreen(roomID: roomID, startMode: startMode) }
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-START-CALL] room_id=\(roomID) start_mode=\(startMode) resolved_start_mode=audio")
+        Task { await presentCallScreen(roomID: roomID, startMode: .audio, prefersOutgoingProductionDispatch: false) }
     }
     
     /// Clearing routes is more complicated than it first seems. When passing routes
@@ -706,15 +733,6 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         presentStockCallScreen(configuration: .init(genericCallLink: url))
     }
     
-    private func presentCallScreen(roomID: String, startMode: ElementCallStartMode = .video) async {
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-BY-ID] room_id=\(roomID) start_mode=\(startMode)")
-        guard case let .joined(roomProxy) = await userSession.clientProxy.roomForIdentifier(roomID) else {
-            return
-        }
-        
-        presentCallScreen(roomProxy: roomProxy, startMode: startMode)
-    }
-
     private func restoreActiveCallPresentationIfNeeded() {
         guard !isRestoringActiveCallPresentation,
               let roomID = flowParameters.ongoingCallRoomIDPublisher.value,
@@ -726,12 +744,30 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
         Task { [weak self] in
             guard let self else { return }
             defer { isRestoringActiveCallPresentation = false }
-            await presentCallScreen(roomID: roomID, startMode: startMode)
+            await presentCallScreen(roomID: roomID, startMode: startMode, prefersOutgoingProductionDispatch: false)
         }
     }
     
-    private func presentCallScreen(roomProxy: JoinedRoomProxyProtocol, startMode: ElementCallStartMode = .video) {
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=\(roomProxy.id) start_mode=\(startMode)")
+    private func presentCallScreen(roomID: String,
+                                   startMode: ElementCallStartMode = .audio,
+                                   prefersOutgoingProductionDispatch: Bool = true) async {
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-BY-ID] room_id=\(roomID) start_mode=\(startMode)")
+        guard case let .joined(roomProxy) = await userSession.clientProxy.roomForIdentifier(roomID) else {
+            return
+        }
+        
+        presentCallScreen(roomProxy: roomProxy,
+                          startMode: startMode,
+                          prefersOutgoingProductionDispatch: prefersOutgoingProductionDispatch)
+    }
+    
+    private func presentCallScreen(roomProxy: JoinedRoomProxyProtocol,
+                                   startMode: ElementCallStartMode = .audio,
+                                   prefersOutgoingProductionDispatch: Bool = true) {
+        let featureEnabled = flowParameters.appSettings.salemxProductionDispatchV1Enabled
+        let hasSession = flowParameters.productionDispatchSession != nil
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][USER-SESSION-PRESENT-ROOM] room_id=\(roomProxy.id) start_mode=\(startMode) prefers_outgoing_dispatch=\(prefersOutgoingProductionDispatch) feature=\(featureEnabled) has_session=\(hasSession)")
+        let resolvedStartMode: ElementCallStartMode = .audio
         let colorScheme: ColorScheme = flowParameters.windowManager.mainWindow.traitCollection.userInterfaceStyle == .light ? .light : .dark
         let configuration = ElementCallConfiguration(roomProxy: roomProxy,
                                                      clientProxy: userSession.clientProxy,
@@ -739,15 +775,23 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                      elementCallBaseURL: flowParameters.appSettings.elementCallBaseURL,
                                                      elementCallBaseURLOverride: flowParameters.appSettings.elementCallBaseURLOverride,
                                                      colorScheme: colorScheme,
-                                                     startMode: startMode)
-        guard flowParameters.appSettings.salemxProductionDispatchV1Enabled,
-              startMode == .audio,
-              flowParameters.productionDispatchSession != nil else {
+                                                     startMode: resolvedStartMode)
+        guard SalemXOutgoingProductionDispatchPresentation.shouldPrepare(prefersOutgoingProductionDispatch: prefersOutgoingProductionDispatch,
+                                                                         featureEnabled: featureEnabled,
+                                                                         startMode: resolvedStartMode,
+                                                                         hasSession: hasSession) else {
             presentStockCallScreen(configuration: configuration)
             return
         }
 
-        guard !isProductionDispatchCallPresentationInFlight else { return }
+        if isProductionDispatchCallPresentationInFlight {
+            if navigationTabCoordinator.overlayCoordinator is CallScreenCoordinator {
+                return
+            }
+            MXLog.info("Clearing a stale production dispatch presentation lock.")
+            flowParameters.productionDispatchSession?.stockCallDidEnd()
+            isProductionDispatchCallPresentationInFlight = false
+        }
         isProductionDispatchCallPresentationInFlight = true
         Task { [weak self] in
             guard let self else { return }
@@ -759,11 +803,16 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
     private var callScreenPictureInPictureController: AVPictureInPictureController?
     @discardableResult
     private func presentStockCallScreen(configuration: ElementCallConfiguration) -> CallScreenCoordinator? {
-        guard flowParameters.ongoingCallRoomIDPublisher.value != configuration.callRoomID else {
-            MXLog.info("Returning to existing call.")
-            callScreenPictureInPictureController?.stopPictureInPicture()
-            navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
-            return nil
+        if flowParameters.ongoingCallRoomIDPublisher.value == configuration.callRoomID {
+            if navigationTabCoordinator.overlayCoordinator is CallScreenCoordinator {
+                MXLog.info("Returning to existing call.")
+                callScreenPictureInPictureController?.stopPictureInPicture()
+                navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
+                return nil
+            }
+
+            MXLog.info("Clearing leftover call session after the call screen was dismissed.")
+            flowParameters.elementCallService.tearDownCallSession()
         }
 
         activeCallStartMode = configuration.startMode
@@ -787,6 +836,7 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                 case .pictureInPictureStopped:
                     navigationTabCoordinator.setOverlayPresentationMode(.fullScreen)
                 case .dismiss:
+                    isProductionDispatchCallPresentationInFlight = false
                     flowParameters.productionDispatchSession?.stockCallDidEnd()
                     activeCallStartMode = nil
                     callScreenPictureInPictureController = nil
@@ -813,10 +863,12 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
 
         let joinedUserIDs: [String]
         switch await SalemXProductionDispatchMemberResolver.joinedUserIDs(roomProxy: roomProxy,
+                                                                          ownUserID: userSession.clientProxy.userID,
                                                                           timeout: productionDispatchMemberResolutionTimeout) {
         case .resolved(let resolvedUserIDs):
             joinedUserIDs = resolvedUserIDs
         case .unavailable:
+            MXLog.error("Timed out resolving members for production dispatch.")
             flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
             return
         }
@@ -830,7 +882,8 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
                                                                             joinedUserIDs: joinedUserIDs,
                                                                             ownUserID: userSession.clientProxy.userID),
             let session = flowParameters.productionDispatchSession else {
-            presentStockCallScreen(configuration: configuration)
+            MXLog.error("Failed resolving a production dispatch recipient for an encrypted 1:1 audio room.")
+            flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
             return
         }
 
@@ -846,14 +899,18 @@ class UserSessionFlowCoordinator: FlowCoordinatorProtocol {
             return .init { await coordinator.requestProductionDispatchTermination() }
         }
 
-        guard case .failed = outcome else { return }
-        flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
+        switch outcome {
+        case .sent:
+            break
+        case .failed(.lifecycle), .failed(.staleGeneration):
+            flowParameters.userIndicatorController.submitIndicator(UserIndicator(title: L10n.errorUnknown))
+        case .failed(let error):
+            MXLog.error("Production dispatch did not notify the callee: \(error)")
+        }
     }
     
     private func hideCallScreenOverlay() {
         guard activeCallStartMode == .video else {
-            MXLog.info("Minimizing audio call without Picture in Picture.")
-            navigationTabCoordinator.setOverlayPresentationMode(.minimized)
             return
         }
 
@@ -947,6 +1004,6 @@ extension UserSessionFlowCoordinator: EmbeddedElementCallRoomCallPresenting {
         #if DEBUG
         SalemXStage2FSimulatorSignalingDebug.recordReceiverJoinExistingCallRequested()
         #endif
-        await presentCallScreen(roomID: roomID, startMode: startMode)
+        await presentCallScreen(roomID: roomID, startMode: .audio, prefersOutgoingProductionDispatch: false)
     }
 }

@@ -179,7 +179,7 @@ final class NotificationManager: NSObject, NotificationManagerProtocol {
                                                               profileTag: pusherProfileTag(),
                                                               lang: Bundle.app.preferredLocalizations.first ?? "en")
             try await clientProxy.setPusher(with: configuration)
-            MXLog.info("Set pusher succeeded")
+            MXLog.info("Set pusher succeeded app_id=\(appSettings.pusherAppID) gateway_host=\(appSettings.pushGatewayBaseURL.host ?? "none")")
             return true
         } catch {
             MXLog.error("Set pusher failed: \(error)")

@@ -14,7 +14,8 @@ struct RoomCallEventTests {
     func titleIncludesCallTypeForKnownIntent() {
         let event = RoomCallEvent(state: .missed, intent: .video)
 
-        #expect(event.title == "\(UntranslatedL10n.commonMissedCall) · \(L10n.commonVideo)")
+        #expect(event.title == "\(UntranslatedL10n.commonMissedCall) · \(L10n.commonAudio)")
+        #expect(event.kindLabel == L10n.commonAudio)
     }
 
     @Test

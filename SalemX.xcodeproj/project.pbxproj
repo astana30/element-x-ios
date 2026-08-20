@@ -451,6 +451,8 @@
 		4B9328DE500F50261A11661B /* RoomRolesAndPermissionsScreenViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4921D9CDB04E819C7C2C5356 /* RoomRolesAndPermissionsScreenViewModel.swift */; };
 		4BAEC5F7F9A73201B740F551 /* NotificationItemProxyMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 550EFBA3104021AEB08B327D /* NotificationItemProxyMock.swift */; };
 		4BB844AF070A195D36116161 /* ElementCallWidgetDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88E289DCC44B86427557B33 /* ElementCallWidgetDriver.swift */; };
+		4BB9A0CE070A195D36116162 /* CallVoiceAudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C3E91A04B2D4E6F80A1C5D9 /* CallVoiceAudioSession.swift */; };
+		4BB9A0CE070A195D36116168 /* MatrixRTCNativeAudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E91A04B2D4E6F80A1C5DF /* MatrixRTCNativeAudioTests.swift */; };
 		4BD650160406F8B65AA55F92 /* NotificationSettingsProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5640E019B82BA0030C503AA /* NotificationSettingsProxy.swift */; };
 		4BDAFADA7A952533D590C458 /* SeparatorMediaEventsTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 272E82C08AE94F62FEAB2E7A /* SeparatorMediaEventsTimelineView.swift */; };
 		4C15854B8AA02205B0F54473 /* MatrixUserShareLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A14EBE49212F658D4C96320 /* MatrixUserShareLink.swift */; };
@@ -2741,6 +2743,8 @@
 		C8F6505B8F209EB9B494C630 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C969B5E5388708336BB28BD4 /* compound-ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "compound-ios"; path = "compound-ios"; sourceTree = SOURCE_ROOT; };
 		C96D53B756BB780F85A41F75 /* CXProviderProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CXProviderProtocol.swift; sourceTree = "<group>"; };
+		7C3E91A04B2D4E6F80A1C5D9 /* CallVoiceAudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallVoiceAudioSession.swift; sourceTree = "<group>"; };
+		7C4E91A04B2D4E6F80A1C5DF /* MatrixRTCNativeAudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRTCNativeAudioTests.swift; sourceTree = "<group>"; };
 		C9781EF3944A35E4F0F5075A /* BadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeView.swift; sourceTree = "<group>"; };
 		C98126A51A5E8EC1AC9AC909 /* AttributedStringBuilderProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttributedStringBuilderProtocol.swift; sourceTree = "<group>"; };
 		C995236CA4A97B9E3F7241D7 /* CallScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallScreen.swift; sourceTree = "<group>"; };
@@ -3314,6 +3318,7 @@
 		08DC618C9C8FBE9C487586C8 /* ElementCall */ = {
 			isa = PBXGroup;
 			children = (
+				7C3E91A04B2D4E6F80A1C5D9 /* CallVoiceAudioSession.swift */,
 				C96D53B756BB780F85A41F75 /* CXProviderProtocol.swift */,
 				A7141C6E2CD5B93B6DD73D6B /* ElementCallConfiguration.swift */,
 				0CCF79C399B7982ACA438288 /* ElementCallService.swift */,
@@ -6520,6 +6525,7 @@
 				D5A1BC32328A4C0F8B1BD1BB /* DirectCallProductionKeyWrappingTests.swift */,
 				4C32CAF0343C7330058CF646 /* EditRoomAddressScreenViewModelTests.swift */,
 				5120B4BA5662E97750E2C6B4 /* ElementCallServiceTests.swift */,
+				7C4E91A04B2D4E6F80A1C5DF /* MatrixRTCNativeAudioTests.swift */,
 				AC688FC7F7B01C139C0B2037 /* EmojiPickerScreenViewModelTests.swift */,
 				8F8ACD08621799AC3FDE5C66 /* EmojiProviderTests.swift */,
 				2A3014F13577265BD88A5FA7 /* ExpiringTaskRunnerTests.swift */,
@@ -8056,6 +8062,7 @@
 				5E84ED9671FDAC78E0DCC16F /* CallScreenModels.swift in Sources */,
 				C248FB794C84F105A945F38E /* CallScreenViewModel.swift in Sources */,
 				C34A49623CBB2B179260B92F /* CallScreenViewModelProtocol.swift in Sources */,
+				4BB9A0CE070A195D36116162 /* CallVoiceAudioSession.swift in Sources */,
 				7ADBF1920C3BDEF506CAB694 /* CallsScreen.swift in Sources */,
 				62EDF7E065AEEEB052548BF9 /* CallsScreenCoordinator.swift in Sources */,
 				14C4FC845D5CF89E10AB6EEB /* CallsScreenModels.swift in Sources */,
@@ -9040,6 +9047,7 @@
 				5CCC2C468CC9C24B191B1ECC /* LoginScreenViewModelTests.swift in Sources */,
 				4CDDF9241C42D23C1CD075BB /* ManageRoomMemberSheetViewModelTests.swift in Sources */,
 				557E98DC1B379CBFC1256B94 /* MapTilerURLBuilderTests.swift in Sources */,
+				4BB9A0CE070A195D36116168 /* MatrixRTCNativeAudioTests.swift in Sources */,
 				D8423A707A702D85352F0B2F /* MatrixEntityRegexTests.swift in Sources */,
 				9C267FE6226FEB83FE19E38E /* MediaLoaderTests.swift in Sources */,
 				10199976F08FBEDC4BCA003A /* MediaPlayerProviderTests.swift in Sources */,
@@ -9461,7 +9469,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 47;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
@@ -9483,7 +9491,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCTION_APP_NAME = SalemX;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PUSH_GATEWAY_BASE_URL = "https://matrix.org";
+				PUSH_GATEWAY_BASE_URL = "https://matrix.mertis.kz";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -9985,7 +9993,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 47;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
@@ -10014,7 +10022,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCTION_APP_NAME = SalemX;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PUSH_GATEWAY_BASE_URL = "https://matrix.org";
+				PUSH_GATEWAY_BASE_URL = "https://matrix.mertis.kz";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -10063,7 +10071,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 47;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = M639Y9MFR2;
 				ENABLE_BITCODE = NO;
@@ -10085,7 +10093,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCTION_APP_NAME = SalemX;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PUSH_GATEWAY_BASE_URL = "https://matrix.org";
+				PUSH_GATEWAY_BASE_URL = "https://matrix.mertis.kz";
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -10495,7 +10503,7 @@
 			repositoryURL = "https://github.com/livekit/client-sdk-swift.git";
 			requirement = {
 				kind = exactVersion;
-				version = 2.13.0;
+				version = 2.16.0;
 			};
 		};
 		D72546F5ACD46255F7D9A1BE /* XCRemoteSwiftPackageReference "posthog-ios" */ = {

@@ -24,6 +24,7 @@ enum SalemXProductionDispatchServerReasonBucket: String {
     case conflict
     case deliveryFailed
     case unavailable
+    case invalidRequest
     case unknown
 }
 
@@ -252,9 +253,20 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
     private func perform<Request: Encodable, Response: Decodable>(path: String,
                                                                   request: Request,
                                                                   ambiguousOnTransportFailure: Bool,
-                                                                  timeoutInterval: TimeInterval? = nil) async -> Result<Response, SalemXProductionDispatchClientError> {
+                                                                  timeoutInterval: TimeInterval? = nil,
+                                                                  authenticationRetryAllowed: Bool = true) async -> Result<Response, SalemXProductionDispatchClientError> {
         guard let endpoint = endpointURL(path: path) else { return .failure(.invalidConfiguration) }
-        guard let accessToken = await accessTokenProvider.matrixAccessToken(), !accessToken.isEmpty else {
+        let accessToken: String
+        if authenticationRetryAllowed {
+            guard let token = await accessTokenProvider.matrixAccessToken(), !token.isEmpty else {
+                return .failure(.accessTokenUnavailable)
+            }
+            accessToken = token
+        } else if let token = await accessTokenProvider.refreshedMatrixAccessToken(), !token.isEmpty {
+            accessToken = token
+        } else if let token = await accessTokenProvider.matrixAccessToken(), !token.isEmpty {
+            accessToken = token
+        } else {
             return .failure(.accessTokenUnavailable)
         }
         let body: Data
@@ -274,7 +286,21 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
         case .success(let response):
             if Task.isCancelled { return .failure(.cancelled) }
             guard (200..<300).contains(response.statusCode) else {
-                return .failure(httpError(response))
+                let error = httpError(response)
+                let errcode = SalemXProductionDispatchErrorSanitizer.loggedErrcode(from: response.data)
+                let errorText = SalemXProductionDispatchErrorSanitizer.loggedErrorText(from: response.data)
+                let delivery = SalemXProductionDispatchErrorSanitizer.loggedDeliveryDiagnostics(from: response.data)
+                MXLog.error("Production dispatch HTTP failed path=\(path) status=\(response.statusCode) error=\(error) errcode=\(errcode) error_text=\(errorText) delivery=\(delivery)")
+                if authenticationRetryAllowed, case .http(.authentication, _) = error {
+                    if Task.isCancelled { return .failure(.cancelled) }
+                    MXLog.info("Production dispatch retrying once after authentication failure path=\(path)")
+                    return await perform(path: path,
+                                         request: request,
+                                         ambiguousOnTransportFailure: ambiguousOnTransportFailure,
+                                         timeoutInterval: timeoutInterval,
+                                         authenticationRetryAllowed: false)
+                }
+                return .failure(error)
             }
             do {
                 return try .success(decoder.decode(Response.self, from: response.data))
@@ -315,6 +341,7 @@ final class SalemXProductionDispatchClient: SalemXProductionDispatchClientProtoc
     private static func reasonBucket(_ errcode: String?) -> SalemXProductionDispatchServerReasonBucket {
         guard let errcode else { return .unknown }
         if errcode == "M_UNRECOGNIZED" { return .disabled }
+        if errcode == "M_UNKNOWN" || errcode == "M_BAD_JSON" || errcode == "M_INVALID_PARAM" { return .invalidRequest }
         if errcode.contains("CAPABILITY") || errcode.contains("BINDING") { return .capability }
         if errcode.contains("EXPIRED") { return .expired }
         if errcode.contains("CONFLICT") || errcode == "M_FORBIDDEN" { return .conflict }

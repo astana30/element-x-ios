@@ -82,10 +82,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     private var setupCallTask: Task<Void, Never>?
 
     @CancellableTask
-    private var audioRouteEnforcementTask: Task<Void, Never>?
-
-    @CancellableTask
     private var timeoutTask: Task<Void, Never>?
+
+    private var lastAudioRouteApply = Date.distantPast
+    private var advertisedSpeakerDeviceID = "Speaker"
         
     /// Designated initialiser
     /// - Parameters:
@@ -117,8 +117,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             preferredAudioRoute = .systemDefault
         case .roomCall(let roomProxy, let clientProxy, _, _, _, _, let startMode):
             guard let deviceID = clientProxy.deviceID else { fatalError("Missing device ID for the call.") }
-            widgetDriver = roomProxy.elementCallWidgetDriver(deviceID: deviceID)
-            (widgetDriver as? ElementCallStartModeConfigurable)?.startMode = startMode
+            if elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID) {
+                widgetDriver = GenericCallLinkWidgetDriver(url: URL(string: "about:blank")!)
+            } else {
+                widgetDriver = roomProxy.elementCallWidgetDriver(deviceID: deviceID)
+                (widgetDriver as? ElementCallStartModeConfigurable)?.startMode = startMode
+            }
             rtcTransportScript = Self.makeRTCTransportScript(clientProxy: clientProxy)
             preferredAudioRoute = startMode == .audio ? .earpiece : .systemDefault
             directRoomCallDetails = Self.makeDirectRoomCallDetails(roomProxy: roomProxy, startMode: startMode)
@@ -130,8 +134,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                                                          directRoomCallDetails: directRoomCallDetails,
                                                          webViewSessionIdentity: webViewSessionIdentity,
                                                          isMicrophoneEnabled: true,
-                                                         isVideoEnabled: configuration.startMode == .video,
+                                                         isVideoEnabled: false,
                                                          isSpeakerphoneEnabled: preferredAudioRoute == .speaker,
+                                                         isNativeMatrixRTCAudioActive: elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID),
                                                          certificateValidator: appHooks.certificateValidatorHook),
                    mediaProvider: mediaProvider)
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][CALL-VM-CONFIG] start_mode=\(configuration.startMode) " +
@@ -166,10 +171,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 switch action {
                 case .callEnded(reason: let reason):
                     let sendHangupMessage = reason == .hangup
-                    requestLocalCallTermination(sendHangupMessage: sendHangupMessage)
-                case .mediaStateChanged(let audioEnabled, let videoEnabled):
+                    requestLocalCallTermination(sendHangupMessage: sendHangupMessage, terminationReason: "widget_driver_call_ended")
+                case .mediaStateChanged(let audioEnabled, _):
                     state.isMicrophoneEnabled = audioEnabled
-                    state.isVideoEnabled = videoEnabled
+                    state.isVideoEnabled = false
                     elementCallService.setAudioEnabled(audioEnabled, roomID: configuration.callRoomID)
                 }
             }
@@ -179,10 +184,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             .publisher(for: AVAudioSession.routeChangeNotification)
             .sink { [weak self] _ in
                 self?.applyPreferredAudioRouteIfNeeded()
-                Task { await self?.updateOutputsListOnWeb() }
             }
             .store(in: &cancellables)
         
+        if shouldControlAudioRoute {
+            CallVoiceAudioSession.prepareEarpieceCategoryIfNeeded()
+        }
         setupCall()
     }
     
@@ -198,7 +205,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .pictureInPictureWillStop:
             actionsSubject.send(.pictureInPictureStopped)
         case .endCall:
-            requestLocalCallTermination()
+            requestLocalCallTermination(terminationReason: "user_end_call")
         case .toggleMicrophone:
             Task { await toggleMicrophone() }
         case .toggleVideo:
@@ -206,10 +213,14 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .toggleSpeakerphone:
             handleSpeakerphoneToggle()
         case .mediaCapturePermissionGranted:
-            schedulePreferredAudioRouteEnforcement()
-            Task { await updateOutputsListOnWeb() }
+            if shouldControlAudioRoute {
+                CallVoiceAudioSession.lockAfterCapture()
+                schedulePreferredAudioRouteEnforcement()
+            }
         case .outputDeviceSelected(deviceID: let deviceID):
             handleOutputDeviceSelected(deviceID: deviceID)
+        case .audioPlaybackStarted:
+            schedulePreferredAudioRouteEnforcement()
         case .widgetAction(let message):
             Task { await handleWidgetAction(message: message) }
         case .elementCallMediaDiagnostics(let message):
@@ -227,7 +238,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     
     func stop() {
         timeoutTask = nil
-        audioRouteEnforcementTask = nil
+        CallVoiceAudioSession.reset()
         finishPendingMatrixRTCMembershipLeaveResponse(outcome: .failed)
         pendingWidgetHangupRequestID = nil
         pendingMatrixRTCDelayedLeavePrepareRequestIDs.removeAll()
@@ -243,7 +254,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
         if shouldSendHangupOnStop {
             Task {
-                _ = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
+                _ = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask, terminationReason: "view_model_stop")
             }
         }
         
@@ -253,7 +264,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     }
 
     func requestProductionDispatchTermination() async -> Bool {
-        await sendCallTerminationSignal(waitingFor: setupCallTask)
+        await sendCallTerminationSignal(waitingFor: setupCallTask, terminationReason: "production_dispatch_termination")
     }
     
     // MARK: - Private
@@ -268,6 +279,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
             Task {
                 state.isMicrophoneEnabled = enabled
+                if elementCallService.ownsNativeMatrixRTCAudio(roomID: roomID) {
+                    return
+                }
                 await setMediaState(audioEnabled: enabled, videoEnabled: state.isVideoEnabled)
             }
         case let .endCall(roomID):
@@ -281,11 +295,11 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 completeCallScreenDismissalIfNeeded()
                 return
             }
-            requestLocalCallTermination(sendHangupMessage: false)
+            requestLocalCallTermination(sendHangupMessage: false, terminationReason: "service_end_call")
         case let .requestCallTermination(roomID):
             guard roomID == configuration.callRoomID else { return }
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-VM-REQUEST-RECEIVED]")
-            requestLocalCallTermination()
+            requestLocalCallTermination(terminationReason: "service_request_call_termination")
         default:
             break
         }
@@ -332,6 +346,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         activeCallWebViewBinding = binding
+        schedulePreferredAudioRouteEnforcement()
     }
 
     private func handleCallWebViewDismantled(_ identity: CallWebViewDocumentIdentity) {
@@ -366,15 +381,17 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
 
         recordMatrixRTCWidgetRequestIfNeeded(message)
 
-        if timeoutTask != nil,
-           let decodedMessage = try? DecodedWidgetMessage.decode(message: message),
+        if let decodedMessage = try? DecodedWidgetMessage.decode(message: message),
            decodedMessage.hasLoaded {
-            // This means that the call room was joined succesfully, we can stop the timeout task
-            timeoutTask = nil
-            #if DEBUG
-            SalemXStage2FSimulatorSignalingDebug.recordReceiverElementCallLoaded()
-            #endif
-            MXLog.info("Element Call media diagnostics: content_loaded=true start_mode=\(configuration.startMode)")
+            if timeoutTask != nil {
+                // This means that the call room was joined succesfully, we can stop the timeout task
+                timeoutTask = nil
+                #if DEBUG
+                SalemXStage2FSimulatorSignalingDebug.recordReceiverElementCallLoaded()
+                #endif
+                MXLog.info("Element Call media diagnostics: content_loaded=true start_mode=\(configuration.startMode)")
+            }
+            schedulePreferredAudioRouteEnforcement()
         }
 
         if await handleNativeWidgetActionIfNeeded(message) {
@@ -406,13 +423,14 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         MXLog.info("Element Call media diagnostics: \(payload)")
     }
 
-    private func requestLocalCallTermination(sendHangupMessage: Bool = true) {
+    private func requestLocalCallTermination(sendHangupMessage: Bool = true, terminationReason: String = "local_termination") {
         guard !isDismissingAfterLocalHangup else {
             return
         }
 
         if sendHangupMessage {
-            guard currentCallWebViewBinding != nil else {
+            guard currentCallWebViewBinding != nil
+                || elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID) else {
                 return
             }
             hasRequestedLocalTermination = true
@@ -423,7 +441,6 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         isDismissingAfterLocalHangup = true
         shouldSendHangupOnStop = false
         timeoutTask = nil
-        audioRouteEnforcementTask = nil
         #if DEBUG
         pendingReceiverWidgetJoinRequestID = nil
         #endif
@@ -435,7 +452,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
 
         Task {
-            let callTerminationCompleted = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask)
+            let callTerminationCompleted = await sendCallTerminationSignal(waitingFor: pendingSetupCallTask,
+                                                                           terminationReason: terminationReason)
             guard callTerminationCompleted || serviceEndedDuringLocalTermination else {
                 isDismissingAfterLocalHangup = false
                 hasRequestedLocalTermination = false
@@ -485,6 +503,17 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             // We need widget messaging to work before enabling CallKit, otherwise mute, hangup etc do nothing.
             
         case .roomCall(let roomProxy, _, let clientID, let elementCallBaseURL, let elementCallBaseURLOverride, let colorScheme, _):
+            if elementCallService.ownsNativeMatrixRTCAudio(roomID: roomProxy.id) {
+                state.isNativeMatrixRTCAudioActive = true
+                setupCallTask = Task { [weak self] in
+                    guard let self else { return }
+                    await elementCallService.setupCallSession(roomID: roomProxy.id,
+                                                              roomDisplayName: roomProxy.infoPublisher.value.displayName ?? roomProxy.id,
+                                                              startMode: configuration.startMode)
+                }
+                return
+            }
+
             setupCallTask = Task { [weak self] in
                 guard let self else { return }
                 
@@ -542,6 +571,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 await elementCallService.setupCallSession(roomID: roomProxy.id,
                                                           roomDisplayName: roomProxy.infoPublisher.value.displayName ?? roomProxy.id,
                                                           startMode: configuration.startMode)
+                schedulePreferredAudioRouteEnforcement()
             }
             
             timeoutTask = Task { [weak self] in
@@ -559,6 +589,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     
     /// This should always match the web app value
     private static let earpieceID = "earpiece-id"
+    private static let speakerDeviceID = "Speaker"
 
     private static let embeddedWebContentResetJavaScript = """
     (() => {
@@ -579,7 +610,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
     """
 
     private var shouldControlAudioRoute: Bool {
-        configuration.startMode == .audio
+        configuration.startMode == .audio && !elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID)
     }
 
     private static func makeDirectRoomCallDetails(roomProxy: JoinedRoomProxyProtocol, startMode: ElementCallStartMode) -> DirectRoomCallDetails? {
@@ -608,10 +639,32 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         guard shouldControlAudioRoute else {
             return
         }
-        
-        let isEarpiece = deviceID == Self.earpieceID
-        preferredAudioRoute = isEarpiece ? .earpiece : .speaker
-        applyPreferredAudioRouteIfNeeded()
+
+        // Element Call's iOS earpiece is virtual: it ducks and pans the loudspeaker
+        // device. Follow that selection for the in-call button and proximity sensor
+        // without changing AVAudioSession category.
+        if deviceID == Self.earpieceID {
+            preferredAudioRoute = .earpiece
+            state.isSpeakerphoneEnabled = false
+            UIDevice.current.isProximityMonitoringEnabled = true
+            CallVoiceAudioSession.logCurrentRoute(speakerEnabled: false)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-VIRTUAL-EARPIECE] selected=earpiece speaker_ui=false")
+            return
+        }
+
+        if deviceID == advertisedSpeakerDeviceID || deviceID == Self.speakerDeviceID {
+            preferredAudioRoute = .speaker
+            state.isSpeakerphoneEnabled = true
+            UIDevice.current.isProximityMonitoringEnabled = false
+            CallVoiceAudioSession.logCurrentRoute(speakerEnabled: true)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-VIRTUAL-EARPIECE] selected=speaker speaker_ui=true")
+            return
+        }
+
+        state.isSpeakerphoneEnabled = false
+        UIDevice.current.isProximityMonitoringEnabled = false
+        CallVoiceAudioSession.logCurrentRoute(speakerEnabled: false)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-VIRTUAL-EARPIECE] selected=other speaker_ui=false")
     }
 
     private func handleSpeakerphoneToggle() {
@@ -620,20 +673,22 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         }
         
         preferredAudioRoute = state.isSpeakerphoneEnabled ? .earpiece : .speaker
-        applyPreferredAudioRouteIfNeeded()
-        Task { await updateOutputsListOnWeb() }
+        applyPreferredAudioRouteIfNeeded(force: true, userInitiated: true)
     }
 
     private func toggleMicrophone() async {
         let isMicrophoneEnabled = !state.isMicrophoneEnabled
         state.isMicrophoneEnabled = isMicrophoneEnabled
-        await setMediaState(audioEnabled: isMicrophoneEnabled, videoEnabled: state.isVideoEnabled)
+        if elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID) {
+            elementCallService.setAudioEnabled(isMicrophoneEnabled, roomID: configuration.callRoomID)
+            return
+        }
+        await setMediaState(audioEnabled: isMicrophoneEnabled, videoEnabled: false)
     }
 
     private func toggleVideo() async {
-        let isVideoEnabled = !state.isVideoEnabled
-        state.isVideoEnabled = isVideoEnabled
-        await setMediaState(audioEnabled: state.isMicrophoneEnabled, videoEnabled: isVideoEnabled)
+        state.isVideoEnabled = false
+        await setMediaState(audioEnabled: state.isMicrophoneEnabled, videoEnabled: false)
     }
 
     private func schedulePreferredAudioRouteEnforcement() {
@@ -641,74 +696,55 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             return
         }
 
-        audioRouteEnforcementTask = Task { @MainActor [weak self] in
-            let delays: [Duration] = [.zero, .milliseconds(150), .milliseconds(500), .seconds(1)]
-
-            for delay in delays {
-                if delay > .zero {
-                    try? await Task.sleep(for: delay)
-                }
-
-                guard let self, !Task.isCancelled else {
-                    return
-                }
-
-                self.applyPreferredAudioRouteIfNeeded()
-            }
-        }
+        CallVoiceAudioSession.logCurrentRoute(speakerEnabled: state.isSpeakerphoneEnabled)
+        Task { await publishControlledAudioDevicesIfNeeded() }
     }
     
-    private func applyPreferredAudioRouteIfNeeded() {
-        guard let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first else {
+    private func applyPreferredAudioRouteIfNeeded(force: Bool = false, userInitiated: Bool = false) {
+        guard shouldControlAudioRoute else {
+            if let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first {
+                state.isSpeakerphoneEnabled = currentOutput.portType == .builtInSpeaker
+            }
+            UIDevice.current.isProximityMonitoringEnabled = false
             return
         }
 
-        guard shouldControlAudioRoute else {
-            state.isSpeakerphoneEnabled = currentOutput.portType == .builtInSpeaker
-            UIDevice.current.isProximityMonitoringEnabled = false
+        if !force, Date().timeIntervalSince(lastAudioRouteApply) < 0.5 {
+            return
+        }
+        lastAudioRouteApply = Date()
+
+        guard userInitiated else {
+            // Virtual earpiece still plays through the loudspeaker. Do not treat
+            // OS Speaker as the in-call speaker button.
+            CallVoiceAudioSession.logCurrentRoute(speakerEnabled: state.isSpeakerphoneEnabled)
+            Task { await publishControlledAudioDevicesIfNeeded() }
             return
         }
         
         switch preferredAudioRoute {
         case .systemDefault:
-            state.isSpeakerphoneEnabled = currentOutput.portType == .builtInSpeaker
-            UIDevice.current.isProximityMonitoringEnabled = currentOutput.portType == .builtInReceiver
+            break
         case .speaker:
             setSpeakerphoneEnabled(true)
         case .earpiece:
-            switch currentOutput.portType {
-            case .builtInSpeaker:
-                setSpeakerphoneEnabled(false)
-            case .builtInReceiver:
-                state.isSpeakerphoneEnabled = false
-                UIDevice.current.isProximityMonitoringEnabled = true
-            default:
-                state.isSpeakerphoneEnabled = false
-                UIDevice.current.isProximityMonitoringEnabled = false
-            }
+            setSpeakerphoneEnabled(false)
         }
     }
     
     private func setSpeakerphoneEnabled(_ enabled: Bool) {
-        do {
-            try AVAudioSession.sharedInstance().overrideOutputAudioPort(enabled ? .speaker : .none)
-        } catch {
-            MXLog.error("Failed updating call audio route with error: \(error)")
-            preferredAudioRoute = .systemDefault
-            state.isSpeakerphoneEnabled = AVAudioSession.sharedInstance().currentRoute.outputs.first?.portType == .builtInSpeaker
-            UIDevice.current.isProximityMonitoringEnabled = false
-            return
-        }
-        
+        CallVoiceAudioSession.applyOutputPort(speakerEnabled: enabled)
+
         state.isSpeakerphoneEnabled = enabled
         UIDevice.current.isProximityMonitoringEnabled = !enabled
+        Task { await publishControlledAudioDevicesIfNeeded() }
     }
     
     private func handleBackwardsNavigation() async {
         if case .roomCall(let roomProxy, _, _, _, _, _, _) = configuration.kind,
            !hasJoinedWidgetCall,
            elementCallService.isPreAnswerOutgoingCall(roomID: roomProxy.id) {
-            requestLocalCallTermination(sendHangupMessage: true)
+            requestLocalCallTermination(sendHangupMessage: true, terminationReason: "backwards_navigation")
             return
         }
 
@@ -829,7 +865,9 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         pendingMatrixRTCMembershipLeaveResponse.continuation.resume(returning: outcome)
     }
     
-    private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil) async -> Bool {
+    private func sendCallTerminationSignal(waitingFor setupTask: Task<Void, Never>? = nil,
+                                           terminationReason: String) async -> Bool {
+        MXLog.info("Sending Element Call hangup (\(terminationReason)).")
         switch configuration.kind {
         case .genericCallLink:
             let outcome = await hangup(waitingFor: setupTask)
@@ -843,7 +881,13 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 return false
             }
         case .roomCall(let roomProxy, _, _, _, _, _, _):
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=start")
+            if elementCallService.ownsNativeMatrixRTCAudio(roomID: roomProxy.id) {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=native_audio reason=\(terminationReason)")
+                await elementCallService.requestCallTermination(roomID: roomProxy.id)
+                return true
+            }
+
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-SENDER-DISPATCH] step=start reason=\(terminationReason)")
             switch await hangup(waitingFor: setupTask) {
             case .failed:
                 if serviceEndedDuringLocalTermination {
@@ -941,12 +985,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
         case .close:
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][PREJOIN-CANCEL-LOCAL-CLOSE] " +
                 "has_joined_widget_call=\(hasJoinedWidgetCall) send_hangup_message=false source=upstream_widget")
-            requestLocalCallTermination(sendHangupMessage: false)
+            requestLocalCallTermination(sendHangupMessage: false, terminationReason: "widget_close")
             Task { [weak self] in
                 await self?.acknowledgeWidgetRequest(requestPayload)
             }
         case .hangup:
-            requestLocalCallTermination(sendHangupMessage: false)
+            requestLocalCallTermination(sendHangupMessage: false, terminationReason: "widget_hangup")
             Task { [weak self] in
                 await self?.acknowledgeWidgetRequest(requestPayload)
             }
@@ -968,10 +1012,10 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             await forwardWidgetJoinRequestToDriver(message)
         case .mediaState:
             let audioEnabled = request.data?.audioEnabled ?? state.isMicrophoneEnabled
-            let videoEnabled = request.data?.videoEnabled ?? state.isVideoEnabled
+            let videoEnabled = false
 
             state.isMicrophoneEnabled = audioEnabled
-            state.isVideoEnabled = videoEnabled
+            state.isVideoEnabled = false
             MXLog.info("Element Call media diagnostics: media_state audio_enabled=\(audioEnabled) video_enabled=\(videoEnabled)")
             elementCallService.setAudioEnabled(audioEnabled, roomID: configuration.callRoomID)
             await acknowledgeWidgetRequest(requestPayload,
@@ -1187,31 +1231,81 @@ extension CallScreenViewModel {
         return await postJSONToWidget(json)
     }
     
-    /// This function updates the list of available audio outputs on the web side
-    /// however since we actually handle switching the audio output through the OS,
-    /// this is only used to inform the webview when the speaker is selected,
-    /// so that the option to use the earpiece can be displayed.
-    private func updateOutputsListOnWeb() async {
-        guard let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first else {
+    /// Publishes the current loudspeaker to Element Call with `forEarpiece: true`.
+    /// Element Call then adds virtual `earpiece-id` (ducked speaker + pan) and
+    /// defaults audio 1:1 calls to that device. Do not send the dummy device:
+    /// without `forEarpiece` EC never creates earpiece mode.
+    private func publishControlledAudioDevicesIfNeeded() async {
+        guard shouldControlAudioRoute else {
             return
         }
-        
-        let deviceList = if currentOutput.portType == .builtInSpeaker {
-            // This allows the webview to display the earpiece option
-            "{id: '\(currentOutput.uid)', name: '\(currentOutput.portName)', forEarpiece: true, isSpeaker: true}"
-        } else {
-            // Doesn't matter because the switch is handled through the OS
-            "{id: 'dummy', name: 'dummy'}"
-        }
-        
-        let javaScript = "window.controls.setAvailableOutputDevices([\(deviceList)])"
         guard let binding = currentCallWebViewBinding else {
             return
         }
 
+        let currentOutput = AVAudioSession.sharedInstance().currentRoute.outputs.first
+        let devices: [[String: Any]]
+        let selectedID: String
+        if CallVoiceAudioSession.isExternalRoute(currentOutput?.portType) {
+            let deviceID = currentOutput?.uid ?? "external"
+            devices = [[
+                "id": deviceID,
+                "name": "Headset",
+                "forEarpiece": false,
+                "isSpeaker": false
+            ]]
+            selectedID = deviceID
+        } else {
+            advertisedSpeakerDeviceID = Self.speakerDeviceID
+            devices = [[
+                "id": Self.speakerDeviceID,
+                "name": "Speaker",
+                "forEarpiece": true,
+                "isSpeaker": true
+            ]]
+            selectedID = preferredAudioRoute == .speaker ? Self.speakerDeviceID : Self.earpieceID
+        }
+
+        guard JSONSerialization.isValidJSONObject(devices),
+              let devicesData = try? JSONSerialization.data(withJSONObject: devices),
+              let devicesJSON = String(data: devicesData, encoding: .utf8),
+              let selectedLiteral = Self.javaScriptStringLiteral(selectedID) else {
+            MXLog.error("Failed encoding Element Call audio devices")
+            return
+        }
+
+        let javaScript = """
+        (() => {
+            const controls = window.controls;
+            if (!controls) {
+                return false;
+            }
+            const setDevices = controls.setAvailableAudioDevices || controls.setAvailableOutputDevices;
+            const setDevice = controls.setAudioDevice || controls.setOutputDevice;
+            if (typeof setDevices !== "function") {
+                return false;
+            }
+            setDevices(\(devicesJSON));
+            if (typeof setDevice === "function") {
+                setDevice(\(selectedLiteral));
+            }
+            return true;
+        })()
+        """
+
         do {
             let result = try await binding.javaScriptEvaluator(javaScript)
-            MXLog.verbose("Element Call output update evaluation completed: result_present=\(result != nil)")
+            let published = result as? Bool ?? false
+            let selectedLabel: String
+            if selectedID == Self.earpieceID {
+                selectedLabel = "earpiece"
+            } else if selectedID == Self.speakerDeviceID {
+                selectedLabel = "speaker"
+            } else {
+                selectedLabel = "other"
+            }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-AUDIO-VIRTUAL-EARPIECE] published=\(published) selected=\(selectedLabel) speaker_ui=\(state.isSpeakerphoneEnabled)")
+            MXLog.verbose("Element Call output update evaluation completed: published=\(published)")
         } catch {
             MXLog.error("Received javascript evaluation error: \(error)")
         }
