@@ -252,9 +252,16 @@ final class MatrixRTCNativeAudioTests {
         #expect(handoff.contains("applyIncomingRemoteKey"))
         #expect(handoff.contains("if lastPeerDeviceID == nil || lastPeerDeviceID == \"*\""))
         #expect(handoff.contains("if sent {\n            localKeyRetryTask?.cancel()"))
-        let storeRange = try #require(handoff.range(of: "storeLocalEncryptionKey(localKey, session: session, widgetStarted: widgetStarted)"))
-        let connectRange = try #require(handoff.range(of: "let connected = await liveKitClient.connect"))
-        #expect(storeRange.lowerBound < connectRange.lowerBound)
+        let membershipRange = try #require(handoff.range(of: "async let membershipPublished = publishMembership"))
+        let connectRange = try #require(handoff.range(of: "async let connected = liveKitClient.connect"))
+        #expect(membershipRange.lowerBound < connectRange.lowerBound)
+        #expect(handoff.contains("stage=sfu_get reused=true"))
+        #expect(handoff.contains("async let membershipPublished = publishMembership"))
+        #expect(handoff.contains("preparedCredentials = credentials"))
+        #expect(handoff.contains("delayForDriverStart: needsDriverStart"))
+        #expect(handoff.contains("var openIDToken = await signalingClient.requestOpenIDToken"))
+        #expect(handoff.contains("jwt=\\(credentials != nil)"))
+        #expect(!handoff.contains("let widgetOpenID = await widgetBridge"))
         #expect(!handoff.contains("setKey(key: localKeyBase64"))
         #expect(!handoff.contains("setKey(key: keyBase64"))
 
@@ -310,6 +317,43 @@ final class MatrixRTCNativeAudioTests {
         try? await Task.sleep(for: .milliseconds(80))
         #expect(liveKit.disconnectCount == 1)
         #expect(signalingHTTP.requests.contains { $0.method == "PUT" && $0.url.path.contains("org.matrix.msc3401.call.member") })
+    }
+
+    @Test
+    func controllerPrefetchesLiveKitJWTWhileRingingAndReusesItOnJoin() async throws {
+        let signalingHTTP = MatrixRTCHTTPClientSpy()
+        signalingHTTP.responses = [
+            .success(.init(statusCode: 200, data: Data(#"{"access_token":"openid-token","token_type":"Bearer","matrix_server_name":"matrix.example","expires_in":3600}"#.utf8))),
+            .success(.init(statusCode: 200, data: Data(#"{"url":"wss://rtc.example","jwt":"livekit-jwt"}"#.utf8))),
+            .success(.init(statusCode: 200, data: Data("{}".utf8))),
+            .success(.init(statusCode: 200, data: Data("{}".utf8)))
+        ]
+        let liveKit = MatrixRTCNativeLiveKitClientSpy()
+        let widgetDriver = ElementCallWidgetDriverMock()
+        widgetDriver.underlyingWidgetID = "widget"
+        widgetDriver.underlyingMessagePublisher = .init()
+        widgetDriver.startBaseURLClientIDColorSchemeRageshakeURLAnalyticsConfigurationReturnValue = .success(URL(string: "https://call.element.io")!)
+        widgetDriver.handleMessageReturnValue = .success(true)
+        let room = JoinedRoomProxyMock(.init(id: "!room:example.com", name: "Room"))
+        room.elementCallWidgetDriverDeviceIDReturnValue = widgetDriver
+        let clientProxy = TokenClientProxyMock(.init(userID: "@me:example.com", deviceID: "DEVICE", homeserver: "https://matrix.example"))
+        clientProxy.roomForIdentifierClosure = { _ in .joined(room) }
+
+        let controller = MatrixRTCNativeAudioController(signalingClient: MatrixRTCNativeSignalingClient(httpClient: signalingHTTP),
+                                                        liveKitClient: liveKit,
+                                                        elementCallBaseURL: try #require(URL(string: "https://call.example")),
+                                                        clientID: "kz.salemx")
+        controller.prepareIncomingKeyListener(roomID: "!room:example.com", clientProxy: clientProxy)
+        await controller.joinIncomingAudio(roomID: "!room:example.com", clientProxy: clientProxy)
+
+        #expect(controller.state == .connected)
+        #expect(liveKit.connectCount == 1)
+        #expect(signalingHTTP.requests.filter { $0.url.path.contains("sfu/get") }.count == 1)
+        #expect(signalingHTTP.requests.filter { $0.url.path.contains("/openid/request_token") }.count == 1)
+        #expect(signalingHTTP.requests.contains { $0.method == "PUT" && $0.url.path.contains("org.matrix.msc3401.call.member") })
+
+        controller.leave()
+        #expect(controller.state == .inactive)
     }
     
     @Test
