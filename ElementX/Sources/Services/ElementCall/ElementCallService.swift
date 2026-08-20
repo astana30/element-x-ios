@@ -1189,6 +1189,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     private var incomingFallbackSuppressionByRoomID: [String: Date] = [:]
     private var consumedDirectCallIdentityKeys = Set<ConsumedDirectCallIdentityKey>()
     private var ongoingDeclineListenerHandles: [String: TaskHandle] = [:]
+    /// The decline observation polls the timeline several times a second. Remembering which room
+    /// proxies were already subscribed keeps that polling out of the call trace log. Weak entries so
+    /// that a recreated proxy for the same room subscribes again.
+    private let subscribedTimelineRoomProxies = NSHashTable<AnyObject>.weakObjects()
     private var isResolvingOngoingDeclines = false
     private let ongoingDeclineObservationLock = NSLock()
     @CancellableTask
@@ -4764,7 +4768,13 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     }
 
     private func ensureTimelineSubscribed(for roomProxy: JoinedRoomProxyProtocol, roomID _: String) async {
+        let proxyObject = roomProxy as AnyObject
+        guard !subscribedTimelineRoomProxies.contains(proxyObject) else {
+            return
+        }
+
         await roomProxy.timeline.subscribeForUpdates()
+        subscribedTimelineRoomProxies.add(proxyObject)
     }
 
     private func preferredCallStartedAt(for roomID: String) -> Date? {

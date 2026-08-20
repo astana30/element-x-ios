@@ -2986,7 +2986,8 @@ protocol MatrixRTCNativeLiveKitConnecting: AnyObject {
 final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting, @unchecked Sendable {
     private var room: Room?
     private var keyProvider: BaseKeyProvider?
-    private var pendingRemoteKeys = [MatrixRTCNativePendingRemoteKey]()
+    private var remoteKeys = [MatrixRTCNativePendingRemoteKey]()
+    private var appliedRemoteKeys = Set<String>()
     private let remoteKeyLock = NSLock()
 
     func connect(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool {
@@ -3021,10 +3022,8 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting, @unc
             return false
         }
         keyProvider.setKey(keyData: localKeyData, participantId: localIdentity, index: 0)
-        let pendingKeys = takePendingRemoteKeys(assigning: keyProvider)
-        for key in pendingKeys {
-            Self.apply(key.keyBase64, identity: key.identity, index: key.index, to: keyProvider, reason: "buffered")
-        }
+        assign(keyProvider: keyProvider)
+        applyRemoteKeys(reason: "buffered")
 
         let roomOptions = RoomOptions(encryptionOptions: EncryptionOptions(keyProvider: keyProvider))
         let connectOptions = ConnectOptions(autoSubscribe: true, enableMicrophone: false)
@@ -3044,6 +3043,7 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting, @unc
                 keyProvider.setKey(keyData: localKeyData, participantId: resolvedIdentity, index: 0)
             }
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_identity match=\(resolvedIdentity == localIdentity)")
+            applyRemoteKeys(reason: "connected")
             try await room.localParticipant.setMicrophone(enabled: true)
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=livekit ok=true")
             return true
@@ -3056,37 +3056,75 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting, @unc
 
     func setRemoteParticipantKey(_ keyBase64: String, identity: String, index: Int32) {
         remoteKeyLock.lock()
-        let provider = keyProvider
-        if provider == nil {
-            MatrixRTCNativeRemoteKeyStore.upsert(&pendingRemoteKeys,
-                                                 keyBase64: keyBase64,
-                                                 identity: identity,
-                                                 index: index)
-        }
+        MatrixRTCNativeRemoteKeyStore.upsert(&remoteKeys,
+                                             keyBase64: keyBase64,
+                                             identity: identity,
+                                             index: index)
+        let hasProvider = keyProvider != nil
         remoteKeyLock.unlock()
 
-        if let provider {
-            Self.apply(keyBase64, identity: identity, index: index, to: provider, reason: nil)
-        } else {
+        guard hasProvider else {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=false reason=buffer")
-        }
-    }
-
-    private static func apply(_ keyBase64: String,
-                              identity: String,
-                              index: Int32,
-                              to keyProvider: BaseKeyProvider,
-                              reason: String?) {
-        guard let keyData = MatrixRTCNativeEncryptionKeyMaterial.data(fromBase64: keyBase64) else {
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=false reason=key_material")
             return
         }
 
-        keyProvider.setKey(keyData: keyData, participantId: identity, index: index)
+        Task { @MainActor [weak self] in
+            self?.applyRemoteKeys(reason: nil)
+        }
+    }
+
+    /// Element Call does not always join the SFU as `userID:deviceID`; newer builds hash the identity.
+    /// The key from the to-device event then belongs to a participant we cannot name, so in a call with a
+    /// single remote key sender it is also installed for the participants we have no key for at all.
+    @MainActor
+    private func applyRemoteKeys(reason: String?) {
+        remoteKeyLock.lock()
+        let provider = keyProvider
+        let keys = remoteKeys
+        remoteKeyLock.unlock()
+
+        guard let provider, !keys.isEmpty else {
+            return
+        }
+
+        let claimedIdentities = Set(keys.map(\.identity))
+        let unclaimedIdentities = (room?.remoteParticipants.keys.map(\.stringValue) ?? [])
+            .filter { !claimedIdentities.contains($0) }
+
+        for key in keys {
+            apply(key, identity: key.identity, to: provider, reason: reason)
+
+            guard keys.count == 1 else {
+                continue
+            }
+
+            for identity in unclaimedIdentities {
+                apply(key, identity: identity, to: provider, reason: "unnamed_participant")
+            }
+        }
+    }
+
+    @MainActor
+    private func apply(_ key: MatrixRTCNativePendingRemoteKey,
+                       identity: String,
+                       to keyProvider: BaseKeyProvider,
+                       reason: String?) {
+        let fingerprint = "\(identity)|\(key.index)|\(key.keyBase64)"
+        guard !appliedRemoteKeys.contains(fingerprint) else {
+            return
+        }
+
+        guard let keyData = MatrixRTCNativeEncryptionKeyMaterial.data(fromBase64: key.keyBase64) else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(key.index) applied=false reason=key_material")
+            return
+        }
+
+        keyProvider.setKey(keyData: keyData, participantId: identity, index: key.index)
+        appliedRemoteKeys.insert(fingerprint)
         if let reason {
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=true reason=\(reason)")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(key.index) applied=true reason=\(reason)")
         } else {
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=true")
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(key.index) applied=true")
         }
     }
 
@@ -3113,21 +3151,20 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting, @unc
         room = nil
         remoteKeyLock.lock()
         keyProvider = nil
+        appliedRemoteKeys.removeAll()
         if clearPendingKeys {
-            pendingRemoteKeys.removeAll()
+            remoteKeys.removeAll()
         }
         remoteKeyLock.unlock()
         currentRoom?.remove(delegate: self)
         await currentRoom?.disconnect()
     }
 
-    private func takePendingRemoteKeys(assigning keyProvider: BaseKeyProvider) -> [MatrixRTCNativePendingRemoteKey] {
+    private func assign(keyProvider: BaseKeyProvider) {
         remoteKeyLock.lock()
         defer { remoteKeyLock.unlock() }
         self.keyProvider = keyProvider
-        let pending = pendingRemoteKeys
-        pendingRemoteKeys.removeAll()
-        return pending
+        appliedRemoteKeys.removeAll()
     }
 
     private static func isSupportedLiveKitURL(_ url: URL) -> Bool {
@@ -3147,14 +3184,23 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting, @unc
 /// Frame level diagnostics: without these the trace log can show a healthy key exchange while the
 /// frame cryptor silently discards every remote frame.
 extension MatrixRTCNativeLiveKitClient: RoomDelegate {
-    nonisolated func room(_: Room, trackPublication: TrackPublication, didUpdateE2EEState state: E2EEState) {
+    nonisolated func room(_ room: Room, trackPublication: TrackPublication, didUpdateE2EEState state: E2EEState) {
         Task { @MainActor in
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=frame_crypto kind=\(trackPublication.kind == .audio ? "audio" : "other") state=\(state.toString())")
+            let isLocal = room.localParticipant.trackPublications.values.contains { $0 === trackPublication }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=frame_crypto kind=\(trackPublication.kind == .audio ? "audio" : "other") " +
+                "scope=\(isLocal ? "local" : "remote") state=\(state.toString())")
+        }
+    }
+
+    nonisolated func room(_: Room, participantDidConnect _: RemoteParticipant) {
+        Task { @MainActor [weak self] in
+            self?.applyRemoteKeys(reason: "participant")
         }
     }
 
     nonisolated func room(_: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            self?.applyRemoteKeys(reason: "subscribed")
             guard publication.kind == .audio else { return }
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_audio identity=\(participant.identity?.stringValue ?? "unknown") muted=\(publication.isMuted)")
         }
@@ -3299,15 +3345,20 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
 
     func resendLocalEncryptionKey() async {
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key_resend")
-        _ = await sendStoredLocalEncryptionKey()
+        if await sendStoredLocalEncryptionKey() {
+            return
+        }
+
+        scheduleLocalEncryptionKeyRetries(generation: joinGeneration)
     }
 
-    /// The widget driver occasionally rejects the first `send_to_device` of a session. Retrying in the
-    /// background keeps the LiveKit join responsive while still getting our key to the remote device.
+    /// The widget driver keeps rejecting `send_to_device` while it is busy, in the worst observed case for
+    /// several seconds after the join. Retrying in the background keeps the LiveKit join responsive while
+    /// still getting our key across, which the remote side needs before it can decrypt our audio.
     private func scheduleLocalEncryptionKeyRetries(generation: UInt64) {
         localKeyRetryTask?.cancel()
         localKeyRetryTask = Task { @MainActor [weak self] in
-            for delayMS in [500, 1000, 2000, 4000] {
+            for delayMS in [300, 600, 1200, 2400, 4800, 8000] {
                 try? await Task.sleep(for: .milliseconds(delayMS))
                 guard let self, !Task.isCancelled, isCurrent(generation) else {
                     return

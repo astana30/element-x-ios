@@ -235,10 +235,24 @@ final class MatrixRTCNativeAudioTests {
         #expect(handoff.contains("ok=false reason=local_key_material"))
         #expect(handoff.contains("stage=local_identity match="))
         #expect(handoff.contains("stage=frame_crypto"))
+        #expect(handoff.contains("scope=\\(isLocal ? \"local\" : \"remote\")"))
         #expect(handoff.contains("stage=remote_audio"))
         #expect(handoff.contains("extension MatrixRTCNativeLiveKitClient: RoomDelegate"))
+        // The peer can join the SFU under a hashed identity, so a lone remote key is also installed for
+        // the participants that no key claims.
+        #expect(handoff.contains("reason: \"unnamed_participant\""))
+        #expect(handoff.contains("room?.remoteParticipants.keys.map(\\.stringValue)"))
+        #expect(handoff.contains("applyRemoteKeys(reason: \"participant\")"))
+        #expect(handoff.contains("applyRemoteKeys(reason: \"subscribed\")"))
+        #expect(handoff.contains("applyRemoteKeys(reason: \"connected\")"))
+        #expect(handoff.contains("[300, 600, 1200, 2400, 4800, 8000]"))
         #expect(!handoff.contains("setKey(key: localKeyBase64"))
         #expect(!handoff.contains("setKey(key: keyBase64"))
+
+        // The decline observation polls the timeline several times a second; the trace log should not
+        // carry one "already subscribed" warning per poll.
+        let callService = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
+        #expect(callService.contains("subscribedTimelineRoomProxies"))
 
         // The raw key and HKDF derivation APIs only exist from LiveKit 2.16.0 onwards.
         let projectSpec = try Self.source(named: "project.yml")
