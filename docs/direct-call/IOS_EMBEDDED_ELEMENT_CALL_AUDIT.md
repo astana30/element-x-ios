@@ -25,7 +25,7 @@ Stage 2B is ready for a compile-time adapter seam because the embedded Element C
 | --- | --- | --- |
 | Matrix Rust SDK | `project.yml`, `SalemX.xcodeproj/project.pbxproj` | `https://github.com/astana30/matrix-rust-components-swift`, revision `1e58d0a4317e3ff74c2d565cf532bc8d035bcc8f` |
 | Embedded Element Call | `project.yml`, `SalemX.xcodeproj/project.pbxproj` | `https://github.com/element-hq/element-call-swift`, exact version `0.17.0` |
-| LiveKit SDK | `project.yml`, `SalemX.xcodeproj/project.pbxproj` | `https://github.com/livekit/client-sdk-swift.git`, exact version `2.13.0` |
+| LiveKit SDK | `project.yml`, `SalemX.xcodeproj/project.pbxproj` | `https://github.com/livekit/client-sdk-swift.git`, exact version `2.16.0` |
 | App target delivery | `ElementX/SupportingFiles/target.yml` | App depends on `EmbeddedElementCall`, `MatrixRustSDK` and `LiveKit` |
 | Embedded EC patching | `ElementX/SupportingFiles/target.yml` | Pre-build script patches the checked-out `element-call-swift` sources with `Tools/branding/patch_embedded_element_call_rtc.py` |
 | Tooling lockfile | `Package.swift`, `Package.resolved` | Top-level package is tooling-only; app package pins live in XcodeGen/project metadata |
