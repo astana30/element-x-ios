@@ -338,7 +338,7 @@ final class ElementCallServiceTests {
             }
         }
 
-        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(await waitUntil { dispatchClient.consumeRequests.count == 1 })
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
         await service.declineIncomingCall()
     }
@@ -359,7 +359,7 @@ final class ElementCallServiceTests {
         }
 
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
-        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(await waitUntil { dispatchClient.consumeRequests.count == 1 })
         #expect(dispatchClient.consumeRequests.first?.appSessionGeneration == "opaque-generation")
 
         await withCheckedContinuation { continuation in
@@ -367,9 +367,29 @@ final class ElementCallServiceTests {
                 continuation.resume()
             }
         }
-        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(await waitUntil { dispatchClient.consumeRequests.count == 1 })
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
         await service.declineIncomingCall()
+    }
+
+    @Test
+    func productionDispatchReportsCallKitOnThePushCallbackStack() {
+        appSettings.salemxProductionDispatchV1Enabled = true
+        var callKitReportedBeforePushCompletion = false
+        var pushCompletionSeen = false
+        callProvider.reportNewIncomingCallWithUpdateCompletionClosure = { _, _, completion in
+            callKitReportedBeforePushCompletion = !pushCompletionSeen
+            completion(nil)
+        }
+
+        service.pushRegistry(pushRegistry, didReceiveIncomingPushWith: productionDispatchPayload(), for: .voIP) {
+            pushCompletionSeen = true
+            #expect(callKitReportedBeforePushCompletion)
+        }
+
+        #expect(callKitReportedBeforePushCompletion)
+        #expect(pushCompletionSeen)
+        #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
     }
 
     @Test
@@ -438,7 +458,7 @@ final class ElementCallServiceTests {
                 continuation.resume()
             }
         }
-        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(await waitUntil { dispatchClient.consumeRequests.count == 1 })
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
         #expect(await waitForEndedCall(reason: .failed))
     }
@@ -459,7 +479,7 @@ final class ElementCallServiceTests {
             }
         }
 
-        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(await waitUntil { dispatchClient.consumeRequests.count == 1 })
         #expect(completionCount == 1)
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
         #expect(await waitForEndedCall(reason: .failed))
@@ -478,6 +498,8 @@ final class ElementCallServiceTests {
                 continuation.resume()
             }
         }
+        #expect(await waitUntil { dispatchClient.consumeRequests.count == 1 })
+        #expect(await waitForEndedCall(reason: .failed))
 
         dispatchClient.consumeResult = .success(productionDispatchConsumeResponse(expiresAt: currentDate))
         await withCheckedContinuation { continuation in
@@ -488,9 +510,9 @@ final class ElementCallServiceTests {
             }
         }
 
-        #expect(dispatchClient.consumeRequests.count == 2)
+        #expect(await waitUntil { dispatchClient.consumeRequests.count == 2 })
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 2)
-        #expect(callProvider.reportCallWithEndedAtReasonCallsCount == 2)
+        #expect(await waitUntil { callProvider.reportCallWithEndedAtReasonCallsCount == 2 })
         #expect(callProvider.reportCallWithEndedAtReasonReceivedArguments?.reason == .failed)
     }
 
@@ -522,7 +544,7 @@ final class ElementCallServiceTests {
             }
         }
 
-        #expect(dispatchClient.consumeRequests.count == 1)
+        #expect(await waitUntil { dispatchClient.consumeRequests.count == 1 })
         #expect(completionCount == 1)
         #expect(callProvider.reportNewIncomingCallWithUpdateCompletionCallsCount == 1)
         #expect(await waitForEndedCall(reason: .failed))

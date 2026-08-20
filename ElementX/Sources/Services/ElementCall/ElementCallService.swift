@@ -1103,6 +1103,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
     @MainActor private var productionDispatchCapabilityRetryCount = 0
     @MainActor private var productionDispatchReceiverConsumptions = Set<UUID>()
     private var pendingProductionDispatchInputByCallKitID = [UUID: ProductionDispatchReceiverInput]()
+    private var reportedProductionDispatchIDs = Set<UUID>()
     @MainActor private var productionDispatchObservations = [UUID: SalemXStockElementCallObservationState]()
     nonisolated(unsafe) private var productionDispatchObservedRoomIDs = Set<String>()
     
@@ -1117,6 +1118,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             let expectedCallID = ongoingCallID
             Task { await observeOngoingCall(expectedCallID: expectedCallID) }
             observeSessionGlobalIncomingCalls()
+            startNativeIncomingKeyListenerIfNeeded(incomingCallID)
             startNativeMatrixRTCAudioIfNeeded(incomingCallID)
         }
     }
@@ -1697,13 +1699,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 return
             }
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-RECEIVED] dispatch_id=\(input.dispatchID.uuidString)")
-            Task { @MainActor [weak self] in
-                guard let self else {
-                    completion()
-                    return
-                }
-                await self.reportProductionDispatchCallKitThenConsume(input, completion: completion)
-            }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-WAKE] application_active=\(applicationActivityProvider.isActive()) origin=push")
+            // Sleeping/killed wake: report CallKit on this callback stack before returning.
+            // A MainActor Task here is starved by session restore and iOS then kills the process.
+            reportProductionDispatchCallKitThenConsume(input, completion: completion)
             return
         }
         #if DEBUG
@@ -1857,11 +1856,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         }
     }
 
-    @MainActor
     private func reportProductionDispatchCallKitThenConsume(_ input: ProductionDispatchReceiverInput,
-                                                           completion: @escaping () -> Void) async {
+                                                           completion: @escaping () -> Void) {
         if pendingProductionDispatchInputByCallKitID.values.contains(where: { $0.dispatchID == input.dispatchID })
-            || productionDispatchReceiverConsumptions.contains(input.dispatchID) {
+            || reportedProductionDispatchIDs.contains(input.dispatchID) {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-DROP] reason=duplicate_dispatch dispatch_id=\(input.dispatchID.uuidString)")
             completion()
             return
@@ -1886,6 +1884,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         resetCallKitAudioAnswerWaitState()
         incomingCallID = callID
         pendingProductionDispatchInputByCallKitID[callID.callKitID] = input
+        reportedProductionDispatchIDs.insert(input.dispatchID)
 
         let update = CXCallUpdate()
         update.hasVideo = false
@@ -1893,41 +1892,34 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         update.remoteHandle = .init(type: .generic, value: "salemx-call")
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-CALLKIT] room_id=\(callID.roomID) start_mode=audio has_video=false caller_name_source=pending_dispatch")
 
-        let didFailToReport = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { error in
-                if let error {
-                    MXLog.error("Failed reporting new incoming call with error: \(error)")
-                    continuation.resume(returning: true)
-                    return
-                }
-                continuation.resume(returning: false)
+        callProvider.reportNewIncomingCall(with: callID.callKitID, update: update) { [weak self] error in
+            guard let self else {
+                completion()
+                return
+            }
+
+            if let error {
+                MXLog.error("Failed reporting new incoming call with error: \(error)")
+                self.pendingProductionDispatchInputByCallKitID.removeValue(forKey: callID.callKitID)
+                self.reportedProductionDispatchIDs.remove(input.dispatchID)
+                self.clearIncomingCallState()
+                completion()
+                return
+            }
+
+            self.actionsSubject.send(.receivedIncomingCallRequest)
+            completion()
+
+            guard self.incomingCallID?.callKitID == callID.callKitID else {
+                return
+            }
+
+            self.scheduleIncomingUnansweredCallTimeout(callKitID: callID.callKitID,
+                                                       duration: ProductionDispatchPushConstants.unansweredTimeout)
+            Task { @MainActor [weak self] in
+                await self?.consumePendingProductionDispatchIfPossible()
             }
         }
-
-        if didFailToReport {
-            pendingProductionDispatchInputByCallKitID.removeValue(forKey: callID.callKitID)
-            clearIncomingCallState()
-            completion()
-            return
-        }
-
-        actionsSubject.send(.receivedIncomingCallRequest)
-
-        guard incomingCallID?.callKitID == callID.callKitID else {
-            completion()
-            return
-        }
-
-        scheduleIncomingUnansweredCallTimeout(callKitID: callID.callKitID,
-                                              duration: ProductionDispatchPushConstants.unansweredTimeout)
-
-        if productionDispatchCapabilityConfiguration != nil {
-            await consumePendingProductionDispatchIfPossible()
-        } else {
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH-WAIT-SESSION] dispatch_id=\(input.dispatchID.uuidString)")
-            MXLog.info("Production dispatch PushKit is waiting for a restored session before consume")
-        }
-        completion()
     }
 
     @MainActor
@@ -1991,6 +1983,7 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-PUSH] room_id=\(response.roomID) payload_fields=production_dispatch " +
             "parsed_intent_key=nil parsed_intent_value=nil parsed_intent_start_mode=audio incoming_start_mode=audio")
         MXLog.info("Production dispatch consume succeeded after CallKit report")
+        startNativeIncomingKeyListenerIfNeeded(bound)
         resumePendingLegacyAnswer()
     }
     
@@ -2108,6 +2101,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     private func startNativeIncomingKeyListenerIfNeeded(_ incomingCallID: CallID?) {
         guard let incomingCallID else {
+            return
+        }
+        guard !Self.isPendingProductionDispatchRoomID(incomingCallID.roomID) else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=early_listen_skip reason=wait_consume")
             return
         }
         guard nativeAudioJoinCallKitID == nil else {
