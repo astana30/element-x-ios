@@ -178,6 +178,8 @@ final class MatrixRTCNativeAudioTests {
         #expect(elementCallService.contains("startNativeIncomingKeyListenerIfNeeded"))
         #expect(elementCallService.contains("early_listen_request"))
         #expect(elementCallService.contains("early_listen_skip"))
+        #expect(elementCallService.contains("native-audio-cancel-unanswered"))
+        #expect(elementCallService.contains("[CALL-INCOMING-TRACE][APP-ANSWER]"))
     }
 
     @Test

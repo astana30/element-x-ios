@@ -2062,6 +2062,11 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
             return
         }
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER] room_id=\(incomingCallID.roomID) callkit_id=\(incomingCallID.callKitID) start_mode=\(incomingCallID.startMode)")
+        // native-audio-cancel-unanswered: locked native audio waits for unlock and never
+        // reaches resumePendingLegacyAnswerPresentation, which used to be the only cancel
+        // of the 45s unanswered timer. Answering must stop that timer immediately.
+        endUnansweredCallTask?.cancel()
+        endUnansweredCallTask = nil
         
         if pendingLegacyAnswerCallID?.callKitID == incomingCallID.callKitID {
             action.fulfill()
