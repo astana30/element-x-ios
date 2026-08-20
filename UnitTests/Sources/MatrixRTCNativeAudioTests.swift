@@ -207,7 +207,7 @@ final class MatrixRTCNativeAudioTests {
     }
 
     @Test
-    func encryptionKeyMaterialDecodesElementCallBase64Spellings() throws {
+    func encryptionKeyMaterialDecodesElementCallBase64Spellings() {
         let rawKey = Data([0xFB, 0xEF, 0x3E, 0x00, 0x10, 0x82, 0x93, 0x94, 0xC0, 0x2F, 0x7F, 0xF9, 0x64, 0x1A, 0x2B, 0x3C])
         let padded = rawKey.base64EncodedString()
         let urlSafeUnpadded = padded
