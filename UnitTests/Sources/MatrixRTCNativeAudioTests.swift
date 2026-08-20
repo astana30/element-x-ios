@@ -152,8 +152,13 @@ final class MatrixRTCNativeAudioTests {
         #expect(handoff.contains("stage=widget_caps"))
         #expect(handoff.contains("stage=remote_key"))
         #expect(handoff.contains("stage=local_key"))
+        #expect(handoff.contains("stage=local_key ok=\\(sent) peerDeviceID="))
         #expect(handoff.contains("org.matrix.msc3819.receive.to_device:io.element.call.encryption_keys"))
         #expect(handoff.contains("enum MatrixRTCNativeEncryptionPeer"))
+        #expect(handoff.contains("enum MatrixRTCNativeRemoteKeyStore"))
+        #expect(handoff.contains("disconnect(clearPendingKeys"))
+        #expect(handoff.contains("applied=false reason=buffer"))
+        #expect(handoff.contains("applied=true reason=buffered"))
         #expect(handoff.contains("prepareIncomingKeyListener"))
         #expect(handoff.contains("lastRemoteDeviceID"))
         #expect(handoff.contains("shouldNegotiateCapabilities"))
@@ -241,6 +246,19 @@ final class MatrixRTCNativeAudioTests {
         #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "@r2:mertis.kz:aqFw8fCpKO") == "aqFw8fCpKO")
         #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "@r2:mertis.kz") == nil)
         #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "no-separator") == nil)
+    }
+
+    @Test
+    func remoteKeyStoreUpsertsByIdentityAndIndex() {
+        var keys = [MatrixRTCNativePendingRemoteKey]()
+        MatrixRTCNativeRemoteKeyStore.upsert(&keys, keyBase64: "first", identity: "@r2:mertis.kz:RAH2romMl2", index: 0)
+        MatrixRTCNativeRemoteKeyStore.upsert(&keys, keyBase64: "other", identity: "@r3:mertis.kz:DEVICE", index: 0)
+        MatrixRTCNativeRemoteKeyStore.upsert(&keys, keyBase64: "replaced", identity: "@r2:mertis.kz:RAH2romMl2", index: 0)
+
+        #expect(keys == [
+            .init(keyBase64: "other", identity: "@r3:mertis.kz:DEVICE", index: 0),
+            .init(keyBase64: "replaced", identity: "@r2:mertis.kz:RAH2romMl2", index: 0)
+        ])
     }
     
     @Test

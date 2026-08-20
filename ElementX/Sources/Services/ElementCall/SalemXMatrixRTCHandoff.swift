@@ -2828,6 +2828,22 @@ final class MatrixRTCNativeWidgetBridge {
 }
 
 
+struct MatrixRTCNativePendingRemoteKey: Equatable {
+    let keyBase64: String
+    let identity: String
+    let index: Int32
+}
+
+enum MatrixRTCNativeRemoteKeyStore {
+    static func upsert(_ keys: inout [MatrixRTCNativePendingRemoteKey],
+                       keyBase64: String,
+                       identity: String,
+                       index: Int32) {
+        keys.removeAll { $0.identity == identity && $0.index == index }
+        keys.append(.init(keyBase64: keyBase64, identity: identity, index: index))
+    }
+}
+
 protocol MatrixRTCNativeLiveKitConnecting: AnyObject {
     func connect(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool
     func setRemoteParticipantKey(_ keyBase64: String, identity: String, index: Int32)
@@ -2838,9 +2854,11 @@ protocol MatrixRTCNativeLiveKitConnecting: AnyObject {
 final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
     private var room: Room?
     private var keyProvider: BaseKeyProvider?
+    private var pendingRemoteKeys = [MatrixRTCNativePendingRemoteKey]()
+    private let remoteKeyLock = NSLock()
 
     func connect(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool {
-        await disconnect()
+        await disconnect(clearPendingKeys: false)
 
         guard Self.isSupportedLiveKitURL(serverURL) else {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=livekit ok=false reason=url")
@@ -2862,7 +2880,11 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
         let options = KeyProviderOptions(sharedKey: false, ratchetWindowSize: 10, keyRingSize: 256)
         let keyProvider = BaseKeyProvider(options: options)
         keyProvider.setKey(key: localKeyBase64, participantId: localIdentity, index: 0)
-        self.keyProvider = keyProvider
+        let pendingKeys = takePendingRemoteKeys(assigning: keyProvider)
+        for key in pendingKeys {
+            keyProvider.setKey(key: key.keyBase64, participantId: key.identity, index: key.index)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(key.index) applied=true reason=buffered")
+        }
 
         let roomOptions = RoomOptions(encryptionOptions: EncryptionOptions(keyProvider: keyProvider))
         let connectOptions = ConnectOptions(autoSubscribe: true, enableMicrophone: false)
@@ -2879,14 +2901,28 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
             return true
         } catch {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=livekit ok=false reason=connect")
-            await disconnect()
+            await disconnect(clearPendingKeys: false)
             return false
         }
     }
 
     func setRemoteParticipantKey(_ keyBase64: String, identity: String, index: Int32) {
-        keyProvider?.setKey(key: keyBase64, participantId: identity, index: index)
-        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index)")
+        remoteKeyLock.lock()
+        let provider = keyProvider
+        if provider == nil {
+            MatrixRTCNativeRemoteKeyStore.upsert(&pendingRemoteKeys,
+                                                 keyBase64: keyBase64,
+                                                 identity: identity,
+                                                 index: index)
+        }
+        remoteKeyLock.unlock()
+
+        if let provider {
+            provider.setKey(key: keyBase64, participantId: identity, index: index)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=true")
+        } else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=false reason=buffer")
+        }
     }
 
     func setMicrophoneEnabled(_ enabled: Bool) async {
@@ -2894,7 +2930,11 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
     }
 
     func disconnect() async {
-        await disconnectOnMainActor()
+        await disconnect(clearPendingKeys: true)
+    }
+
+    private func disconnect(clearPendingKeys: Bool) async {
+        await disconnectOnMainActor(clearPendingKeys: clearPendingKeys)
     }
 
     @MainActor
@@ -2903,11 +2943,25 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
     }
 
     @MainActor
-    private func disconnectOnMainActor() async {
+    private func disconnectOnMainActor(clearPendingKeys: Bool) async {
         let currentRoom = room
         room = nil
+        remoteKeyLock.lock()
         keyProvider = nil
+        if clearPendingKeys {
+            pendingRemoteKeys.removeAll()
+        }
+        remoteKeyLock.unlock()
         await currentRoom?.disconnect()
+    }
+
+    private func takePendingRemoteKeys(assigning keyProvider: BaseKeyProvider) -> [MatrixRTCNativePendingRemoteKey] {
+        remoteKeyLock.lock()
+        defer { remoteKeyLock.unlock() }
+        self.keyProvider = keyProvider
+        let pending = pendingRemoteKeys
+        pendingRemoteKeys.removeAll()
+        return pending
     }
 
     private static func isSupportedLiveKitURL(_ url: URL) -> Bool {
@@ -3173,13 +3227,14 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         }
 
         if widgetStarted, let peerUserID = Self.peerUserID(in: session.roomProxy, ownUserID: session.userID) {
+            let peerDeviceID = MatrixRTCNativeEncryptionPeer.peerDeviceID(from: [lastRemoteDeviceID].compactMap { $0 })
             let sent = await widgetBridge.sendEncryptionKey(localKey,
                                                             index: 0,
                                                             membership: session.membership,
                                                             roomID: roomID,
                                                             peerUserID: peerUserID,
-                                                            peerDeviceID: MatrixRTCNativeEncryptionPeer.peerDeviceID(from: [lastRemoteDeviceID].compactMap { $0 }))
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key ok=\(sent)")
+                                                            peerDeviceID: peerDeviceID)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key ok=\(sent) peerDeviceID=\(peerDeviceID)")
         }
 
         guard isCurrent(generation) else {
