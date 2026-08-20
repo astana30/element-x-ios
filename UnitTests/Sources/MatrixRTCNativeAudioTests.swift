@@ -273,6 +273,12 @@ final class MatrixRTCNativeAudioTests {
         #expect(widgetDriver.contains("widgetDriver = nil"))
         #expect(handoff.contains("stage=bg_key_send"))
         #expect(handoff.contains("native-audio-bg-key-send"))
+        #expect(handoff.contains("native-audio-no-star-send"))
+        #expect(handoff.contains("reason=no_peer_device"))
+        #expect(handoff.contains("stage=peer_device source="))
+        #expect(handoff.contains("matrixDeviceID(fromLiveKitIdentity"))
+        #expect(handoff.contains("resolvePeerDeviceFromMembershipIfNeeded"))
+        #expect(!handoff.contains("Set(deviceIDs).count == 1 ? deviceIDs[0] : \"*\""))
         #expect(!handoff.contains("self?.finish(requestID: requestID, response: [:])"))
         #expect(handoff.contains("var openIDToken = await signalingClient.requestOpenIDToken"))
         #expect(handoff.contains("jwt=\\(credentials != nil)"))
@@ -299,6 +305,7 @@ final class MatrixRTCNativeAudioTests {
             .success(.init(statusCode: 200, data: Data(#"{"access_token":"openid-token","token_type":"Bearer","matrix_server_name":"matrix.example","expires_in":3600}"#.utf8))),
             .success(.init(statusCode: 200, data: Data(#"{"url":"wss://rtc.example","jwt":"livekit-jwt"}"#.utf8))),
             .success(.init(statusCode: 200, data: Data("{}".utf8))),
+            .success(.init(statusCode: 200, data: Data("[]".utf8))),
             .success(.init(statusCode: 200, data: Data("{}".utf8)))
         ]
         let liveKit = MatrixRTCNativeLiveKitClientSpy()
@@ -322,6 +329,7 @@ final class MatrixRTCNativeAudioTests {
         #expect(liveKit.connectCount == 1)
         #expect(liveKit.microphoneEnabled == true)
         #expect(signalingHTTP.requests.contains { $0.method == "PUT" && $0.url.path.contains("org.matrix.msc3401.call.member") })
+        #expect(signalingHTTP.requests.contains { $0.method == "GET" && $0.url.path.hasSuffix("/state") })
 
         await controller.joinIncomingAudio(roomID: "!room:example.com", clientProxy: clientProxy)
         #expect(liveKit.connectCount == 1)
@@ -332,6 +340,7 @@ final class MatrixRTCNativeAudioTests {
         try? await Task.sleep(for: .milliseconds(80))
         #expect(liveKit.disconnectCount == 1)
         #expect(signalingHTTP.requests.contains { $0.method == "PUT" && $0.url.path.contains("org.matrix.msc3401.call.member") })
+        #expect(signalingHTTP.requests.contains { $0.method == "GET" && $0.url.path.hasSuffix("/state") })
     }
 
     @Test
@@ -341,6 +350,7 @@ final class MatrixRTCNativeAudioTests {
             .success(.init(statusCode: 200, data: Data(#"{"access_token":"openid-token","token_type":"Bearer","matrix_server_name":"matrix.example","expires_in":3600}"#.utf8))),
             .success(.init(statusCode: 200, data: Data(#"{"url":"wss://rtc.example","jwt":"livekit-jwt"}"#.utf8))),
             .success(.init(statusCode: 200, data: Data("{}".utf8))),
+            .success(.init(statusCode: 200, data: Data("[]".utf8))),
             .success(.init(statusCode: 200, data: Data("{}".utf8)))
         ]
         let liveKit = MatrixRTCNativeLiveKitClientSpy()
@@ -366,6 +376,7 @@ final class MatrixRTCNativeAudioTests {
         #expect(signalingHTTP.requests.filter { $0.url.path.contains("sfu/get") }.count == 1)
         #expect(signalingHTTP.requests.filter { $0.url.path.contains("/openid/request_token") }.count == 1)
         #expect(signalingHTTP.requests.contains { $0.method == "PUT" && $0.url.path.contains("org.matrix.msc3401.call.member") })
+        #expect(signalingHTTP.requests.contains { $0.method == "GET" && $0.url.path.hasSuffix("/state") })
 
         controller.leave()
         #expect(controller.state == .inactive)
@@ -373,12 +384,78 @@ final class MatrixRTCNativeAudioTests {
     
     @Test
     func encryptionPeerDeviceIDTargetsSingleRemoteDevice() {
-        #expect(MatrixRTCNativeEncryptionPeer.peerDeviceID(from: []) == "*")
+        #expect(MatrixRTCNativeEncryptionPeer.peerDeviceID(from: []) == nil)
+        #expect(MatrixRTCNativeEncryptionPeer.peerDeviceID(from: ["*"]) == nil)
         #expect(MatrixRTCNativeEncryptionPeer.peerDeviceID(from: ["aqFw8fCpKO"]) == "aqFw8fCpKO")
-        #expect(MatrixRTCNativeEncryptionPeer.peerDeviceID(from: ["aqFw8fCpKO", "x310zhsKGJ"]) == "*")
+        #expect(MatrixRTCNativeEncryptionPeer.peerDeviceID(from: ["aqFw8fCpKO", "x310zhsKGJ"]) == nil)
         #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "@r2:mertis.kz:aqFw8fCpKO") == "aqFw8fCpKO")
+        #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "@r2:mertis.kz:*") == nil)
         #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "@r2:mertis.kz") == nil)
         #expect(MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: "no-separator") == nil)
+        #expect(MatrixRTCNativeEncryptionPeer.matrixDeviceID(fromLiveKitIdentity: "@r2:mertis.kz:aqFw8fCpKO") == "aqFw8fCpKO")
+        #expect(MatrixRTCNativeEncryptionPeer.matrixDeviceID(fromLiveKitIdentity: "+FLnILJA2VdpHashed") == nil)
+        #expect(MatrixRTCNativeEncryptionPeer.resolvedDeviceID("*") == nil)
+        #expect(MatrixRTCNativeEncryptionPeer.resolvedDeviceID("  ") == nil)
+    }
+    
+    @Test
+    func callMembershipStateReadsASingleRecentPeerDevice() {
+        let now = Date(timeIntervalSince1970: 1_700_000_180)
+        let recent = UInt64(1_700_000_000_000)
+        let stale = UInt64(1_699_999_000_000)
+        let events: [[String: Any]] = [
+            [
+                "type": "m.room.member",
+                "sender": "@r2:mertis.kz",
+                "content": ["membership": "join"]
+            ],
+            [
+                "type": "org.matrix.msc3401.call.member",
+                "sender": "@r2:mertis.kz",
+                "content": [
+                    "application": "m.call",
+                    "device_id": "OLDDEVICE",
+                    "created_ts": stale
+                ]
+            ],
+            [
+                "type": "org.matrix.msc3401.call.member",
+                "sender": "@r2:mertis.kz",
+                "content": [
+                    "application": "m.call",
+                    "device_id": "RAH2romMl2",
+                    "created_ts": recent
+                ]
+            ],
+            [
+                "type": "org.matrix.msc3401.call.member",
+                "sender": "@r2:mertis.kz",
+                "content": [:]
+            ]
+        ]
+        
+        #expect(MatrixRTCNativeCallMembershipState.peerDeviceID(fromStateEvents: events,
+                                                                peerUserID: "@r2:mertis.kz",
+                                                                now: now) == "RAH2romMl2")
+        #expect(MatrixRTCNativeCallMembershipState.peerDeviceID(fromStateEvents: events,
+                                                                peerUserID: "@me:example.com",
+                                                                now: now) == nil)
+        
+        let conflicting: [[String: Any]] = [
+            [
+                "type": "org.matrix.msc3401.call.member",
+                "sender": "@r2:mertis.kz",
+                "content": ["device_id": "DEVICEA", "created_ts": recent]
+            ],
+            [
+                "type": "org.matrix.msc3401.call.member",
+                "sender": "@r2:mertis.kz",
+                "content": ["device_id": "DEVICEB", "created_ts": recent]
+            ]
+        ]
+        #expect(MatrixRTCNativeCallMembershipState.peerDeviceID(fromStateEvents: conflicting,
+                                                                peerUserID: "@r2:mertis.kz",
+                                                                now: now) == nil)
     }
 
     @Test
@@ -496,6 +573,8 @@ private final class MatrixRTCNativeLiveKitClientSpy: MatrixRTCNativeLiveKitConne
     }
 
     func setRemoteParticipantKey(_: String, identity _: String, index _: Int32) { }
+
+    func listenForRemoteParticipantIdentity(_: @escaping (String) -> Void) { }
 
     func setMicrophoneEnabled(_ enabled: Bool) async {
         microphoneEnabled = enabled

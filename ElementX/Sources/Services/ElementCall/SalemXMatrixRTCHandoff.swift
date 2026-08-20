@@ -2547,6 +2547,35 @@ struct MatrixRTCNativeSignalingClient {
             return false
         }
     }
+    
+    /// native-audio-no-star-send: the widget rejects `send_to_device` to `*`. The caller's
+    /// membership is already in room state, so this reads their real device ID over the same
+    /// custom HTTP path that still works while the phone is locked.
+    func peerDeviceID(homeserverURL: URL,
+                      roomID: String,
+                      accessToken: String,
+                      peerUserID: String) async -> String? {
+        let url = homeserverURL
+            .appending(path: "/_matrix/client/v3/rooms")
+            .appending(path: roomID)
+            .appending(path: "state")
+        switch await sendJSON(method: "GET", url: url, accessToken: accessToken, body: nil) {
+        case .success(let response) where (200...299).contains(response.statusCode):
+            guard let events = try? JSONSerialization.jsonObject(with: response.data) as? [[String: Any]] else {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=peer_device source=membership parse=false")
+                return nil
+            }
+            let deviceID = MatrixRTCNativeCallMembershipState.peerDeviceID(fromStateEvents: events, peerUserID: peerUserID)
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=peer_device source=membership ok=\(deviceID != nil)")
+            return deviceID
+        case .success:
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=peer_device source=membership ok=false")
+            return nil
+        case .failure:
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=peer_device source=membership ok=false")
+            return nil
+        }
+    }
 
     private func sendJSON(method: String, url: URL, accessToken: String?, body: Data?) async -> Result<MatrixRTCHTTPResponse, Error> {
         var headers = ["Content-Type": "application/json"]
@@ -2926,19 +2955,68 @@ final class MatrixRTCNativeWidgetBridge {
         if response["errcode"] != nil {
             return nil
         }
-        if let error = response["error"] {
-            if error is NSNull {
-                return response
-            }
-            if let string = error as? String, string.isEmpty {
-                return response
-            }
-            if let dict = error as? [String: Any], dict.isEmpty {
-                return response
-            }
+        // native-audio-no-star-send: `{ "error": {} }` is a failed send_to_device, not an ack.
+        // Treating it as success cancelled the retry ladder before Olm ever ran.
+        if let error = response["error"], !(error is NSNull) {
             return nil
         }
         return response
+    }
+}
+
+enum MatrixRTCNativeCallMembershipState {
+    static let eventType = "org.matrix.msc3401.call.member"
+    static let freshness: TimeInterval = 180
+    
+    static func peerDeviceID(fromStateEvents events: [[String: Any]],
+                             peerUserID: String,
+                             now: Date = Date()) -> String? {
+        let cutoffMilliseconds = now.timeIntervalSince1970 * 1000 - freshness * 1000
+        var deviceIDs = [String]()
+        
+        for event in events {
+            guard event["type"] as? String == eventType else {
+                continue
+            }
+            
+            let content = event["content"] as? [String: Any] ?? [:]
+            guard !content.isEmpty else {
+                continue
+            }
+            
+            let member = content["member"] as? [String: Any]
+            let userID = member?["user_id"] as? String ?? event["sender"] as? String
+            guard userID == peerUserID else {
+                continue
+            }
+            
+            guard let deviceID = MatrixRTCNativeEncryptionPeer.resolvedDeviceID(member?["device_id"] as? String
+                                                                                ?? content["device_id"] as? String) else {
+                continue
+            }
+            
+            if let createdAt = createdTimestampMilliseconds(content["created_ts"]),
+               createdAt < cutoffMilliseconds {
+                continue
+            }
+            
+            deviceIDs.append(deviceID)
+        }
+        
+        return MatrixRTCNativeEncryptionPeer.peerDeviceID(from: deviceIDs)
+    }
+    
+    private static func createdTimestampMilliseconds(_ value: Any?) -> Double? {
+        if let number = value as? NSNumber {
+            return number.doubleValue
+        }
+        if let value = value as? Double {
+            return value
+        }
+        if let value = value as? Int {
+            return Double(value)
+        }
+        return nil
     }
 }
 
@@ -2984,6 +3062,7 @@ enum MatrixRTCNativeEncryptionKeyMaterial {
 protocol MatrixRTCNativeLiveKitConnecting: AnyObject {
     func connect(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool
     func setRemoteParticipantKey(_ keyBase64: String, identity: String, index: Int32)
+    func listenForRemoteParticipantIdentity(_ handler: @escaping (String) -> Void)
     func setMicrophoneEnabled(_ enabled: Bool) async
     func disconnect() async
 }
@@ -2994,6 +3073,7 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting, @unc
     private var remoteKeys = [MatrixRTCNativePendingRemoteKey]()
     private var appliedRemoteKeys = Set<String>()
     private let remoteKeyLock = NSLock()
+    private var remoteParticipantIdentityHandler: ((String) -> Void)?
 
     func connect(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool {
         await disconnect(clearPendingKeys: false)
@@ -3057,6 +3137,10 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting, @unc
             await disconnect(clearPendingKeys: false)
             return false
         }
+    }
+
+    func listenForRemoteParticipantIdentity(_ handler: @escaping (String) -> Void) {
+        remoteParticipantIdentityHandler = handler
     }
 
     func setRemoteParticipantKey(_ keyBase64: String, identity: String, index: Int32) {
@@ -3197,18 +3281,30 @@ extension MatrixRTCNativeLiveKitClient: RoomDelegate {
         }
     }
 
-    nonisolated func room(_: Room, participantDidConnect _: RemoteParticipant) {
+    nonisolated func room(_: Room, participantDidConnect participant: RemoteParticipant) {
+        let identity = participant.identity?.stringValue
         Task { @MainActor [weak self] in
             self?.applyRemoteKeys(reason: "participant")
+            self?.notifyRemoteParticipantIdentity(identity)
         }
     }
 
     nonisolated func room(_: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
+        let identity = participant.identity?.stringValue
         Task { @MainActor [weak self] in
             self?.applyRemoteKeys(reason: "subscribed")
+            self?.notifyRemoteParticipantIdentity(identity)
             guard publication.kind == .audio else { return }
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_audio identity=\(participant.identity?.stringValue ?? "unknown") muted=\(publication.isMuted)")
         }
+    }
+    
+    @MainActor
+    private func notifyRemoteParticipantIdentity(_ identity: String?) {
+        guard let identity else {
+            return
+        }
+        remoteParticipantIdentityHandler?(identity)
     }
 }
 
@@ -3219,11 +3315,34 @@ enum MatrixRTCNativeEncryptionPeer {
         }
         
         let deviceID = String(identity[identity.index(after: separatorIndex)...])
-        return deviceID.isEmpty ? nil : deviceID
+        return resolvedDeviceID(deviceID)
     }
     
-    static func peerDeviceID(from deviceIDs: [String]) -> String {
-        Set(deviceIDs).count == 1 ? deviceIDs[0] : "*"
+    /// LiveKit hashed identities must not be treated as Matrix device IDs.
+    static func matrixDeviceID(fromLiveKitIdentity identity: String) -> String? {
+        guard identity.hasPrefix("@") else {
+            return nil
+        }
+        return deviceID(fromIdentity: identity)
+    }
+    
+    static func resolvedDeviceID(_ deviceID: String?) -> String? {
+        guard let deviceID else {
+            return nil
+        }
+        let trimmed = deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != "*" else {
+            return nil
+        }
+        return trimmed
+    }
+    
+    static func peerDeviceID(from deviceIDs: [String]) -> String? {
+        let unique = Set(deviceIDs.compactMap { resolvedDeviceID($0) })
+        guard unique.count == 1 else {
+            return nil
+        }
+        return unique.first
     }
 }
 
@@ -3249,6 +3368,7 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     private var lastLocalKey: String?
     private var lastPeerUserID: String?
     private var lastPeerDeviceID: String?
+    private var canSendLocalEncryptionKey = false
     private var localKeyRetryTask: Task<Void, Never>?
     private var prepareIncomingKeyListenerTask: Task<Void, Never>?
     private var preparedCredentials: MediaCredentials?
@@ -3364,9 +3484,8 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         scheduleLocalEncryptionKeyRetries(generation: joinGeneration)
     }
 
-    /// The widget driver keeps rejecting `send_to_device` while it is busy, in the worst observed case for
-    /// several seconds after the join. Retrying in the background keeps the LiveKit join responsive while
-    /// still getting our key across, which the remote side needs before it can decrypt our audio.
+    /// Retries wait for a concrete peer device ID (membership, remote key, or LiveKit identity).
+    /// Sending to `*` returns `{error:{}}` immediately and never encrypts.
     private func scheduleLocalEncryptionKeyRetries(generation: UInt64) {
         localKeyRetryTask?.cancel()
         localKeyRetryTask = Task { @MainActor [weak self] in
@@ -3376,6 +3495,9 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
                     return
                 }
 
+                if MatrixRTCNativeEncryptionPeer.resolvedDeviceID(lastPeerDeviceID) == nil {
+                    await resolvePeerDeviceFromMembershipIfNeeded()
+                }
                 IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key_resend")
                 if await sendStoredLocalEncryptionKey() {
                     return
@@ -3391,7 +3513,9 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
 
         lastLocalKey = localKey
         lastPeerUserID = peerUserID
-        lastPeerDeviceID = MatrixRTCNativeEncryptionPeer.peerDeviceID(from: [lastRemoteDeviceID].compactMap { $0 })
+        if lastPeerDeviceID == nil || lastPeerDeviceID == "*" {
+            lastPeerDeviceID = MatrixRTCNativeEncryptionPeer.peerDeviceID(from: [lastRemoteDeviceID].compactMap { $0 })
+        }
     }
 
     /// Starts the Olm key send without waiting for LiveKit. The remote side can install our key while
@@ -3414,11 +3538,51 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key identity=\(key.identity) index=\(key.index)")
         if let deviceID = MatrixRTCNativeEncryptionPeer.deviceID(fromIdentity: key.identity) {
             lastRemoteDeviceID = deviceID
-            if lastPeerDeviceID == nil || lastPeerDeviceID == "*" {
-                lastPeerDeviceID = deviceID
-            }
+            rememberPeerDeviceID(deviceID, source: "remote_key")
         }
         liveKitClient.setRemoteParticipantKey(key.keyBase64, identity: key.identity, index: key.index)
+    }
+    
+    private func applyRemoteParticipantIdentity(_ identity: String) {
+        guard let deviceID = MatrixRTCNativeEncryptionPeer.matrixDeviceID(fromLiveKitIdentity: identity) else {
+            return
+        }
+        lastRemoteDeviceID = deviceID
+        rememberPeerDeviceID(deviceID, source: "livekit")
+    }
+    
+    private func rememberPeerDeviceID(_ deviceID: String?, source: String) {
+        guard let deviceID = MatrixRTCNativeEncryptionPeer.resolvedDeviceID(deviceID) else {
+            return
+        }
+        if lastPeerDeviceID == deviceID {
+            return
+        }
+        lastPeerDeviceID = deviceID
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=peer_device source=\(source)")
+        guard canSendLocalEncryptionKey, lastLocalKey != nil else {
+            return
+        }
+        Task { @MainActor [weak self] in
+            _ = await self?.sendStoredLocalEncryptionKey()
+        }
+    }
+    
+    private func resolvePeerDeviceFromMembershipIfNeeded() async {
+        guard MatrixRTCNativeEncryptionPeer.resolvedDeviceID(lastPeerDeviceID) == nil,
+              let homeserverURL,
+              let roomID,
+              let accessToken,
+              let peerUserID = lastPeerUserID else {
+            return
+        }
+        
+        if let deviceID = await signalingClient.peerDeviceID(homeserverURL: homeserverURL,
+                                                             roomID: roomID,
+                                                             accessToken: accessToken,
+                                                             peerUserID: peerUserID) {
+            lastPeerDeviceID = deviceID
+        }
     }
 
     private func sendStoredLocalEncryptionKey() async -> Bool {
@@ -3426,8 +3590,11 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
               let localKey = lastLocalKey,
               let membership,
               let roomID,
-              let peerUserID = lastPeerUserID,
-              let peerDeviceID = lastPeerDeviceID else {
+              let peerUserID = lastPeerUserID else {
+            return false
+        }
+        guard let peerDeviceID = MatrixRTCNativeEncryptionPeer.resolvedDeviceID(lastPeerDeviceID) else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key ok=false reason=no_peer_device")
             return false
         }
         IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=bg_key_send")
@@ -3458,6 +3625,7 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         lastLocalKey = nil
         lastPeerUserID = nil
         lastPeerDeviceID = nil
+        canSendLocalEncryptionKey = false
         joinTask?.cancel()
         joinTask = nil
 
@@ -3541,6 +3709,12 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         self.roomID = roomID
         toDeviceClientProxy = clientProxy
         await clientProxy.enableOutgoingToDeviceForCall()
+        liveKitClient.listenForRemoteParticipantIdentity { [weak self] identity in
+            Task { @MainActor in
+                guard let self, self.joinGeneration == generation else { return }
+                self.applyRemoteParticipantIdentity(identity)
+            }
+        }
 
         let localKey = Self.randomKeyBase64()
         async let membershipPublished = publishMembership(session: session)
@@ -3553,6 +3727,8 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
 
         let published = await membershipPublished
         if published, widgetStarted {
+            canSendLocalEncryptionKey = true
+            await resolvePeerDeviceFromMembershipIfNeeded()
             beginSendingLocalEncryptionKey(generation: generation)
         }
         guard published else {
