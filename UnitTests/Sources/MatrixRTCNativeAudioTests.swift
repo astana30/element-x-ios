@@ -116,6 +116,7 @@ final class MatrixRTCNativeAudioTests {
         let protocolSource = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallServiceProtocol.swift")
         #expect(protocolSource.contains("enum MatrixRTCNativeAudioState"))
         #expect(protocolSource.contains("protocol MatrixRTCNativeAudioJoining"))
+        #expect(protocolSource.contains("func prepareIncomingKeyListener"))
         #expect(protocolSource.contains("var isActive: Bool"))
 
         let callService = try Self.source(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
@@ -296,6 +297,8 @@ private final class MatrixRTCNativeAudioJoiningSpy: MatrixRTCNativeAudioJoining 
         activeRoomID = roomID
         state = .connected
     }
+
+    func prepareIncomingKeyListener(roomID _: String, clientProxy _: ClientProxyProtocol) { }
 
     func setMicrophoneEnabled(_: Bool) { }
 

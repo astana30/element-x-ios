@@ -235,6 +235,7 @@ protocol MatrixRTCNativeAudioJoining: AnyObject {
     var state: MatrixRTCNativeAudioState { get }
 
     func joinIncomingAudio(roomID: String, clientProxy: ClientProxyProtocol) async
+    func prepareIncomingKeyListener(roomID: String, clientProxy: ClientProxyProtocol)
     func setMicrophoneEnabled(_ enabled: Bool)
     func leave()
 }
@@ -297,4 +298,6 @@ extension MatrixRTCNativeAudioJoining {
             false
         }
     }
+
+    func prepareIncomingKeyListener(roomID _: String, clientProxy _: ClientProxyProtocol) { }
 }
