@@ -2954,6 +2954,28 @@ enum MatrixRTCNativeRemoteKeyStore {
     }
 }
 
+/// MatrixRTC media keys travel as base64 text but the frame cryptor derives its frame key from the
+/// decoded bytes. Element Call encodes them without padding and sometimes with the URL safe alphabet,
+/// so both spellings have to decode to the same material that the web client feeds into HKDF.
+enum MatrixRTCNativeEncryptionKeyMaterial {
+    static func data(fromBase64 value: String) -> Data? {
+        var normalised = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+
+        let paddingRemainder = normalised.count % 4
+        if paddingRemainder > 0 {
+            normalised.append(String(repeating: "=", count: 4 - paddingRemainder))
+        }
+
+        guard let data = Data(base64Encoded: normalised), !data.isEmpty else {
+            return nil
+        }
+
+        return data
+    }
+}
+
 protocol MatrixRTCNativeLiveKitConnecting: AnyObject {
     func connect(serverURL: URL, token: String, localIdentity: String, localKeyBase64: String) async -> Bool
     func setRemoteParticipantKey(_ keyBase64: String, identity: String, index: Int32)
@@ -2961,7 +2983,7 @@ protocol MatrixRTCNativeLiveKitConnecting: AnyObject {
     func disconnect() async
 }
 
-final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
+final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting, @unchecked Sendable {
     private var room: Room?
     private var keyProvider: BaseKeyProvider?
     private var pendingRemoteKeys = [MatrixRTCNativePendingRemoteKey]()
@@ -2987,18 +3009,27 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
         AudioManager.shared.audioSession.isAutomaticDeactivationEnabled = false
         AudioManager.shared.audioSession.isSpeakerOutputPreferred = false
 
-        let options = KeyProviderOptions(sharedKey: false, ratchetWindowSize: 10, keyRingSize: 256)
+        // These have to match Element Call's key provider (`ratchetWindowSize: 10`, `keyringSize: 256`)
+        // and its HKDF key derivation, otherwise neither side can decrypt the other's frames.
+        let options = KeyProviderOptions(sharedKey: false,
+                                         ratchetWindowSize: 10,
+                                         keyRingSize: 256,
+                                         keyDerivationAlgorithm: .hkdf)
         let keyProvider = BaseKeyProvider(options: options)
-        keyProvider.setKey(key: localKeyBase64, participantId: localIdentity, index: 0)
+        guard let localKeyData = MatrixRTCNativeEncryptionKeyMaterial.data(fromBase64: localKeyBase64) else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=livekit ok=false reason=local_key_material")
+            return false
+        }
+        keyProvider.setKey(keyData: localKeyData, participantId: localIdentity, index: 0)
         let pendingKeys = takePendingRemoteKeys(assigning: keyProvider)
         for key in pendingKeys {
-            keyProvider.setKey(key: key.keyBase64, participantId: key.identity, index: key.index)
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(key.index) applied=true reason=buffered")
+            Self.apply(key.keyBase64, identity: key.identity, index: key.index, to: keyProvider, reason: "buffered")
         }
 
         let roomOptions = RoomOptions(encryptionOptions: EncryptionOptions(keyProvider: keyProvider))
         let connectOptions = ConnectOptions(autoSubscribe: true, enableMicrophone: false)
         let room = Room(connectOptions: connectOptions, roomOptions: roomOptions)
+        room.add(delegate: self)
         self.room = room
 
         do {
@@ -3006,6 +3037,13 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
                                    token: token,
                                    connectOptions: connectOptions,
                                    roomOptions: roomOptions)
+            // The SFU decides our participant identity from the JWT. Our own frames are encrypted with
+            // the key stored under that identity, so a mismatch would mute us for everybody else.
+            let resolvedIdentity = room.localParticipant.identity?.stringValue
+            if let resolvedIdentity, resolvedIdentity != localIdentity {
+                keyProvider.setKey(keyData: localKeyData, participantId: resolvedIdentity, index: 0)
+            }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_identity match=\(resolvedIdentity == localIdentity)")
             try await room.localParticipant.setMicrophone(enabled: true)
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=livekit ok=true")
             return true
@@ -3028,10 +3066,27 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
         remoteKeyLock.unlock()
 
         if let provider {
-            provider.setKey(key: keyBase64, participantId: identity, index: index)
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=true")
+            Self.apply(keyBase64, identity: identity, index: index, to: provider, reason: nil)
         } else {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=false reason=buffer")
+        }
+    }
+
+    private static func apply(_ keyBase64: String,
+                              identity: String,
+                              index: Int32,
+                              to keyProvider: BaseKeyProvider,
+                              reason: String?) {
+        guard let keyData = MatrixRTCNativeEncryptionKeyMaterial.data(fromBase64: keyBase64) else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=false reason=key_material")
+            return
+        }
+
+        keyProvider.setKey(keyData: keyData, participantId: identity, index: index)
+        if let reason {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=true reason=\(reason)")
+        } else {
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_key index=\(index) applied=true")
         }
     }
 
@@ -3062,6 +3117,7 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
             pendingRemoteKeys.removeAll()
         }
         remoteKeyLock.unlock()
+        currentRoom?.remove(delegate: self)
         await currentRoom?.disconnect()
     }
 
@@ -3084,6 +3140,23 @@ final class MatrixRTCNativeLiveKitClient: MatrixRTCNativeLiveKitConnecting {
             return true
         default:
             return false
+        }
+    }
+}
+
+/// Frame level diagnostics: without these the trace log can show a healthy key exchange while the
+/// frame cryptor silently discards every remote frame.
+extension MatrixRTCNativeLiveKitClient: RoomDelegate {
+    nonisolated func room(_: Room, trackPublication: TrackPublication, didUpdateE2EEState state: E2EEState) {
+        Task { @MainActor in
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=frame_crypto kind=\(trackPublication.kind == .audio ? "audio" : "other") state=\(state.toString())")
+        }
+    }
+
+    nonisolated func room(_: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
+        Task { @MainActor in
+            guard publication.kind == .audio else { return }
+            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=remote_audio identity=\(participant.identity?.stringValue ?? "unknown") muted=\(publication.isMuted)")
         }
     }
 }

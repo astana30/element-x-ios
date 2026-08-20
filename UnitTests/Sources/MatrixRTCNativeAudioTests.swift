@@ -167,7 +167,8 @@ final class MatrixRTCNativeAudioTests {
         #expect(handoff.contains("enum MatrixRTCNativeRemoteKeyStore"))
         #expect(handoff.contains("disconnect(clearPendingKeys"))
         #expect(handoff.contains("applied=false reason=buffer"))
-        #expect(handoff.contains("applied=true reason=buffered"))
+        #expect(handoff.contains("applied=true reason=\\(reason)"))
+        #expect(handoff.contains("reason: \"buffered\""))
         #expect(handoff.contains("prepareIncomingKeyListener"))
         #expect(handoff.contains("lastRemoteDeviceID"))
         #expect(handoff.contains("shouldNegotiateCapabilities"))
@@ -203,6 +204,47 @@ final class MatrixRTCNativeAudioTests {
         #expect(key?.identity == "@alice:example.com:DEVICE")
         #expect(key?.keyBase64 == "remote-key")
         #expect(key?.index == 0)
+    }
+
+    @Test
+    func encryptionKeyMaterialDecodesElementCallBase64Spellings() throws {
+        let rawKey = Data([0xFB, 0xEF, 0x3E, 0x00, 0x10, 0x82, 0x93, 0x94, 0xC0, 0x2F, 0x7F, 0xF9, 0x64, 0x1A, 0x2B, 0x3C])
+        let padded = rawKey.base64EncodedString()
+        let urlSafeUnpadded = padded
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+
+        #expect(MatrixRTCNativeEncryptionKeyMaterial.data(fromBase64: padded) == rawKey)
+        #expect(MatrixRTCNativeEncryptionKeyMaterial.data(fromBase64: urlSafeUnpadded) == rawKey)
+        #expect(MatrixRTCNativeEncryptionKeyMaterial.data(fromBase64: " \(padded)\n") == rawKey)
+        #expect(MatrixRTCNativeEncryptionKeyMaterial.data(fromBase64: "") == nil)
+        #expect(MatrixRTCNativeEncryptionKeyMaterial.data(fromBase64: "not base64 at all!") == nil)
+    }
+
+    @Test
+    func liveKitKeyProviderMatchesElementCallFrameCrypto() throws {
+        let handoff = try Self.source(named: "ElementX/Sources/Services/ElementCall/SalemXMatrixRTCHandoff.swift")
+
+        #expect(handoff.contains("keyDerivationAlgorithm: .hkdf"))
+        #expect(handoff.contains("ratchetWindowSize: 10"))
+        #expect(handoff.contains("keyRingSize: 256"))
+        #expect(handoff.contains("keyProvider.setKey(keyData: localKeyData, participantId: localIdentity, index: 0)"))
+        #expect(handoff.contains("keyProvider.setKey(keyData: keyData, participantId: identity, index: index)"))
+        #expect(handoff.contains("applied=false reason=key_material"))
+        #expect(handoff.contains("ok=false reason=local_key_material"))
+        #expect(handoff.contains("stage=local_identity match="))
+        #expect(handoff.contains("stage=frame_crypto"))
+        #expect(handoff.contains("stage=remote_audio"))
+        #expect(handoff.contains("extension MatrixRTCNativeLiveKitClient: RoomDelegate"))
+        #expect(!handoff.contains("setKey(key: localKeyBase64"))
+        #expect(!handoff.contains("setKey(key: keyBase64"))
+
+        // The raw key and HKDF derivation APIs only exist from LiveKit 2.16.0 onwards.
+        let projectSpec = try Self.source(named: "project.yml")
+        #expect(projectSpec.contains("client-sdk-swift.git\n    exactVersion: 2.16.0"))
+        let pbxproj = try Self.source(named: "SalemX.xcodeproj/project.pbxproj")
+        #expect(!pbxproj.contains("version = 2.13.0;"))
     }
 
     @Test
