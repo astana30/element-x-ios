@@ -2617,6 +2617,9 @@ final class MatrixRTCNativeWidgetBridge {
     private let widgetDriver: ElementCallWidgetDriverProtocol
     private var cancellables = Set<AnyCancellable>()
     private var continuations = [String: CheckedContinuation<[String: Any]?, Never>]()
+    private var bufferedResponses = [String: [String: Any]]()
+    private var handleFinished = Set<String>()
+    private let sendLock = NSLock()
     private var encryptionKeyHandler: ((MatrixRTCWidgetEncryptionKey) -> Void)?
     private let capabilitiesLock = NSLock()
     private var didAnswerCapabilities = false
@@ -2700,7 +2703,19 @@ final class MatrixRTCNativeWidgetBridge {
                 ]
             ]
         ]
-        return await send(action: "send_to_device", data: data) != nil
+        let started = Date()
+        let response = await send(action: "send_to_device", data: data)
+        let durationMS = Int(Date().timeIntervalSince(started) * 1000)
+        let keys: String
+        if let response, !response.isEmpty {
+            keys = response.keys.sorted().joined(separator: ",")
+        } else if response != nil {
+            keys = "empty"
+        } else {
+            keys = "none"
+        }
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key_send duration_ms=\(durationMS) keys=\(keys)")
+        return response != nil
     }
 
     func listenForEncryptionKeys(_ handler: @escaping (MatrixRTCWidgetEncryptionKey) -> Void) {
@@ -2709,6 +2724,10 @@ final class MatrixRTCNativeWidgetBridge {
 
     func stop() {
         encryptionKeyHandler = nil
+        sendLock.lock()
+        bufferedResponses.removeAll()
+        handleFinished.removeAll()
+        sendLock.unlock()
         continuations.values.forEach { $0.resume(returning: nil) }
         continuations.removeAll()
         cancellables.removeAll()
@@ -2744,16 +2763,66 @@ final class MatrixRTCNativeWidgetBridge {
             return nil
         }
 
-        return await withCheckedContinuation { continuation in
+        let started = Date()
+        let timeout: Duration = action == "send_to_device" ? .seconds(8) : .seconds(3)
+        let response = await withCheckedContinuation { continuation in
             continuations[requestID] = continuation
-            Task {
-                _ = await widgetDriver.handleMessage(json)
+            Task { [weak self] in
+                guard let self else {
+                    return
+                }
+                let handleResult = await widgetDriver.handleMessage(json)
+                let handleOK: Bool
+                switch handleResult {
+                case .success:
+                    handleOK = true
+                case .failure:
+                    handleOK = false
+                }
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_send action=\(action) handle=\(handleOK)")
+
+                sendLock.lock()
+                handleFinished.insert(requestID)
+                let buffered = bufferedResponses.removeValue(forKey: requestID)
+                sendLock.unlock()
+
+                if !handleOK {
+                    finish(requestID: requestID, response: nil)
+                    return
+                }
+
+                if let buffered {
+                    finish(requestID: requestID, response: Self.sanitizedWidgetResponse(buffered))
+                    return
+                }
+
+                if action != "send_to_device" {
+                    finish(requestID: requestID, response: [:])
+                    return
+                }
+
+                Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    self?.finish(requestID: requestID, response: [:])
+                }
             }
-            Task {
-                try? await Task.sleep(for: .seconds(3))
-                finish(requestID: requestID, response: nil)
+            Task { [weak self] in
+                try? await Task.sleep(for: timeout)
+                self?.finish(requestID: requestID, response: nil)
             }
         }
+
+        let durationMS = Int(Date().timeIntervalSince(started) * 1000)
+        let keys: String
+        if let response, !response.isEmpty {
+            keys = response.keys.sorted().joined(separator: ",")
+        } else if response != nil {
+            keys = "empty"
+        } else {
+            keys = "none"
+        }
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=widget_send action=\(action) duration_ms=\(durationMS) keys=\(keys)")
+        return response
     }
 
     private func handleIncomingMessage(_ message: String) {
@@ -2764,8 +2833,15 @@ final class MatrixRTCNativeWidgetBridge {
 
         if let requestID = object["requestId"] as? String,
            object["response"] != nil {
-            let response = object["response"] as? [String: Any]
-            finish(requestID: requestID, response: response)
+            let response = object["response"] as? [String: Any] ?? [:]
+            sendLock.lock()
+            if handleFinished.contains(requestID) {
+                sendLock.unlock()
+                finish(requestID: requestID, response: Self.sanitizedWidgetResponse(response))
+            } else {
+                bufferedResponses[requestID] = response
+                sendLock.unlock()
+            }
         }
 
         let api = object["api"] as? String
@@ -2820,10 +2896,36 @@ final class MatrixRTCNativeWidgetBridge {
     }
 
     private func finish(requestID: String, response: [String: Any]?) {
+        sendLock.lock()
+        bufferedResponses.removeValue(forKey: requestID)
+        handleFinished.remove(requestID)
+        sendLock.unlock()
         guard let continuation = continuations.removeValue(forKey: requestID) else {
             return
         }
         continuation.resume(returning: response)
+    }
+
+    private static func sanitizedWidgetResponse(_ response: [String: Any]?) -> [String: Any]? {
+        guard let response else {
+            return nil
+        }
+        if response["errcode"] != nil {
+            return nil
+        }
+        if let error = response["error"] {
+            if error is NSNull {
+                return response
+            }
+            if let string = error as? String, string.isEmpty {
+                return response
+            }
+            if let dict = error as? [String: Any], dict.isEmpty {
+                return response
+            }
+            return nil
+        }
+        return response
     }
 }
 
@@ -3012,6 +3114,9 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     private var joinTask: Task<Void, Never>?
     private var preparedSession: SessionContext?
     private var lastRemoteDeviceID: String?
+    private var lastLocalKey: String?
+    private var lastPeerUserID: String?
+    private var lastPeerDeviceID: String?
     private var prepareIncomingKeyListenerTask: Task<Void, Never>?
         
         init(signalingClient: MatrixRTCNativeSignalingClient = MatrixRTCNativeSignalingClient(),
@@ -3029,6 +3134,7 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
     func joinIncomingAudio(roomID: String, clientProxy: ClientProxyProtocol) async {
         if activeRoomID == roomID, isActive {
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=join skipped=already_active")
+            await resendLocalEncryptionKey()
             return
         }
         
@@ -3109,12 +3215,39 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         }
     }
 
+    func resendLocalEncryptionKey() async {
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key_resend")
+        _ = await sendStoredLocalEncryptionKey()
+    }
+
+    private func sendStoredLocalEncryptionKey() async -> Bool {
+        guard let widgetBridge,
+              let localKey = lastLocalKey,
+              let membership,
+              let roomID,
+              let peerUserID = lastPeerUserID,
+              let peerDeviceID = lastPeerDeviceID else {
+            return false
+        }
+        let sent = await widgetBridge.sendEncryptionKey(localKey,
+                                                        index: 0,
+                                                        membership: membership,
+                                                        roomID: roomID,
+                                                        peerUserID: peerUserID,
+                                                        peerDeviceID: peerDeviceID)
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key ok=\(sent) peerDeviceID=\(peerDeviceID)")
+        return sent
+    }
+
     func leave() {
         joinGeneration += 1
         prepareIncomingKeyListenerTask?.cancel()
         prepareIncomingKeyListenerTask = nil
         preparedSession = nil
         lastRemoteDeviceID = nil
+        lastLocalKey = nil
+        lastPeerUserID = nil
+        lastPeerDeviceID = nil
         joinTask?.cancel()
         joinTask = nil
 
@@ -3227,14 +3360,18 @@ final class MatrixRTCNativeAudioController: MatrixRTCNativeAudioJoining {
         }
 
         if widgetStarted, let peerUserID = Self.peerUserID(in: session.roomProxy, ownUserID: session.userID) {
-            let peerDeviceID = MatrixRTCNativeEncryptionPeer.peerDeviceID(from: [lastRemoteDeviceID].compactMap { $0 })
-            let sent = await widgetBridge.sendEncryptionKey(localKey,
-                                                            index: 0,
-                                                            membership: session.membership,
-                                                            roomID: roomID,
-                                                            peerUserID: peerUserID,
-                                                            peerDeviceID: peerDeviceID)
-            IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key ok=\(sent) peerDeviceID=\(peerDeviceID)")
+            lastLocalKey = localKey
+            lastPeerUserID = peerUserID
+            lastPeerDeviceID = MatrixRTCNativeEncryptionPeer.peerDeviceID(from: [lastRemoteDeviceID].compactMap { $0 })
+            _ = await sendStoredLocalEncryptionKey()
+            for delayMS in [500, 1000] {
+                try? await Task.sleep(for: .milliseconds(delayMS))
+                guard isCurrent(generation) else {
+                    return
+                }
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=local_key_resend")
+                _ = await sendStoredLocalEncryptionKey()
+            }
         }
 
         guard isCurrent(generation) else {

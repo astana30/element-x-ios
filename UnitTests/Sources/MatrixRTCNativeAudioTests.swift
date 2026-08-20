@@ -108,6 +108,7 @@ final class MatrixRTCNativeAudioTests {
         #expect(callScreen.contains("ownsNativeMatrixRTCAudio"))
         #expect(callScreen.contains("isNativeMatrixRTCAudioActive = true"))
         #expect(callScreen.contains("!elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID)"))
+        #expect(callScreen.contains("GenericCallLinkWidgetDriver(url: URL(string: \"about:blank\")!)"))
         #expect(!callScreen.contains("DirectCallEngine"))
     }
 
@@ -125,6 +126,7 @@ final class MatrixRTCNativeAudioTests {
         #expect(callService.contains("shouldKeepAnsweredCallKitForNativeAudio"))
         #expect(callService.contains("nativeAudioJoinCallKitID = incomingCallID.callKitID"))
         #expect(callService.contains("[APP-INCOMING-SKIP-END]"))
+        #expect(callService.contains("stage=wait_owner"))
         #expect(!callService.contains("!= .inactive"))
 
         let generatedMocks = try Self.source(named: "ElementX/Sources/Mocks/Generated/GeneratedMocks.swift")
@@ -153,6 +155,10 @@ final class MatrixRTCNativeAudioTests {
         #expect(handoff.contains("stage=remote_key"))
         #expect(handoff.contains("stage=local_key"))
         #expect(handoff.contains("stage=local_key ok=\\(sent) peerDeviceID="))
+        #expect(handoff.contains("resendLocalEncryptionKey"))
+        #expect(handoff.contains("stage=local_key_send"))
+        #expect(handoff.contains("stage=widget_send"))
+        #expect(handoff.contains("stage=local_key_resend"))
         #expect(handoff.contains("org.matrix.msc3819.receive.to_device:io.element.call.encryption_keys"))
         #expect(handoff.contains("enum MatrixRTCNativeEncryptionPeer"))
         #expect(handoff.contains("enum MatrixRTCNativeRemoteKeyStore"))

@@ -2137,6 +2137,9 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
         if nativeAudioController.activeRoomID == incomingCallID.roomID, nativeAudioController.isActive {
             nativeAudioJoinCallKitID = incomingCallID.callKitID
             IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=start skipped=already_active")
+            Task { @MainActor [weak self] in
+                await self?.nativeAudioController.resendLocalEncryptionKey()
+            }
             return
         }
 
@@ -2191,6 +2194,17 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
 
     private func shouldWaitForUnlockBeforeStarting(_ incomingCallID: CallID) -> Bool {
         incomingCallID.startMode == .audio && !applicationActivityProvider.isActive()
+    }
+
+    private func waitForNativeAudioOwnership(roomID: String) async {
+        for _ in 0..<20 {
+            if nativeAudioController.activeRoomID == roomID, nativeAudioController.isActive {
+                IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=wait_owner ok=true")
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-NATIVE-AUDIO] stage=wait_owner ok=false")
     }
 
     private func legacyAnswerResumeReason() -> String {
@@ -2265,6 +2279,10 @@ class ElementCallService: NSObject, ElementCallServiceProtocol, SalemXStockEleme
                 didWaitForUnlockBeforeStart = true
                 IncomingCallTraceFile.log("[CALL-INCOMING-TRACE][APP-ANSWER-WAIT-UNLOCK] callkit_id=\(incomingCallID.callKitID) application_active=false callkit_audio_active=\(isCallKitAudioSessionActive)")
                 return
+            }
+
+            if incomingCallID.startMode == .audio {
+                await waitForNativeAudioOwnership(roomID: incomingCallID.roomID)
             }
 
             let isApplicationActive = applicationActivityProvider.isActive()

@@ -117,8 +117,12 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             preferredAudioRoute = .systemDefault
         case .roomCall(let roomProxy, let clientProxy, _, _, _, _, let startMode):
             guard let deviceID = clientProxy.deviceID else { fatalError("Missing device ID for the call.") }
-            widgetDriver = roomProxy.elementCallWidgetDriver(deviceID: deviceID)
-            (widgetDriver as? ElementCallStartModeConfigurable)?.startMode = startMode
+            if elementCallService.ownsNativeMatrixRTCAudio(roomID: configuration.callRoomID) {
+                widgetDriver = GenericCallLinkWidgetDriver(url: URL(string: "about:blank")!)
+            } else {
+                widgetDriver = roomProxy.elementCallWidgetDriver(deviceID: deviceID)
+                (widgetDriver as? ElementCallStartModeConfigurable)?.startMode = startMode
+            }
             rtcTransportScript = Self.makeRTCTransportScript(clientProxy: clientProxy)
             preferredAudioRoute = startMode == .audio ? .earpiece : .systemDefault
             directRoomCallDetails = Self.makeDirectRoomCallDetails(roomProxy: roomProxy, startMode: startMode)

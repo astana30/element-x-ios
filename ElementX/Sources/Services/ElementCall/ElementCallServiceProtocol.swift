@@ -237,6 +237,7 @@ protocol MatrixRTCNativeAudioJoining: AnyObject {
     func joinIncomingAudio(roomID: String, clientProxy: ClientProxyProtocol) async
     func prepareIncomingKeyListener(roomID: String, clientProxy: ClientProxyProtocol)
     func setMicrophoneEnabled(_ enabled: Bool)
+    func resendLocalEncryptionKey() async
     func leave()
 }
 
@@ -300,4 +301,6 @@ extension MatrixRTCNativeAudioJoining {
     }
 
     func prepareIncomingKeyListener(roomID _: String, clientProxy _: ClientProxyProtocol) { }
+
+    func resendLocalEncryptionKey() async { }
 }
