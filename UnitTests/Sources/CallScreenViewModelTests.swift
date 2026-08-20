@@ -1258,45 +1258,7 @@ extension CallScreenViewModelTests {
     func appStoreLinePresentsIncomingCallsFromMatrixRTCPresence() throws {
         let appCoordinator = try repositorySource(named: "ElementX/Sources/Application/AppCoordinator.swift")
         let callService = try repositorySource(named: "ElementX/Sources/Services/ElementCall/ElementCallService.swift")
-        #expect(appCoordinator.contains("lock-answer-no-wait"))
-        #expect(appCoordinator.contains("pushkit-callkit-first"))
-        #expect(appCoordinator.contains("skip-stale-on-push"))
-        #expect(appCoordinator.contains("callkit-answer-playandrecord"))
-        #expect(appCoordinator.contains("wait-callkit-audio"))
-        #expect(appCoordinator.contains("wait-unlock-after-audio"))
-        #expect(appCoordinator.contains("callkit-native-audio"))
-        #expect(appCoordinator.contains("native-audio-pbx"))
-        #expect(appCoordinator.contains("native-audio-types"))
-        #expect(appCoordinator.contains("native-audio-active"))
-        #expect(appCoordinator.contains("native-audio-handoff"))
-        #expect(appCoordinator.contains("native-audio-nonisolated"))
-        #expect(appCoordinator.contains("native-audio-await"))
-        #expect(appCoordinator.contains("native-audio-membership-http"))
-        #expect(appCoordinator.contains("native-audio-skip-rejoin"))
-        #expect(appCoordinator.contains("native-audio-callkit-session"))
-        #expect(appCoordinator.contains("native-audio-widget-caps"))
-        #expect(appCoordinator.contains("native-audio-keep-answered"))
-        #expect(appCoordinator.contains("native-audio-skip-stale-while-join"))
-        #expect(appCoordinator.contains("native-audio-early-keys"))
-        #expect(appCoordinator.contains("native-audio-peer-device-key"))
-        #expect(appCoordinator.contains("native-audio-buffer-keys"))
-        #expect(appCoordinator.contains("native-audio-local-key-wait"))
-        #expect(appCoordinator.contains("native-audio-skip-chrome"))
-        #expect(appCoordinator.contains("native-audio-key-error-log"))
-        #expect(appCoordinator.contains("native-audio-hkdf-raw-keys"))
-        #expect(appCoordinator.contains("native-audio-frame-crypto-log"))
-        #expect(appCoordinator.contains("native-audio-unnamed-participant-key"))
-        #expect(appCoordinator.contains("native-audio-key-retry-ladder"))
-        #expect(appCoordinator.contains("native-audio-key-before-livekit"))
-        #expect(appCoordinator.contains("native-audio-cancel-key-retry"))
-        #expect(appCoordinator.contains("native-audio-prefetch-jwt"))
-        #expect(appCoordinator.contains("native-audio-overlap-membership"))
-        #expect(appCoordinator.contains("native-audio-direct-openid"))
-        #expect(!appCoordinator.contains("no-native-category"))
-        #expect(!appCoordinator.contains(" answer-on-active "))
-        #expect(!appCoordinator.contains("answer-on-callkit-activate"))
-        #expect(appCoordinator.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session callkit-answer-playandrecord wait-callkit-audio wait-unlock-after-audio callkit-native-audio native-audio-pbx native-audio-types native-audio-active native-audio-handoff native-audio-nonisolated native-audio-await native-audio-membership-http native-audio-skip-rejoin native-audio-callkit-session native-audio-widget-caps native-audio-keep-answered native-audio-skip-stale-while-join "))
-        #expect(appCoordinator.contains("native-audio-early-keys native-audio-peer-device-key native-audio-buffer-keys native-audio-local-key-wait native-audio-skip-chrome native-audio-key-error-log native-audio-hkdf-raw-keys native-audio-frame-crypto-log native-audio-unnamed-participant-key native-audio-key-retry-ladder native-audio-key-before-livekit native-audio-cancel-key-retry native-audio-prefetch-jwt native-audio-overlap-membership native-audio-direct-openid virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first"))
+        Self.expectAppStoreLineAppCoordinatorFingerprints(appCoordinator)
         #expect(callService.contains("[MATRIXRTC-PRESENCE-INCOMING]"))
         #expect(callService.contains("source=matrixrtc_presence"))
         #expect(callService.contains("[CALL-INCOMING-TRACE][APP-ANSWER-SKIP-STALE] origin=push"))
@@ -1584,6 +1546,55 @@ extension CallScreenViewModelTests {
         """
     }
 
+    private static let appStoreLineAppCoordinatorFingerprints = [
+        "lock-answer-no-wait",
+        "pushkit-callkit-first",
+        "skip-stale-on-push",
+        "callkit-answer-playandrecord",
+        "wait-callkit-audio",
+        "wait-unlock-after-audio",
+        "callkit-native-audio",
+        "native-audio-pbx",
+        "native-audio-types",
+        "native-audio-active",
+        "native-audio-handoff",
+        "native-audio-nonisolated",
+        "native-audio-await",
+        "native-audio-membership-http",
+        "native-audio-skip-rejoin",
+        "native-audio-callkit-session",
+        "native-audio-widget-caps",
+        "native-audio-keep-answered",
+        "native-audio-skip-stale-while-join",
+        "native-audio-early-keys",
+        "native-audio-peer-device-key",
+        "native-audio-buffer-keys",
+        "native-audio-local-key-wait",
+        "native-audio-skip-chrome",
+        "native-audio-key-error-log",
+        "native-audio-hkdf-raw-keys",
+        "native-audio-frame-crypto-log",
+        "native-audio-unnamed-participant-key",
+        "native-audio-key-retry-ladder",
+        "native-audio-key-before-livekit",
+        "native-audio-cancel-key-retry",
+        "native-audio-prefetch-jwt",
+        "native-audio-overlap-membership",
+        "native-audio-direct-openid"
+    ]
+    
+    private static func expectAppStoreLineAppCoordinatorFingerprints(_ source: String) {
+        for fingerprint in appStoreLineAppCoordinatorFingerprints {
+            #expect(source.contains(fingerprint))
+        }
+        
+        #expect(!source.contains("no-native-category"))
+        #expect(!source.contains(" answer-on-active "))
+        #expect(!source.contains("answer-on-callkit-activate"))
+        #expect(source.contains("matrixrtc-presence-incoming capability-retry membership-timeout keep-call-on-dispatch-fail wait-membership-before-prepare http-status-log opaque-call-handle presence-requires-remote keep-audio-overlay dispatch-401-retry leave-webrtc-audio-session callkit-answer-playandrecord wait-callkit-audio wait-unlock-after-audio callkit-native-audio native-audio-pbx native-audio-types native-audio-active native-audio-handoff native-audio-nonisolated native-audio-await native-audio-membership-http native-audio-skip-rejoin native-audio-callkit-session native-audio-widget-caps native-audio-keep-answered native-audio-skip-stale-while-join "))
+        #expect(source.contains("native-audio-early-keys native-audio-peer-device-key native-audio-buffer-keys native-audio-local-key-wait native-audio-skip-chrome native-audio-key-error-log native-audio-hkdf-raw-keys native-audio-frame-crypto-log native-audio-unnamed-participant-key native-audio-key-retry-ladder native-audio-key-before-livekit native-audio-cancel-key-retry native-audio-prefetch-jwt native-audio-overlap-membership native-audio-direct-openid virtual-earpiece-default pushkit-token-hex sandbox-apns-activation message-pusher-dev mertis-push-gateway pushkit-callkit-first"))
+    }
+    
     private func repositorySource(named path: String) throws -> String {
         let repositoryRootURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
